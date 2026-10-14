@@ -1,0 +1,33 @@
+{
+  "_nota": "Planes de AutograFlow (los usan Laravel y la página). Precios en la moneda de MONEDA del .env. documentos: cupo por periodo (dia o mes); null = ilimitado. dias: duración al comprarlo (null = no vence). creditos: documentos que suma al comprarlo (no vencen).",
+  "notaIlimitado": "* Sujeto a política de uso razonable (tamaño, páginas y firmantes máximos por documento).",
+  "planes": {
+    "gratis": {
+      "id": "gratis", "nombre": "Gratis", "icono": "✨", "precio": 0, "dias": null, "creditos": 0,
+      "documentos": 2, "periodo": "dia", "firmantesPorDocumento": 2, "selloHuella": false, "marcaAgua": true, "usuarios": 1,
+      "resumen": "2 documentos diarios", "nota": "Se renuevan cada día",
+      "ventajas": ["Sin tarjeta ni compromiso", "Certificado de firmas en cada PDF", "Solo firma (sello y huella con un plan). Hasta 2 firmantes", "Lleva la marca «Firmado con AutograFlow»"]
+    },
+    "ocasional": {
+      "id": "ocasional", "nombre": "Ocasional", "icono": "📄", "precio": 4.9, "dias": null, "creditos": 10,
+      "documentos": 2, "periodo": "dia", "firmantesPorDocumento": 20, "selloHuella": true, "marcaAgua": false, "usuarios": 1,
+      "resumen": "10 documentos", "nota": "Compra una vez. Úsalos cuando los necesites.",
+      "destacada": "⭐ Hasta 20 firmantes con sellos y huellas",
+      "ventajas": ["+ 2 documentos gratis cada día", "Sin mensualidad", "Sin renovación automática", "Tu logo y sin marca de AutograFlow"]
+    },
+    "profesional": {
+      "id": "profesional", "nombre": "Profesional", "icono": "⚡", "precio": 19.9, "dias": 30, "creditos": 0,
+      "documentos": 180, "periodo": "mes", "firmantesPorDocumento": 20, "selloHuella": true, "marcaAgua": false, "usuarios": 1,
+      "resumen": "180 documentos / mes", "nota": "Para quienes firman con frecuencia", "insignia": "MÁS POPULAR",
+      "destacada": "⭐ Hasta 20 firmantes con sellos y huellas",
+      "ventajas": ["Acceso completo individual", "Estadísticas personales", "Tu logo y sin marca de AutograFlow", "Recarga 10 documentos cuando los necesites"]
+    },
+    "empresarial": {
+      "id": "empresarial", "nombre": "Empresarial", "icono": "🏢", "precio": 149.9, "dias": 365, "creditos": 0,
+      "documentos": null, "periodo": "mes", "firmantesPorDocumento": 20, "selloHuella": true, "marcaAgua": false, "usuarios": 5,
+      "resumen": "Documentos ilimitados*", "nota": "Por año · Para equipos y organizaciones", "insignia": "MEJOR VALOR",
+      "destacada": "⭐ Hasta 20 firmantes con sellos y huellas",
+      "ventajas": ["Organización + código único", "Hasta 5 usuarios incluidos", "Documentos y estadísticas del equipo", "Tu logo y sin marca de AutograFlow"]
+    }
+  }
+}

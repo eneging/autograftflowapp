@@ -1,0 +1,26 @@
+/* Cuenta, cupo y logo */
+.cupo { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border-radius: 10px; background: #f5f3ff; border: 1px solid #ddd6fe; font-size: 14px; }
+.cupo.pocos { background: #fff7ed; border-color: #fdba74; }
+.cupo a { font-weight: 800; color: var(--accent); }
+.ctaPlanes { text-align: center; }
+.ctaPlanes .boton { min-width: 220px; }
+.insignia.pago-aprobado { background: #ecfdf5; color: #047857; }
+.insignia.pago-pendiente { background: #fff7ed; color: #b45309; }
+.insignia.pago-rechazado, .insignia.pago-cancelado { background: #fef2f2; color: var(--rojo); }
+.avisoEditor .boton { padding: 6px 12px; margin-left: 6px; }
+
+.logoCuenta { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.logoVista { width: 180px; height: 80px; border: 1px dashed #cfc6e3; border-radius: 10px; display: grid; place-items: center; background: #fff; }
+.logoVista img { max-width: 160px; max-height: 64px; object-fit: contain; }
+.logoCuenta label.boton { cursor: pointer; }
+.logoEmpresa { margin: 4px 0 12px; }
+.logoEmpresa img { max-height: 52px; max-width: 220px; object-fit: contain; }
+.plantillaFila .row { margin-top: 0; }
+.plantillaFila .boton, .plantillaFila button { padding: 8px 12px; }
+.verificacion { margin-top: 14px; }
+.verificacion h2 { margin: 0 0 6px; }
+.verificacion ul { margin: 6px 0 0; padding-left: 20px; }
+
+.olvide { margin: -4px 0 0; text-align: right; font-size: 13.5px; }
+.olvide a { color: var(--accent); font-weight: 700; }
+.avisoRecordatorio { display: block; margin-top: 6px; color: var(--accent) !important; font-weight: 700; }

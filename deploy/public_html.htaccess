@@ -1,0 +1,27 @@
+# Solo si tu hosting NO deja cambiar la carpeta raíz del dominio a «autograflow/public».
+# Copia este archivo como «.htaccess» dentro de public_html (donde subiste todo el proyecto).
+#
+# Todas las visitas se envían a la carpeta public/: así el código, .env, vendor y storage nunca se sirven
+# (aunque se pidan directamente, Laravel responde «no encontrado»).
+
+# Nunca servir archivos ocultos (.env, .git…), aunque algo falle en las reglas de abajo.
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
+# «/app» es una página de la plataforma y también el nombre de una carpeta del código:
+# sin esto Apache redirigiría a «/app/» antes de pasar la visita a Laravel.
+<IfModule mod_dir.c>
+    DirectorySlash Off
+</IfModule>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{REQUEST_URI} !^/public/
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
+
+# Sin mod_rewrite no hay forma segura de servir la app desde aquí: se bloquea todo.
+<IfModule !mod_rewrite.c>
+    Require all denied
+</IfModule>

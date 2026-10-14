@@ -1,0 +1,143 @@
+/* ======================= Plataforma AutograFlow ======================= */
+header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.menuCuenta { display: flex; align-items: center; gap: 14px; font-weight: 700; font-size: 14px; }
+.menuCuenta a { color: var(--accent); text-decoration: none; }
+.menuCuenta .boton { color: #fff; padding: 8px 14px; }
+.usuarioNombre { color: var(--muted); font-weight: 600; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ancho { width: 100%; }
+.boton.ancho { display: flex; }
+.smLabel { font-size: 12px; font-weight: 800; color: #4d148c; }
+
+/* Inicio */
+.heroAf { text-align: center; padding: 34px 12px 18px; }
+.heroAf h1 { font-size: clamp(28px, 5vw, 46px); line-height: 1.1; letter-spacing: -1px; margin-bottom: 14px; }
+.heroAf h1 span { color: var(--s2); display: block; }
+.heroAf p { max-width: 640px; margin: 0 auto 22px; font-size: 17px; }
+.heroAcciones { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.heroAcciones .boton { min-width: 180px; min-height: 50px; font-size: 16px; }
+.pasosAf { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin: 22px 0; }
+.pasoAf { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
+.pasoAf h3 { margin: 8px 0 4px; }
+.pasoAf p { margin: 0; font-size: 14px; }
+.pasoIcono { font-size: 28px; }
+.plantillaAf { display: block; padding: 14px; border: 1px solid #ddd6fe; background: #f5f3ff; border-radius: 12px; text-decoration: none; color: var(--ink); }
+.plantillaAf span { display: block; color: var(--muted); font-size: 14px; margin-top: 4px; }
+.plantillaAf:hover { border-color: var(--accent); }
+
+/* Acceso */
+.acceso { max-width: 440px; margin: 20px auto; display: flex; flex-direction: column; gap: 12px; }
+.acceso .campo input { min-height: 46px; }
+
+/* Panel */
+.subidaPdf { border: 2.5px dashed #c9b8ef; border-radius: 16px; background: #faf8ff; padding: 26px 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; margin-top: 10px; }
+.subidaPdf.arrastrando { border-color: var(--accent); background: #f1ecf9; }
+.subidaPdf small, .subidaPdf span { color: var(--muted); }
+.subidaIcono { font-size: 40px; }
+.listaDocs { display: flex; flex-direction: column; gap: 8px; }
+.filaDoc { display: block; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; text-decoration: none; color: var(--ink); }
+.filaDoc:hover { border-color: var(--accent); background: #faf8ff; }
+.filaDocTitulo { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+.filaDocInfo { color: var(--muted); font-size: 13px; margin-top: 4px; }
+.progreso { height: 6px; background: #ede9f7; border-radius: 99px; overflow: hidden; margin-top: 8px; }
+.progreso span { display: block; height: 100%; background: linear-gradient(90deg, #4d148c, #ff6200); }
+.insignia.doc-borrador { background: #f3f4f6; color: #4b5563; }
+.insignia.doc-en_firma { background: #fff7ed; color: #b45309; }
+.insignia.doc-completado { background: #ecfdf5; color: #047857; }
+.insignia.doc-rechazado, .insignia.doc-anulado { background: #fef2f2; color: var(--rojo); }
+.insignia.f-firmado { background: #ecfdf5; color: #047857; }
+.insignia.f-pendiente { background: #fff7ed; color: #b45309; }
+.insignia.f-espera { background: #f3f4f6; color: #6b7280; }
+.insignia.f-rechazado { background: #fef2f2; color: var(--rojo); }
+
+/* Páginas PDF */
+.pdfPagina { position: relative; width: min(100%, 1000px); }
+.pdfLienzo { display: block; width: 100%; height: 100%; }
+.pdfCargando { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 14px; line-height: normal; }
+
+/* Editor */
+.editorCabecera { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.editorCabecera .row { margin-top: 0; margin-left: auto; }
+.tituloDoc { font: inherit; font-size: 20px; font-weight: 800; border: 1.5px solid transparent; border-radius: 10px; padding: 6px 10px; flex: 1; min-width: 200px; color: var(--ink); background: #faf8ff; }
+.tituloDoc:focus { border-color: var(--accent); outline: none; }
+.estadoGuardado { font-size: 12.5px; font-weight: 700; color: var(--ok); }
+.estadoGuardado.pendiente, .estadoGuardado.guardando { color: var(--muted); }
+.estadoGuardado.error { color: var(--rojo); }
+.avisoEditor { width: 100%; }
+.editorCuerpo { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
+.editorPanel { position: sticky; top: 12px; display: flex; flex-direction: column; }
+.editorPanel .card { padding: 14px; }
+.editorPanel h3 { margin-top: 0; }
+.barraHerramientas { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.grupoHerramientas { display: flex; flex-direction: column; gap: 6px; }
+.chips, .herramientas { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { padding: 7px 12px; border-radius: 99px; border: 2px solid transparent; background: #f4f2f9; font-size: 13.5px; display: inline-flex; align-items: center; gap: 6px; }
+.chip.activo { border-color: var(--c); background: #fff; box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 18%, transparent); }
+.punto { width: 11px; height: 11px; border-radius: 50%; background: var(--c); flex: 0 0 auto; display: inline-block; }
+.herramienta { padding: 9px 12px; font-size: 14px; background: #fff; border: 1.5px solid #d9d2ea; }
+.herramienta.activa { background: #4d148c; color: #fff; border-color: #4d148c; }
+.campoEditor {
+  position: absolute; z-index: 8; border: 2px solid var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); border-radius: 4px;
+  cursor: move; touch-action: none; display: flex; align-items: center; justify-content: center; overflow: hidden; line-height: 1.05; user-select: none;
+}
+.campoEditor.sel { box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 30%, transparent); z-index: 9; }
+.campoEditor.lectura { cursor: default; border-style: dashed; }
+.campoEditor.lectura.lleno { border-style: solid; background: color-mix(in srgb, var(--c) 6%, transparent); }
+.campoEditor img { width: 100%; height: 100%; object-fit: contain; }
+.campoEditorTexto { font-size: clamp(8px, 1.15cqw, 13px); font-weight: 800; color: var(--c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 3px; pointer-events: none; }
+.campoEditor.tipo-casilla .campoEditorTexto { font-size: clamp(8px, 1.6cqw, 16px); }
+.asaTamano { position: absolute; right: -1px; bottom: -1px; width: 16px; height: 16px; background: var(--c); border-radius: 4px 0 3px 0; cursor: nwse-resize; touch-action: none; }
+.tarjetaFirmante { border: 1px solid var(--line); border-left: 4px solid var(--c); border-radius: 10px; padding: 10px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 6px; }
+.tarjetaFirmante input { font: inherit; font-size: 14px; padding: 8px 10px; border: 1.5px solid #d9d2ea; border-radius: 8px; }
+.tarjetaFirmanteCab { display: flex; align-items: center; gap: 6px; }
+.tarjetaFirmanteCab small { color: var(--muted); }
+.tarjetaFirmanteCab .acciones { margin: 0 0 0 auto; display: flex; gap: 4px; }
+.tarjetaFirmanteCab .acciones button { padding: 4px 8px; font-size: 13px; }
+.casillaLinea { display: flex; gap: 8px; align-items: center; font-size: 14px; margin: 6px 0; }
+.casillaLinea input { width: 18px; height: 18px; accent-color: var(--accent); }
+.panelCampo select, .editorPanel textarea, .editorPanel .campo input { font: inherit; width: 100%; padding: 8px 10px; border: 1.5px solid #d9d2ea; border-radius: 8px; background: #fff; }
+.panelCampo .row { margin-top: 8px; }
+
+/* Firmante */
+.campoFirma {
+  position: absolute; z-index: 8; box-sizing: border-box; padding: 0; margin: 0; font: inherit; line-height: normal; border-radius: 3px;
+  display: flex; align-items: center; justify-content: center; overflow: hidden; background: transparent; min-width: 0;
+}
+.campoFirma.mio { border: 2px dashed var(--c); background: color-mix(in srgb, var(--c) 12%, transparent); cursor: pointer; }
+.campoFirma.mio:not(.filled)::after { content: attr(data-vacio); color: var(--c); font-weight: 800; font-size: clamp(7px, 1.2cqw, 13px); text-align: center; padding: 0 2px; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.campoFirma.mio.filled { border-style: solid; border-width: 1px; background: transparent; }
+.campoFirma.mio:hover { box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 25%, transparent); }
+.campoFirma.invalido { border: 2px solid #dc2626 !important; background: rgba(254, 226, 226, 0.6) !important; }
+.campoFirma.otro { pointer-events: none; }
+.campoFirma img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.campoFirma .afTextShown { font-size: clamp(7px, 1.35cqw, 15px); }
+.marcaCasilla { font-weight: 900; color: #111827; font-size: clamp(9px, 1.5cqw, 18px); line-height: 1; }
+
+/* Seguimiento */
+.listaFirmantes { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+.firmanteSeguimiento { border: 1px solid var(--line); border-left: 4px solid var(--c); border-radius: 12px; padding: 12px; }
+.firmanteSeguimiento small { color: var(--muted); display: block; margin-top: 4px; }
+.firmanteSeguimiento .row { margin-top: 10px; }
+.firmanteSeguimientoCab { display: flex; align-items: center; gap: 8px; }
+.firmanteSeguimientoCab .insignia { margin-left: auto; }
+.historial { list-style: none; padding: 0; margin: 0; font-size: 13.5px; }
+.historial li { padding: 7px 0; border-bottom: 1px solid var(--line); color: var(--ink); }
+.historial time { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 6px; }
+.huella code { word-break: break-all; font-size: 11px; }
+
+/* Sello */
+.stampMaker { position: absolute; inset: 0; z-index: 3; overflow: auto; display: flex; flex-direction: column; gap: 8px; padding: 14px; background: #faf8fd; }
+.stampMaker textarea { width: 100%; min-height: 90px; padding: 10px; border: 1.5px solid #d9d2ea; border-radius: 10px; font: inherit; font-size: 16px; resize: vertical; }
+.smPreviewWrap { border: 1px dashed #cfc6e3; border-radius: 10px; background: repeating-conic-gradient(#f3f3f3 0 25%, #fff 0 50%) 0/14px 14px; display: flex; justify-content: center; align-items: center; padding: 8px; min-height: 90px; }
+.smPreviewWrap img { max-width: 100%; max-height: 180px; }
+.smActions { justify-content: center; margin-top: 0; }
+
+@media (max-width: 900px) {
+  .editorCuerpo { grid-template-columns: 1fr; }
+  .editorPanel { position: static; }
+}
+@media (max-width: 600px) {
+  .menuCuenta { gap: 10px; font-size: 13px; }
+  .usuarioNombre { display: none; }
+  .editorCabecera .row { margin-left: 0; width: 100%; }
+  .editorCabecera .row button { flex: 1; }
+}
