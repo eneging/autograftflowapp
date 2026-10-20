@@ -1,4 +1,4 @@
-import type { DatosGuardarDocumento, DocumentoDetalle, EstadoDocumento, VistaFirmante } from "../../../shared/plataforma";
+import type { DatosGuardarDocumento, DocumentoDetalle, EstadoDocumento, Evidencias, VistaFirmante } from "../../../shared/plataforma";
 import type { EstadoCuenta, IdPlan, PagoFila, Plan } from "../../../shared/planes";
 import { prepararPdf } from "./prepararPdf";
 
@@ -45,11 +45,12 @@ export const plataforma = {
 
   documentos: () => pedir<FilaDocumento[]>("/api/documentos"),
   subir: async (archivo: File) => {
-    const { preparado, campos } = await prepararPdf(archivo);
+    const { preparado, campos, formulario } = await prepararPdf(archivo);
     const datos = new FormData();
     datos.append("original", archivo);
     datos.append("preparado", preparado, "preparado.pdf");
     datos.append("campos", JSON.stringify(campos));
+    if (formulario) datos.append("formulario", JSON.stringify(formulario));
     datos.append("nombre", archivo.name);
     return pedir<{ id: number; camposDetectados: number }>("/api/documentos", { method: "POST", body: datos });
   },
@@ -58,6 +59,7 @@ export const plataforma = {
   enviar: (id: number) => pedir<DocumentoDetalle>(`/api/documentos/${id}/enviar`, json("POST", {})),
   plantilla: (id: number, es: boolean) => pedir(`/api/documentos/${id}/plantilla`, json("POST", { es })),
   duplicar: (id: number) => pedir<{ id: number }>(`/api/documentos/${id}/duplicar`, json("POST", {})),
+  eliminarPagina: (id: number, pagina: number) => pedir<DocumentoDetalle>(`/api/documentos/${id}/paginas/${pagina}`, { method: "DELETE" }),
   subirLogo: (archivo: File) => pedir("/api/cuenta/logo", { method: "PUT", body: archivo, headers: { "Content-Type": archivo.type } }),
   quitarLogo: () => pedir("/api/cuenta/logo", { method: "DELETE" }),
   verificar: (sha: string) => pedir<Verificacion>(`/api/verificar/${sha}`),
@@ -73,8 +75,8 @@ export const plataforma = {
   verificarPago: (id: number) => pedir<PagoFila>(`/api/pagos/${id}/verificar`, json("POST", {})),
 
   vista: (token: string) => pedir<VistaFirmante>(`/api/firmar/${encodeURIComponent(token)}`),
-  firmar: (token: string, valores: Record<string, string | boolean>) =>
-    pedir<{ completo: boolean }>(`/api/firmar/${encodeURIComponent(token)}`, json("POST", { valores })),
+  firmar: (token: string, valores: Record<string, string | boolean>, evidencias: Evidencias = {}, calculos: Record<string, string> = {}) =>
+    pedir<{ completo: boolean }>(`/api/firmar/${encodeURIComponent(token)}`, json("POST", { valores, evidencias, calculos })),
   rechazar: (token: string, motivo: string) => pedir(`/api/firmar/${encodeURIComponent(token)}/rechazar`, json("POST", { motivo })),
 };
 

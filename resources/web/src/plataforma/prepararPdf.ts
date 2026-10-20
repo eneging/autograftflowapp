@@ -1,7 +1,8 @@
 import { PDFCheckBox, PDFDocument, PDFSignature, PDFTextField, degrees } from "pdf-lib";
-import { LIMITES_PLATAFORMA, type TipoCampo } from "../../../shared/plataforma";
+import { LIMITES_PLATAFORMA, type FormularioPdf, type TipoCampo } from "../../../shared/plataforma";
+import { leerPdf } from "./VisorPdf";
 
-export interface CampoDetectado { tipo: TipoCampo; pagina: number; x: number; y: number; w: number; h: number; etiqueta: string }
+export interface CampoDetectado { tipo: TipoCampo; pagina: number; x: number; y: number; w: number; h: number; etiqueta: string; nombrePdf: string }
 
 /**
  * Prepara en el navegador un PDF antes de subirlo (en hosting compartido no hay Node en el servidor):
@@ -28,7 +29,9 @@ export async function prepararPdf(archivo: File) {
     return { giro, recorte, recta: giro === 0 && recorte.x === 0 && recorte.y === 0 };
   });
   const todasRectas = geometria.every((g) => g.recta);
-  const campos = todasRectas ? detectarCampos(doc) : [];
+  const formulario = todasRectas ? await leerFormulario(bytes) : null;
+  const calculados = new Set(formulario ? Object.entries(formulario.objects).filter(([, l]) => l.some((o) => o.actions?.Calculate?.length)).map(([n]) => n) : []);
+  const campos = todasRectas ? detectarCampos(doc, calculados) : [];
 
   let salida = doc;
   if (!todasRectas) {
@@ -49,11 +52,28 @@ export async function prepararPdf(archivo: File) {
     }
   }
   const preparado = await salida.save({ useObjectStreams: false });
-  return { preparado: new Blob([preparado as Uint8Array<ArrayBuffer>], { type: "application/pdf" }), campos };
+  // El formulario (con sus scripts) solo se guarda si el PDF tiene campos calculados.
+  return { preparado: new Blob([preparado as Uint8Array<ArrayBuffer>], { type: "application/pdf" }), campos, formulario: calculados.size ? formulario : null };
+}
+
+/** Campos y scripts del formulario con pdf.js (lo que necesita su entorno aislado para ejecutar los cálculos). */
+async function leerFormulario(bytes: Uint8Array): Promise<FormularioPdf | null> {
+  try {
+    const pdf = await leerPdf(bytes.slice());
+    try {
+      const [objects, orden, actions] = await Promise.all([pdf.getFieldObjects(), pdf.getCalculationOrderIds(), pdf.getJSActions()]);
+      if (!objects) return null;
+      return { objects: objects as unknown as FormularioPdf["objects"], calculationOrder: orden ?? [], actions: (actions as FormularioPdf["actions"]) ?? null, numPages: pdf.numPages };
+    } finally {
+      pdf.destroy();
+    }
+  } catch {
+    return null; // sin formulario legible: el PDF se sube igual, solo que sin cálculos
+  }
 }
 
 /** Campos rellenables del PDF → campos de AutograFlow (en coordenadas desde arriba a la izquierda). */
-function detectarCampos(doc: PDFDocument): CampoDetectado[] {
+function detectarCampos(doc: PDFDocument, calculados: Set<string>): CampoDetectado[] {
   let campos;
   try {
     campos = doc.getForm().getFields();
@@ -68,7 +88,8 @@ function detectarCampos(doc: PDFDocument): CampoDetectado[] {
     let tipo: TipoCampo | null =
       campo instanceof PDFSignature ? "firma" : campo instanceof PDFCheckBox ? "casilla" : campo instanceof PDFTextField ? "texto" : null;
     if (!tipo) continue;
-    if (tipo === "texto" && /firma|signature|sign\b/i.test(nombre)) tipo = "firma";
+    if (tipo === "texto" && calculados.has(nombre)) tipo = "calculo";
+    else if (tipo === "texto" && /firma|signature|sign\b/i.test(nombre)) tipo = "firma";
     else if (tipo === "texto" && /fecha|date/i.test(nombre)) tipo = "fecha";
     for (const widget of campo.acroField.getWidgets()) {
       const ref = widget.P();
@@ -79,7 +100,7 @@ function detectarCampos(doc: PDFDocument): CampoDetectado[] {
       if (r.width < 4 || r.height < 4) continue;
       // Las firmas en una línea delgada se agrandan hacia arriba para que quepa el trazo.
       const h = tipo === "firma" ? Math.max(r.height, 36) : r.height;
-      salida.push({ tipo, pagina: i + 1, x: r.x, y: alto - r.y - h, w: r.width, h, etiqueta: nombre.replace(/[_.]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120) });
+      salida.push({ tipo, pagina: i + 1, x: r.x, y: alto - r.y - h, w: r.width, h, etiqueta: nombre.replace(/[_.]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120), nombrePdf: nombre.slice(0, 200) });
     }
   }
   return salida.slice(0, LIMITES_PLATAFORMA.campos);

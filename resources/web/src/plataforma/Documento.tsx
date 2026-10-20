@@ -14,6 +14,9 @@ export function DocumentoPagina() {
   const id = Number(useParams().id);
   const [d, setD] = useState<DocumentoDetalle | null>(null);
   const [error, setError] = useState("");
+  // Al quitar una página cambia el PDF: el editor se vuelve a armar (versión) con un aviso.
+  const [version, setVersion] = useState(0);
+  const [avisoEditor, setAvisoEditor] = useState("");
   useEffect(() => {
     setD(null);
     setError("");
@@ -22,7 +25,10 @@ export function DocumentoPagina() {
   if (error) return <div className="card"><div className="afAlerta">{error}</div><Link to="/app">← Mis documentos</Link></div>;
   if (!d) return <div className="card"><p id="loading">Cargando documento…</p></div>;
   // La clave reinicia el editor al pasar a otro documento (p. ej. a la copia de una plantilla).
-  return d.estado === "borrador" ? <Editor key={d.id} inicial={d} alEnviar={setD} /> : <Seguimiento key={d.id} d={d} recargar={() => plataforma.documento(id).then(setD)} />;
+  return d.estado === "borrador"
+    ? <Editor key={`${d.id}-${version}`} inicial={d} alEnviar={setD} avisoInicial={avisoEditor}
+        alCambiarPdf={(nuevo, aviso) => { setAvisoEditor(aviso); setD(nuevo); setVersion((v) => v + 1); }} />
+    : <Seguimiento key={d.id} d={d} recargar={() => plataforma.documento(id).then(setD)} />;
 }
 
 /** Comparte un PDF como archivo (menú del celular → WhatsApp) o, si no se puede, lo descarga. */
@@ -116,6 +122,9 @@ function Seguimiento({ d, recargar }: { d: DocumentoDetalle; recargar: () => voi
                 {recordado[f.id] && recordado[f.id] !== "Enviando…" && <small className="avisoRecordatorio">{recordado[f.id]}</small>}
                 {d.estado === "en_firma" && f.estado === "pendiente" && f.token && (
                   <div className="row">
+                    {turno && usuario && f.email.toLowerCase() === usuario.email.toLowerCase() && (
+                      <Link className="boton success" to={`/f/${f.token}`}>✍️ Firmar ahora (eres tú)</Link>
+                    )}
                     <a className="boton primary" target="_blank" rel="noopener noreferrer" href={enlaceWhatsApp(textoInvitacion(f.nombre, f.token), f.telefono)}>💬 Enviar por WhatsApp</a>
                     <button type="button" onClick={async () => { if (await copiar(urls.enlaceFirmante(f.token!))) { setCopiado(f.id); setTimeout(() => setCopiado(null), 2000); } }}>
                       {copiado === f.id ? "✓ Copiado" : "🔗 Copiar enlace"}
@@ -142,10 +151,13 @@ function Seguimiento({ d, recargar }: { d: DocumentoDetalle; recargar: () => voi
           <PaginaPdf doc={doc} numero={pagina} pagina={tamano}>
             {!completo && d.campos.filter((c) => c.pagina === pagina).map((c) => {
               const f = d.firmantes.find((x) => x.clave === c.firmante);
+              const quien = c.tipo === "calculo" ? "lo calcula el PDF" : f?.nombre ?? "lo llenaste tú";
               return (
-                <div key={c.id} className={`campoEditor lectura ${c.lleno ? "lleno" : ""}`} style={{ ...posicion(c, tamano), "--c": f?.color } as CSSProperties} title={`${ETIQUETA_TIPO[c.tipo]} — ${f?.nombre}`}>
+                <div key={c.id} className={`campoEditor lectura tipo-${c.tipo} ${c.lleno ? "lleno" : ""}`} style={{ ...posicion(c, tamano), "--c": f?.color ?? "#dc2626" } as CSSProperties} title={`${c.etiqueta || ETIQUETA_TIPO[c.tipo]} — ${quien}`}>
                   {c.lleno && ["firma", "sello", "huella"].includes(c.tipo)
                     ? <img src={urls.imagenDueno(d.id, c.id)} alt={ETIQUETA_TIPO[c.tipo]} />
+                    : typeof c.valor === "string" && c.valor && c.tipo !== "fecha" ? <span className="campoEditorTexto valorLleno">{c.valor}</span>
+                    : ["texto", "fecha", "casilla", "calculo"].includes(c.tipo) ? (c.lleno ? <span className="campoEditorTexto">✓</span> : null)
                     : <span className="campoEditorTexto">{c.lleno ? "✓" : ""} {c.etiqueta || ETIQUETA_TIPO[c.tipo]}</span>}
                 </div>
               );

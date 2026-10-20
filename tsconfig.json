@@ -13,5 +13,5 @@
     "isolatedModules": true,
     "types": ["vite/client"]
   },
-  "include": ["resources/web/src", "resources/shared", "vite.config.ts"]
+  "include": ["resources/web/src", "resources/shared", "vite.config.ts", "vite-node.d.ts"]
 }

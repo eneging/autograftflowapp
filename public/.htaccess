@@ -1,3 +1,8 @@
+# Archivos WebAssembly (cálculos de los formularios PDF en /pdfjs/).
+<IfModule mod_mime.c>
+    AddType application/wasm .wasm
+</IfModule>
+
 <IfModule mod_rewrite.c>
     <IfModule mod_negotiation.c>
         Options -MultiViews -Indexes

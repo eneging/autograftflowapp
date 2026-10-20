@@ -12,10 +12,14 @@ use setasign\Fpdi\Tcpdf\Fpdi;
 /** Plataforma AutograFlow: documentos, firmantes, campos, firma y PDF final con certificado. */
 class Documentos
 {
-    public const TIPOS = ['firma', 'texto', 'fecha', 'casilla', 'sello', 'huella'];
+    public const TIPOS = ['firma', 'texto', 'fecha', 'casilla', 'sello', 'huella', 'calculo'];
     public const TIPOS_IMAGEN = ['firma', 'sello', 'huella'];
+    /** Datos que puede llenar quien prepara el documento (el resto lo llena un firmante o lo calcula el PDF). */
+    public const TIPOS_DATO = ['texto', 'fecha', 'casilla'];
+    /** «Firmante» de los campos sin firmante: los llena quien prepara el documento o los calcula el PDF. */
+    public const PREPARADOR = 'preparador';
     public const COLORES = ['#4d148c', '#ff6200', '#0e9f6e', '#2563eb', '#c026d3', '#b45309', '#0891b2', '#be123c'];
-    private const ETIQUETA = ['firma' => 'firma', 'texto' => 'texto', 'fecha' => 'fecha', 'casilla' => 'casilla', 'sello' => 'sello', 'huella' => 'huella'];
+    private const ETIQUETA = ['firma' => 'firma', 'texto' => 'texto', 'fecha' => 'fecha', 'casilla' => 'casilla', 'sello' => 'sello', 'huella' => 'huella', 'calculo' => 'cálculo'];
 
     private static function disco()
     {
@@ -36,8 +40,12 @@ class Documentos
      * Guarda un PDF subido. La página ya lo preparó (enderezó las páginas y lo guardó sin «object streams»
      * para que FPDI pueda leerlo); aquí se comprueba que se pueda leer y se toman sus medidas reales.
      */
-    public static function crear(User $u, string $nombre, string $original, string $preparado, array $detectados, array $origen): array
+    public static function crear(User $u, string $nombre, string $original, string $preparado, array $detectados, array $origen, ?string $formulario = null): array
     {
+        // Campos y scripts de cálculo del PDF (los lee la página con pdf.js): se guardan tal cual si son JSON válido.
+        if ($formulario !== null && (strlen($formulario) > 3_000_000 || ! is_array(json_decode($formulario, true)['objects'] ?? null))) {
+            $formulario = null;
+        }
         foreach ([$original, $preparado] as $pdf) {
             if (! str_starts_with($pdf, '%PDF-')) {
                 throw new ErrorUso('El archivo no es un PDF');
@@ -68,21 +76,24 @@ class Documentos
             if (! $p || ! in_array($c['tipo'] ?? '', self::TIPOS, true)) {
                 continue;
             }
+            $nombrePdf = Str::limit((string) ($c['nombrePdf'] ?? ''), 197, '');
             $campos[] = self::recortar(['tipo' => $c['tipo'], 'pagina' => (int) $c['pagina'], 'x' => (float) $c['x'], 'y' => (float) $c['y'],
-                'w' => (float) $c['w'], 'h' => (float) $c['h'], 'etiqueta' => Str::limit((string) ($c['etiqueta'] ?? ''), 117)], $p);
+                'w' => (float) $c['w'], 'h' => (float) $c['h'], 'etiqueta' => Str::limit((string) ($c['etiqueta'] ?? ''), 117), 'nombre_pdf' => $nombrePdf ?: null], $p);
         }
 
-        $id = DB::transaction(function () use ($u, $nombre, $original, $preparado, $paginas, $campos, $origen) {
+        $id = DB::transaction(function () use ($u, $nombre, $original, $preparado, $paginas, $campos, $origen, $formulario) {
             $id = DB::table('documentos')->insertGetId([
                 'cuenta_id' => $u->cuenta_id, 'user_id' => $u->id, 'nombre' => Str::limit($nombre, 157), 'archivo' => '',
-                'sha256_original' => hash('sha256', $original), 'paginas' => json_encode($paginas), 'created_at' => now(), 'updated_at' => now(),
+                'sha256_original' => hash('sha256', $original), 'paginas' => json_encode($paginas), 'formulario' => $formulario, 'created_at' => now(), 'updated_at' => now(),
             ]);
             $ruta = "documentos/{$id}/original.pdf";
             self::disco()->put($ruta, $preparado);
             DB::table('documentos')->where('id', $id)->update(['archivo' => $ruta]);
             $f = DB::table('firmantes')->insertGetId(['documento_id' => $id, 'orden' => 1, 'nombre' => 'Firmante 1', 'color' => self::COLORES[0]]);
+            // Como en el prototipo: los datos detectados los llena quien prepara el documento (puede asignarlos a un
+            // firmante en el editor); las firmas, al Firmante 1; los calculados, el PDF.
             foreach ($campos as $c) {
-                DB::table('campos')->insert($c + ['documento_id' => $id, 'firmante_id' => $f, 'obligatorio' => $c['tipo'] === 'firma']);
+                DB::table('campos')->insert($c + ['documento_id' => $id, 'firmante_id' => in_array($c['tipo'], self::TIPOS_IMAGEN, true) ? $f : null, 'obligatorio' => $c['tipo'] === 'firma']);
             }
             self::evento($id, 'creado', "Documento creado por {$u->name} ({$u->email})", $origen);
             return $id;
@@ -126,22 +137,25 @@ class Documentos
             self::completarSinFallar($id);
             $d = self::documentoDe($cuentaId, $id);
         }
-        $clave = fn ($fid) => "f{$fid}";
+        $clave = fn ($fid) => $fid ? "f{$fid}" : self::PREPARADOR;
         return [
             'id' => $d->id, 'nombre' => $d->nombre, 'estado' => $d->estado, 'esPlantilla' => (bool) $d->es_plantilla, 'orden' => $d->orden,
             'bloquearDibujo' => (bool) $d->bloquear_dibujo, 'bloquearSello' => (bool) $d->bloquear_sello,
+            'flujo' => (bool) $d->flujo, 'certificado' => (bool) $d->certificado_evidencias,
             'mensaje' => $d->mensaje, 'paginas' => json_decode($d->paginas, true), 'sha256Original' => $d->sha256_original, 'sha256Final' => $d->sha256_final,
             'creadoEn' => Fechas::iso($d->created_at), 'enviadoEn' => Fechas::iso($d->enviado_en), 'completadoEn' => Fechas::iso($d->completado_en),
             'firmantes' => DB::table('firmantes')->where('documento_id', $id)->orderBy('orden')->get()->map(fn ($f) => [
                 'id' => $f->id, 'clave' => $clave($f->id), 'orden' => $f->orden, 'nombre' => $f->nombre, 'telefono' => $f->telefono, 'email' => $f->email,
-                'color' => $f->color, 'token' => $f->token, 'estado' => $f->estado, 'abiertoEn' => Fechas::iso($f->abierto_en),
+                'pedirDni' => (bool) $f->pedir_dni, 'color' => $f->color, 'token' => $f->token, 'estado' => $f->estado, 'abiertoEn' => Fechas::iso($f->abierto_en),
                 'firmadoEn' => Fechas::iso($f->firmado_en), 'motivoRechazo' => $f->motivo_rechazo,
             ])->all(),
             'campos' => DB::table('campos')->where('documento_id', $id)->orderBy('id')->get()->map(fn ($c) => [
                 'id' => $c->id, 'firmante' => $clave($c->firmante_id), 'tipo' => $c->tipo, 'pagina' => $c->pagina,
                 'x' => (float) $c->x, 'y' => (float) $c->y, 'w' => (float) $c->w, 'h' => (float) $c->h,
                 'etiqueta' => $c->etiqueta, 'obligatorio' => (bool) $c->obligatorio, 'lleno' => (bool) ($c->imagen || ($c->valor !== null && $c->valor !== '' && $c->valor !== '0')),
+                'valor' => $c->tipo === 'casilla' ? ($c->valor === null ? null : $c->valor === '1') : $c->valor, 'nombrePdf' => $c->nombre_pdf ?? '',
             ])->all(),
+            'formulario' => $d->formulario ? json_decode($d->formulario, true) : null,
             'eventos' => DB::table('eventos as e')->leftJoin('firmantes as f', 'f.id', '=', 'e.firmante_id')->where('e.documento_id', $id)->orderBy('e.id')
                 ->get(['e.tipo', 'e.detalle', 'e.creado_en', 'f.nombre as firmante'])
                 ->map(fn ($e) => ['tipo' => $e->tipo, 'detalle' => $e->detalle, 'firmante' => $e->firmante, 'creadoEn' => Fechas::iso($e->creado_en)])->all(),
@@ -161,32 +175,59 @@ class Documentos
             throw new ErrorUso('Hay firmantes repetidos');
         }
         foreach ($datos['campos'] as &$c) {
-            if (! in_array($c['firmante'], $claves, true)) {
+            if ($c['tipo'] === 'calculo') {
+                $c['firmante'] = self::PREPARADOR; // lo calcula el PDF, nadie lo llena
+            } elseif ($c['firmante'] === self::PREPARADOR) {
+                if (! in_array($c['tipo'], self::TIPOS_DATO, true)) {
+                    throw new ErrorUso('La firma, el sello y la huella deben asignarse a un firmante');
+                }
+            } elseif (! in_array($c['firmante'], $claves, true)) {
                 throw new ErrorUso('Hay un campo asignado a un firmante que no existe');
             }
             $p = $paginas[$c['pagina'] - 1] ?? throw new ErrorUso('Hay un campo en una página que no existe');
             $c = self::recortar($c, $p);
+            $c['valor'] = $c['firmante'] === self::PREPARADOR && $c['tipo'] !== 'calculo' ? self::valorDelPreparador($c) : null;
         }
         unset($c);
         DB::transaction(function () use ($id, $datos) {
             DB::table('documentos')->where('id', $id)->update(['nombre' => $datos['nombre'], 'orden' => $datos['orden'], 'mensaje' => $datos['mensaje'],
-                'bloquear_dibujo' => $datos['bloquearDibujo'] ?? false, 'bloquear_sello' => $datos['bloquearSello'] ?? false, 'updated_at' => now()]);
+                'bloquear_dibujo' => $datos['bloquearDibujo'] ?? false, 'bloquear_sello' => $datos['bloquearSello'] ?? false,
+                'flujo' => $datos['flujo'] ?? false, 'certificado_evidencias' => $datos['certificado'] ?? false, 'updated_at' => now()]);
             DB::table('campos')->where('documento_id', $id)->delete();
             DB::table('firmantes')->where('documento_id', $id)->delete();
             $ids = [];
             foreach ($datos['firmantes'] as $i => $f) {
                 $ids[$f['clave']] = DB::table('firmantes')->insertGetId([
                     'documento_id' => $id, 'orden' => $i + 1, 'nombre' => $f['nombre'], 'telefono' => $f['telefono'], 'email' => $f['email'],
-                    'color' => self::COLORES[$i % count(self::COLORES)],
+                    'color' => self::COLORES[$i % count(self::COLORES)], 'pedir_dni' => $f['pedirDni'] ?? false,
                 ]);
             }
             foreach ($datos['campos'] as $c) {
+                $preparador = $c['firmante'] === self::PREPARADOR;
                 DB::table('campos')->insert([
-                    'documento_id' => $id, 'firmante_id' => $ids[$c['firmante']], 'tipo' => $c['tipo'], 'pagina' => $c['pagina'],
-                    'x' => $c['x'], 'y' => $c['y'], 'w' => $c['w'], 'h' => $c['h'], 'etiqueta' => $c['etiqueta'], 'obligatorio' => $c['obligatorio'],
+                    'documento_id' => $id, 'firmante_id' => $preparador ? null : $ids[$c['firmante']], 'tipo' => $c['tipo'], 'pagina' => $c['pagina'],
+                    'x' => $c['x'], 'y' => $c['y'], 'w' => $c['w'], 'h' => $c['h'], 'etiqueta' => $c['etiqueta'], 'obligatorio' => ! $preparador && $c['obligatorio'],
+                    'valor' => $c['valor'], 'nombre_pdf' => ($c['nombrePdf'] ?? '') ?: null,
                 ]);
             }
         });
+    }
+
+    /** Lo que escribió quien prepara el documento: queda impreso tal cual; vacío (o casilla sin marcar) → null. */
+    private static function valorDelPreparador(array $c): ?string
+    {
+        $v = $c['valor'] ?? null;
+        if ($c['tipo'] === 'casilla') {
+            return $v === true || $v === '1' ? '1' : null;
+        }
+        if (! is_string($v) || trim($v) === '') {
+            return null;
+        }
+        $s = Str::limit(trim($v), config('autograflow.limites.texto'), '');
+        if ($c['tipo'] === 'fecha' && ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $s)) {
+            throw new ErrorUso('Hay una fecha inválida en los campos que llenas tú');
+        }
+        return $s;
     }
 
     /** Envía a firmar: descuenta un documento del plan y crea el enlace de cada firmante. */
@@ -205,6 +246,13 @@ class Documentos
         $sinCampos = array_filter($det['firmantes'], fn ($f) => ! array_filter($det['campos'], fn ($c) => $c['firmante'] === $f['clave']));
         if ($sinCampos) {
             throw new ErrorUso(implode(', ', array_column($sinCampos, 'nombre')).' no tiene campos para llenar o firmar');
+        }
+        // Con DNI, la firma sale de una foto de la firma en papel y la huella del reverso del DNI: necesita los dos espacios.
+        foreach ($det['firmantes'] as $f) {
+            $tipos = array_column(array_filter($det['campos'], fn ($c) => $c['firmante'] === $f['clave']), 'tipo');
+            if ($f['pedirDni'] && (! in_array('firma', $tipos, true) || ! in_array('huella', $tipos, true))) {
+                throw new ErrorUso("Marca un espacio para la firma y otro para la huella de {$f['nombre']}: se tomarán con su DNI");
+            }
         }
         DB::transaction(function () use ($u, $id, $det, $origen) {
             Planes::consumirEnvio($u->cuenta_id, $id, count($det['firmantes']), array_column($det['campos'], 'tipo'));
@@ -261,7 +309,8 @@ class Documentos
             $nuevo = DB::table('documentos')->insertGetId([
                 'cuenta_id' => $u->cuenta_id, 'user_id' => $u->id, 'nombre' => $d->nombre, 'orden' => $d->orden, 'mensaje' => $d->mensaje,
                 'bloquear_dibujo' => $d->bloquear_dibujo, 'bloquear_sello' => $d->bloquear_sello,
-                'archivo' => '', 'sha256_original' => $d->sha256_original, 'paginas' => $d->paginas, 'created_at' => now(), 'updated_at' => now(),
+                'flujo' => $d->flujo, 'certificado_evidencias' => $d->certificado_evidencias,
+                'archivo' => '', 'sha256_original' => $d->sha256_original, 'paginas' => $d->paginas, 'formulario' => $d->formulario, 'created_at' => now(), 'updated_at' => now(),
             ]);
             $ruta = "documentos/{$nuevo}/original.pdf";
             self::disco()->put($ruta, self::disco()->get($d->archivo));
@@ -269,20 +318,62 @@ class Documentos
             $ids = [];
             foreach ($det['firmantes'] as $f) {
                 $ids[$f['clave']] = DB::table('firmantes')->insertGetId([
-                    'documento_id' => $nuevo, 'orden' => $f['orden'], 'nombre' => $f['nombre'], 'color' => $f['color'],
+                    'documento_id' => $nuevo, 'orden' => $f['orden'], 'nombre' => $f['nombre'], 'color' => $f['color'], 'pedir_dni' => $f['pedirDni'],
                     'telefono' => $det['esPlantilla'] ? '' : $f['telefono'], 'email' => $det['esPlantilla'] ? '' : $f['email'],
                 ]);
             }
             foreach ($det['campos'] as $c) {
+                // Se copia lo que escribió quien preparó el documento (no lo que llenaron los firmantes ni los cálculos).
+                $preparador = $c['firmante'] === self::PREPARADOR;
+                $valor = $preparador && $c['tipo'] !== 'calculo' ? ($c['tipo'] === 'casilla' ? ($c['valor'] ? '1' : null) : $c['valor']) : null;
                 DB::table('campos')->insert([
-                    'documento_id' => $nuevo, 'firmante_id' => $ids[$c['firmante']], 'tipo' => $c['tipo'], 'pagina' => $c['pagina'],
+                    'documento_id' => $nuevo, 'firmante_id' => $preparador ? null : $ids[$c['firmante']], 'tipo' => $c['tipo'], 'pagina' => $c['pagina'],
                     'x' => $c['x'], 'y' => $c['y'], 'w' => $c['w'], 'h' => $c['h'], 'etiqueta' => $c['etiqueta'], 'obligatorio' => $c['obligatorio'],
+                    'valor' => $valor, 'nombre_pdf' => $c['nombrePdf'] ?: null,
                 ]);
             }
             self::evento($nuevo, 'creado', "Creado por {$u->name} a partir de «{$d->nombre}»".($det['esPlantilla'] ? ' (plantilla)' : ''), $origen);
             return $nuevo;
         });
         return ['id' => $nuevo];
+    }
+
+    /**
+     * Quita una página del borrador: el PDF que se enviará ya no la tiene, se borran los campos que había en ella y los
+     * de las páginas siguientes suben una página. La huella SHA-256 del original no cambia (es la del archivo subido).
+     */
+    public static function eliminarPagina(int $cuentaId, int $id, int $pagina, array $origen): void
+    {
+        $d = self::documentoDe($cuentaId, $id);
+        if ($d->estado !== 'borrador') {
+            throw new ErrorUso('El documento ya fue enviado y no se puede modificar', 409);
+        }
+        $paginas = json_decode($d->paginas, true);
+        if (! isset($paginas[$pagina - 1])) {
+            throw new ErrorUso('Esa página no existe', 404);
+        }
+        if (count($paginas) === 1) {
+            throw new ErrorUso('El documento debe tener al menos una página');
+        }
+        $pdf = PdfFinal::nuevo();
+        $total = $pdf->setSourceFile(StreamReader::createByString(self::disco()->get($d->archivo)));
+        for ($i = 1; $i <= $total; $i++) {
+            if ($i === $pagina) {
+                continue;
+            }
+            $tpl = $pdf->importPage($i);
+            $t = $pdf->getTemplateSize($tpl);
+            $pdf->AddPage($t['orientation'], [$t['width'], $t['height']]);
+            $pdf->useTemplate($tpl, 0, 0, $t['width'], $t['height']);
+        }
+        array_splice($paginas, $pagina - 1, 1);
+        DB::transaction(function () use ($id, $pagina, $paginas, $pdf, $d, $origen) {
+            self::disco()->put($d->archivo, $pdf->Output('', 'S'));
+            DB::table('documentos')->where('id', $id)->update(['paginas' => json_encode($paginas), 'updated_at' => now()]);
+            DB::table('campos')->where('documento_id', $id)->where('pagina', $pagina)->delete();
+            DB::table('campos')->where('documento_id', $id)->where('pagina', '>', $pagina)->decrement('pagina');
+            self::evento($id, 'pagina', "Se quitó la página {$pagina} antes de enviarlo", $origen);
+        });
     }
 
     public static function eliminar(User $u, int $id, array $origen): string
@@ -351,7 +442,7 @@ class Documentos
         $q = DB::table('firmantes as f')->join('documentos as d', 'd.id', '=', 'f.documento_id')->join('users as u', 'u.id', '=', 'd.user_id')
             ->join('cuentas as c', 'c.id', '=', 'd.cuenta_id')->where('f.token', $t)
             ->select('f.*', 'd.nombre as doc_nombre', 'd.estado as doc_estado', 'd.orden as doc_orden', 'd.mensaje as doc_mensaje',
-                'd.paginas as doc_paginas', 'd.bloquear_dibujo', 'd.bloquear_sello', 'd.archivo', 'd.archivo_final', 'd.cuenta_id', 'u.name as remitente', 'c.nombre as empresa', 'c.logo as cuenta_logo');
+                'd.paginas as doc_paginas', 'd.bloquear_dibujo', 'd.bloquear_sello', 'd.flujo', 'd.certificado_evidencias', 'd.archivo', 'd.archivo_final', 'd.cuenta_id', 'u.name as remitente', 'c.nombre as empresa', 'c.logo as cuenta_logo');
         return ($bloquear ? $q->lockForUpdate() : $q)->first() ?? throw new ErrorUso('Enlace no válido', 404);
     }
 
@@ -383,28 +474,64 @@ class Documentos
             'documento' => [
                 'nombre' => $f->doc_nombre, 'estado' => $f->doc_estado, 'mensaje' => $f->doc_mensaje, 'paginas' => json_decode($f->doc_paginas, true),
                 'remitente' => $f->remitente, 'empresa' => $f->empresa, 'logo' => (bool) $f->cuenta_logo && ! Planes::esGratis($f->cuenta_id),
-                'bloquearDibujo' => (bool) $f->bloquear_dibujo, 'bloquearSello' => (bool) $f->bloquear_sello,
+                'bloquearDibujo' => (bool) $f->bloquear_dibujo || (bool) $f->pedir_dni, 'bloquearSello' => (bool) $f->bloquear_sello,
+                'flujo' => (bool) $f->flujo, 'certificado' => (bool) $f->certificado_evidencias,
             ],
-            'yo' => ['orden' => $f->orden, 'nombre' => $f->nombre, 'estado' => $f->estado, 'color' => $f->color, 'total' => $firmantes->count()],
+            'yo' => ['orden' => $f->orden, 'nombre' => $f->nombre, 'estado' => $f->estado, 'color' => $f->color, 'total' => $firmantes->count(), 'pedirDni' => (bool) $f->pedir_dni],
             'turno' => $turno, 'esperando' => $esperando,
+            // Sus campos, los ya llenados por otros (o por quien preparó el documento) y los que calcula el PDF.
             'campos' => DB::table('campos')->where('documento_id', $f->documento_id)
-                ->where(fn ($q) => $q->where('firmante_id', $f->id)->orWhereNotNull('imagen')->orWhereNotNull('valor'))
+                ->where(fn ($q) => $q->where('firmante_id', $f->id)->orWhereNotNull('imagen')->orWhereNotNull('valor')->orWhere('tipo', 'calculo'))
                 ->orderBy('pagina')->orderBy('y')->orderBy('x')->get()->map(fn ($c) => [
                     'id' => $c->id, 'tipo' => $c->tipo, 'pagina' => $c->pagina, 'x' => (float) $c->x, 'y' => (float) $c->y, 'w' => (float) $c->w, 'h' => (float) $c->h,
                     'etiqueta' => $c->etiqueta, 'obligatorio' => (bool) $c->obligatorio, 'mio' => $c->firmante_id === $f->id,
                     'valor' => $c->tipo === 'casilla' ? ($c->valor === null ? null : $c->valor === '1') : $c->valor,
-                    'imagen' => (bool) $c->imagen, 'color' => $colores[$c->firmante_id] ?? '#4d148c',
+                    'imagen' => (bool) $c->imagen, 'color' => $colores[$c->firmante_id] ?? '#4d148c', 'nombrePdf' => $c->nombre_pdf ?? '',
                 ])->all(),
+            // Scripts de cálculo del PDF: solo si tiene campos calculados (la página los ejecuta en el entorno aislado de pdf.js).
+            'formulario' => DB::table('campos')->where('documento_id', $f->documento_id)->where('tipo', 'calculo')->exists()
+                ? json_decode((string) DB::table('documentos')->where('id', $f->documento_id)->value('formulario'), true) : null,
             'siguiente' => $siguiente ? ['nombre' => $siguiente->nombre, 'telefono' => $siguiente->telefono, 'enlace' => $siguiente->token] : null,
         ];
     }
 
-    /** Guarda lo que llenó un firmante; si era el último, genera el PDF final. */
-    public static function firmar(string $t, array $valores, array $origen): array
+    /** Momentos que registra la página del firmante (hora de su dispositivo), en el orden en que se muestran. */
+    public const MOMENTOS = ['dniFrente' => 'Foto del frente del DNI', 'firma' => 'Firma', 'sello' => 'Sello', 'dniReverso' => 'Foto del reverso del DNI', 'huella' => 'Huella'];
+
+    /** Momentos de captura y ubicación enviados por la página, limpios. Null si no hay nada. */
+    private static function limpiarEvidencias(array $e): ?string
+    {
+        $momentos = [];
+        foreach (array_keys(self::MOMENTOS) as $k) {
+            $v = $e['momentos'][$k] ?? null;
+            if (is_string($v) && strlen($v) <= 40 && ($ts = strtotime($v)) !== false) {
+                $momentos[$k] = gmdate('Y-m-d\TH:i:s\Z', $ts);
+            }
+        }
+        $u = $e['ubicacion'] ?? null;
+        $ubicacion = null;
+        if (is_array($u) && is_numeric($u['lat'] ?? null) && is_numeric($u['lng'] ?? null) && abs((float) $u['lat']) <= 90 && abs((float) $u['lng']) <= 180) {
+            $ubicacion = ['lat' => round((float) $u['lat'], 5), 'lng' => round((float) $u['lng'], 5),
+                'precision' => is_numeric($u['precision'] ?? null) ? (int) round(max(0, (float) $u['precision'])) : null];
+        } elseif (is_array($u) && in_array($u['estado'] ?? '', ['denegada', 'no_disponible'], true)) {
+            $ubicacion = ['estado' => $u['estado']];
+        }
+        return $momentos || $ubicacion ? json_encode(['momentos' => $momentos, 'ubicacion' => $ubicacion]) : null;
+    }
+
+    /**
+     * Guarda lo que llenó un firmante; si era el último, genera el PDF final.
+     *
+     * @param  array  $evidencias  dni: {frente, reverso} (fotos «data:image/…», si el documento las pide),
+     *                             momentos: {firma, sello, huella, dniFrente, dniReverso} (ISO 8601), ubicacion: {lat, lng, precision} o {estado}
+     * @param  array  $calculos  id del campo calculado → texto: lo que dieron los scripts del PDF en el navegador del firmante,
+     *                           con todo lo llenado hasta ese momento (quien firma al último los calcula con todos los datos)
+     */
+    public static function firmar(string $t, array $valores, array $origen, array $evidencias = [], array $calculos = []): array
     {
         $subidas = [];
         try {
-            $resultado = DB::transaction(function () use ($t, $valores, $origen, &$subidas) {
+            $resultado = DB::transaction(function () use ($t, $valores, $origen, $evidencias, $calculos, &$subidas) {
                 $f = self::firmantePorToken($t, true);
                 if ($f->doc_estado !== 'en_firma') {
                     throw new ErrorUso('Este documento ya no se puede firmar', 409);
@@ -450,11 +577,30 @@ class Documentos
                         DB::table('campos')->where('id', $c->id)->update(['valor' => $s === '' ? null : $s]);
                     }
                 }
+                $dni = [];
+                if ($f->pedir_dni) {
+                    foreach (['frente' => 'dni_frente', 'reverso' => 'dni_reverso'] as $lado => $columna) {
+                        $v = $evidencias['dni'][$lado] ?? null;
+                        if (is_string($v) && str_starts_with($v, 'data:image/')) {
+                            $subidas[] = $dni[$columna] = Imagenes::guardar(Imagenes::desdeDataUrl($v, config('autograflow.limites.dni_bytes')), "documentos/{$f->documento_id}/dni");
+                        } else {
+                            $faltan["dni_{$lado}"] = "Falta la foto del {$lado} del DNI";
+                        }
+                    }
+                }
                 if ($faltan) {
                     throw new ErrorUso('Completa los campos obligatorios', 400, $faltan);
                 }
-                DB::table('firmantes')->where('id', $f->id)->update([
+                foreach (DB::table('campos')->where('documento_id', $f->documento_id)->where('tipo', 'calculo')->pluck('id') as $campoId) {
+                    $v = $calculos[(string) $campoId] ?? null;
+                    if (is_string($v)) {
+                        $v = Str::limit(trim($v), 100, '');
+                        DB::table('campos')->where('id', $campoId)->update(['valor' => $v === '' ? null : $v]);
+                    }
+                }
+                DB::table('firmantes')->where('id', $f->id)->update($dni + [
                     'estado' => 'firmado', 'firmado_en' => now(), 'ip' => $origen['ip'], 'agente' => Str::limit((string) $origen['agente'], 297),
+                    'evidencias' => self::limpiarEvidencias($evidencias),
                 ]);
                 self::evento($f->documento_id, 'firmado', 'Firmó el documento', $origen, $f->id);
                 $pendientes = DB::table('firmantes')->where('documento_id', $f->documento_id)->where('estado', '<>', 'firmado')->count();
@@ -526,12 +672,19 @@ class Documentos
             'enviadoEn' => $d->enviado_en, 'completadoEn' => $completadoEn, 'marcaAgua' => $gratis,
             'logo' => ! $gratis && $d->cuenta_logo ? rescue(fn () => Imagenes::leer($d->cuenta_logo), null, false) : null,
             'urlVerificacion' => rtrim(config('app.url'), '/').'/verificar',
+            'evidencias' => (bool) $d->certificado_evidencias,
             'campos' => $campos->map(fn ($c) => ['tipo' => $c->tipo, 'pagina' => $c->pagina, 'x' => $c->x, 'y' => $c->y, 'w' => $c->w, 'h' => $c->h, 'valor' => $c->valor, 'imagen' => $leer($c->imagen)])->all(),
-            'firmantes' => $firmantes->map(fn ($f) => [
-                'orden' => $f->orden, 'nombre' => $f->nombre, 'telefono' => $f->telefono, 'email' => $f->email, 'estado' => $f->estado,
-                'abiertoEn' => $f->abierto_en, 'firmadoEn' => $f->firmado_en, 'ip' => $f->ip, 'agente' => $f->agente,
-                'firma' => $leer($campos->first(fn ($c) => $c->firmante_id === $f->id && $c->tipo === 'firma' && $c->imagen)?->imagen),
-            ])->all(),
+            'firmantes' => $firmantes->map(function ($f) use ($campos, $leer) {
+                $imagen = fn (string $tipo) => $leer($campos->first(fn ($c) => $c->firmante_id === $f->id && $c->tipo === $tipo && $c->imagen)?->imagen);
+                $ev = json_decode((string) $f->evidencias, true) ?: [];
+                return [
+                    'orden' => $f->orden, 'nombre' => $f->nombre, 'telefono' => $f->telefono, 'email' => $f->email, 'estado' => $f->estado,
+                    'abiertoEn' => $f->abierto_en, 'firmadoEn' => $f->firmado_en, 'ip' => $f->ip, 'agente' => $f->agente,
+                    'firma' => $imagen('firma'), 'sello' => $imagen('sello'), 'huella' => $imagen('huella'),
+                    'dniFrente' => $leer($f->dni_frente), 'dniReverso' => $leer($f->dni_reverso),
+                    'momentos' => $ev['momentos'] ?? [], 'ubicacion' => $ev['ubicacion'] ?? null,
+                ];
+            })->all(),
             'eventos' => $eventos,
         ]);
         $ruta = "documentos/{$id}/firmado.pdf";

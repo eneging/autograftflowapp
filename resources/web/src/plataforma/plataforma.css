@@ -85,6 +85,25 @@ header { display: flex; align-items: center; justify-content: space-between; gap
 .campoEditor img { width: 100%; height: 100%; object-fit: contain; }
 .campoEditorTexto { font-size: clamp(8px, 1.15cqw, 13px); font-weight: 800; color: var(--c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 3px; pointer-events: none; }
 .campoEditor.tipo-casilla .campoEditorTexto { font-size: clamp(8px, 1.6cqw, 16px); }
+/* Datos por llenar como en el prototipo: texto y fecha con recuadro rojo punteado, casillas en naranja, sin rótulo.
+   El color del firmante aparece al seleccionar el campo. */
+.campoEditor:is(.tipo-texto, .tipo-fecha) { border: 1.5px dashed rgba(220, 38, 38, 0.8); background: rgba(255, 255, 255, 0.55); border-radius: 3px; }
+.campoEditor.tipo-casilla { border: 2px solid #ff9d52; background: rgba(255, 157, 82, 0.15); border-radius: 3px; }
+.campoEditor:is(.tipo-texto, .tipo-fecha, .tipo-casilla):hover { border-style: solid; }
+.campoEditor:is(.tipo-texto, .tipo-fecha, .tipo-casilla).sel { border: 2px solid var(--c); background: color-mix(in srgb, var(--c) 12%, transparent); }
+.campoEditor.lectura:is(.tipo-texto, .tipo-fecha, .tipo-casilla).lleno { border-color: rgba(14, 159, 110, 0.6); background: rgba(14, 159, 110, 0.08); }
+/* Los que llena quien prepara: se escribe dentro del recuadro; ya llenos, el borde casi desaparece (como en el prototipo). */
+.campoEditor.preparador { cursor: text; }
+.campoEditor.preparador.tipo-casilla { cursor: pointer; }
+.campoEditor.preparador.lleno:is(.tipo-texto, .tipo-fecha) { border-color: rgba(220, 38, 38, 0.18); background: transparent; }
+.campoEditor.preparador.lleno.tipo-casilla { background: rgba(14, 159, 110, 0.15); border-color: #0e9f6e; }
+.campoEntrada { width: 100%; height: 100%; min-width: 0; border: 0 !important; background: transparent !important; box-shadow: none !important; padding: 0 3px; margin: 0;
+  font: 500 clamp(8px, 1.2cqw, 14px) Helvetica, Arial, sans-serif; color: #111827; outline: none; cursor: text; border-radius: 0; }
+.campoEditor .marcaCasilla { color: #111827; font-weight: 900; font-size: clamp(8px, 1.6cqw, 16px); pointer-events: none; }
+/* ƒx: lo calcula el propio PDF (verde punteado). */
+.campoEditor.tipo-calculo, .campoFirma.tipo-calculo { border: 1.5px dotted #0e9f6e !important; background: rgba(14, 159, 110, 0.08) !important; justify-content: flex-start; cursor: default; }
+.campoCalculo { color: #0b6b4c; font-weight: 800; font-size: clamp(8px, 1.15cqw, 13px); padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+.campoEditorTexto.valorLleno { color: #111827; font-weight: 500; }
 .asaTamano { position: absolute; right: -1px; bottom: -1px; width: 16px; height: 16px; background: var(--c); border-radius: 4px 0 3px 0; cursor: nwse-resize; touch-action: none; }
 .tarjetaFirmante { border: 1px solid var(--line); border-left: 4px solid var(--c); border-radius: 10px; padding: 10px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 6px; }
 .tarjetaFirmante input { font: inherit; font-size: 14px; padding: 8px 10px; border: 1.5px solid #d9d2ea; border-radius: 8px; }
@@ -106,6 +125,11 @@ header { display: flex; align-items: center; justify-content: space-between; gap
 .campoFirma.mio:not(.filled)::after { content: attr(data-vacio); color: var(--c); font-weight: 800; font-size: clamp(7px, 1.2cqw, 13px); text-align: center; padding: 0 2px; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .campoFirma.mio.filled { border-style: solid; border-width: 1px; background: transparent; }
 .campoFirma.mio:hover { box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 25%, transparent); }
+/* Como el prototipo: los datos por llenar (texto, fecha, casilla) se marcan solo con un recuadro rojo punteado, sin texto;
+   al llenarlos el borde queda casi invisible. El nombre del campo aparece al pasar el cursor y en el panel de escritura. */
+.campoFirma.mio:is(.tipo-texto, .tipo-fecha, .tipo-casilla) { border: 1.5px dashed rgba(220, 38, 38, 0.8); background: rgba(255, 255, 255, 0.55); border-radius: 3px; }
+.campoFirma.mio:is(.tipo-texto, .tipo-fecha, .tipo-casilla).filled { border: 1px dashed rgba(220, 38, 38, 0.18); background: transparent; }
+.campoFirma.mio:is(.tipo-texto, .tipo-fecha, .tipo-casilla):hover { border-style: solid; box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15); }
 .campoFirma.invalido { border: 2px solid #dc2626 !important; background: rgba(254, 226, 226, 0.6) !important; }
 .campoFirma.otro { pointer-events: none; }
 .campoFirma img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }

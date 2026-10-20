@@ -27,7 +27,13 @@ class FirmaController extends Controlador
                 throw new ErrorUso('Revisa los datos');
             }
         }
-        return Documentos::firmar($token, $valores, $this->origen($r));
+        // Opcional: fotos del DNI, momentos de cada captura y ubicación (Documentos::firmar las revisa una por una).
+        $evidencias = $r->input('evidencias', []);
+        $calculos = $r->input('calculos', []);
+        if (! is_array($evidencias) || ! is_array($calculos)) {
+            throw new ErrorUso('Revisa los datos');
+        }
+        return Documentos::firmar($token, $valores, $this->origen($r), $evidencias, $calculos);
     }
 
     public function rechazar(Request $r, string $token)

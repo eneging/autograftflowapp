@@ -445,6 +445,31 @@ input[type=radio] { width: 20px; height: 20px; accent-color: #7c3aed; flex: 0 0 
 .fpTipsHands { margin-top: 8px; background: #fff; border: 1px solid rgba(124,58,237,.25); border-radius: 14px; padding: 10px; }
 .fpTipsHands p { margin: 6px 0 0; text-align: center; font-weight: 700; color: #5b21b6; font-size: 13px; }
 .manosSvg { width: 100%; max-width: 360px; display: block; margin: 0 auto; }
+.fpFitZoomRow output { min-width: 46px; text-align: right; font-weight: 800; }
+.dniCard { width: min(600px, 100%); }
+
+/* Firma y huella con DNI (pasos del firmante) */
+.dniCaptureSteps { display: grid; gap: 10px; margin: 12px 0; }
+.dniAviso { border-color: #d97706; background: #fffbeb; color: #78350f; }
+[data-theme="dark"] .dniAviso { background: rgba(217,119,6,.16); color: #fde7c4; }
+.dniCaptureStep { padding: 12px; border-radius: 14px; background: var(--sheen), var(--vidrioInterior); border: 1px solid var(--borde); }
+.dniCaptureStep strong { display: block; color: var(--accent); }
+.dniCaptureStep p { margin: 5px 0 9px; font-size: 13px; }
+.dniCaptureStep > span { display: block; margin-top: 7px; font-size: 12px; color: var(--muted); }
+.dniCaptureStep.bloqueado { opacity: .62; }
+.dniCaptureActions { display: flex; gap: 8px; flex-wrap: wrap; }
+.dniCaptureActions button { flex: 1; min-width: 170px; }
+.dniCapturePreview { display: block; max-width: min(100%, 320px); max-height: 150px; object-fit: contain; margin: 10px auto 0; padding: 8px; border: 1px solid var(--borde); border-radius: 10px;
+  background: repeating-conic-gradient(#eee 0 25%, #fff 0 50%) 0 / 16px 16px; }
+
+/* «Convertir en Flujo»: formulario guiado antes de firmar */
+.flujoFormulario { display: grid; gap: 12px; margin: 12px 0; }
+.flujoSeccion { padding: 14px; border-radius: 16px; background: var(--sheen), var(--vidrioInterior); border: 1px solid var(--borde); display: grid; gap: 10px; }
+.flujoSeccion h3 { margin: 0; color: var(--accent); font-size: 16px; }
+.flujoSeccion .field { display: grid; gap: 6px; margin: 0; }
+.flujoSeccion input:not([type=checkbox]) { width: 100%; padding: 12px; font-size: 16px; }
+.flujoSeccion input.invalido, .flujoSeccion .checkrow.invalido { border-color: #dc2626; box-shadow: 0 0 0 3px rgba(220,38,38,.15); }
+.afCertificatePrivacyNote { padding: 9px 11px; border-radius: 12px; background: rgba(124,58,237,.08); border: 1px solid rgba(124,58,237,.22); }
 
 /* Administración y plantilla de reembolso sobre el fondo de color */
 .titulo-pagina h1, .titulo-pagina p { color: #fff; text-shadow: 0 1px 10px rgba(10,6,40,.35); }

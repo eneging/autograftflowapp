@@ -6,6 +6,9 @@ import type { Pagina } from "../../../shared/plataforma";
 pdfjs.GlobalWorkerOptions.workerSrc = trabajador;
 type DocPdf = Awaited<ReturnType<typeof pdfjs.getDocument>["promise"]>;
 
+/** Abre un PDF ya cargado en memoria (p. ej. para leer su formulario antes de subirlo). */
+export const leerPdf = (datos: Uint8Array) => pdfjs.getDocument({ data: datos }).promise;
+
 /** Carga un PDF (con la sesión o el enlace del firmante) para dibujar sus páginas. */
 export function usarPdf(url: string | null) {
   const [doc, setDoc] = useState<DocPdf | null>(null);

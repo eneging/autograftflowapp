@@ -18,7 +18,7 @@ class PdfFinal
     /**
      * @param  string  $original  PDF preparado (sin «object streams», ver la subida en la página)
      * @param  array  $d  id, nombre, remitente, sha256Original, enviadoEn, completadoEn, marcaAgua, logo (bytes|null),
-     *                    urlVerificacion, campos[], firmantes[], eventos[]
+     *                    urlVerificacion, evidencias (cronología por firmante), campos[], firmantes[], eventos[]
      */
     public static function generar(string $original, array $d): string
     {
@@ -200,5 +200,77 @@ class PdfFinal
         $y += 6;
         $linea('Este certificado forma parte del documento. Cada firmante accedió mediante un enlace personal y su firma electrónica se registró con la fecha, la hora, la IP y el dispositivo indicados. La huella SHA-256 permite comprobar que el documento original no fue alterado.'
             .(! empty($d['urlVerificacion']) ? " Verifica la autenticidad de este PDF en {$d['urlVerificacion']}" : ''), 7.5, '', self::GRIS);
+        foreach ($d['firmantes'] as $f) {
+            self::evidencias($pdf, $f, ! empty($d['evidencias']));
+        }
+    }
+
+    /**
+     * Hoja de evidencias de un firmante: con el certificado de evidencias, la cronología de sus capturas, su ubicación
+     * (si la autorizó) y las imágenes que aportó; y, si el documento pidió el DNI, las fotos del frente y del reverso.
+     */
+    private static function evidencias(Fpdi $pdf, array $f, bool $cronologia): void
+    {
+        $conDni = ! empty($f['dniFrente']) || ! empty($f['dniReverso']);
+        if (($f['estado'] ?? '') !== 'firmado' || (! $cronologia && ! $conDni)) {
+            return;
+        }
+        $M = 48;
+        $A = 612 - 2 * $M;
+        $pdf->AddPage('P', [612, 792]);
+        $pdf->setCellPaddings(0, 0, 0, 0);
+        $y = $M;
+        $linea = function (string $texto, float $size = 9, string $estilo = '', array $color = self::TINTA) use ($pdf, &$y, $M, $A) {
+            $pdf->SetFont('helvetica', $estilo, $size);
+            $pdf->SetTextColor(...$color);
+            $pdf->MultiCell($A, 0, $texto, 0, 'L', false, 1, $M, $y);
+            $y = $pdf->GetY() + 3;
+        };
+        $caja = function (?string $bytes, string $titulo, float $x, float $yCaja, float $w, float $h) use ($pdf) {
+            $pdf->SetLineStyle(['width' => 0.8, 'color' => self::LINEA]);
+            $pdf->Rect($x, $yCaja, $w, $h, 'D');
+            $pdf->SetFont('helvetica', 'B', 8);
+            $pdf->SetTextColor(...self::TINTA);
+            $pdf->Text($x + 6, $yCaja + 5, $titulo);
+            if ($bytes) {
+                try {
+                    self::imagen($pdf, $bytes, $x + 6, $yCaja + 18, $w - 12, $h - 24);
+                } catch (\Throwable) {
+                    // Imagen dañada: queda el recuadro vacío.
+                }
+            }
+        };
+
+        $linea("Evidencias — Firmante {$f['orden']} · {$f['nombre']}", 13, 'B', self::MORADO);
+        if ($cronologia) {
+            $linea('Cronología', 11, 'B');
+            $momentos = $f['momentos'] ?? [];
+            asort($momentos);
+            foreach ($momentos as $clave => $momento) {
+                $linea(Fechas::utc($momento).'  ·  '.(Documentos::MOMENTOS[$clave] ?? $clave).' (hora del dispositivo)', 9);
+            }
+            $linea(Fechas::utc($f['firmadoEn']).'  ·  Envió su firma (hora del servidor)'.($f['ip'] ? " desde la IP {$f['ip']}" : ''), 9);
+            $u = $f['ubicacion'] ?? null;
+            $linea(isset($u['lat'])
+                ? "Ubicación al firmar: {$u['lat']}, {$u['lng']}".(isset($u['precision']) ? " (± {$u['precision']} m)" : '').', autorizada por el firmante.'
+                : 'Ubicación: '.(($u['estado'] ?? '') === 'denegada' ? 'el firmante no la autorizó.' : 'no disponible.'), 8.5, '', self::GRIS);
+            $y += 6;
+            $imagenes = array_filter(['Firma' => $f['firma'] ?? null, 'Sello' => $f['sello'] ?? null, 'Huella' => $f['huella'] ?? null]);
+            $x = $M;
+            foreach ($imagenes as $titulo => $bytes) {
+                $caja($bytes, $titulo, $x, $y, 160, 120);
+                $x += 172;
+            }
+            if ($imagenes) {
+                $y += 134;
+            }
+        }
+        if ($conDni) {
+            $linea('Fotos del DNI aportadas por el firmante', 11, 'B');
+            $caja($f['dniFrente'] ?? null, 'Frente del DNI', $M, $y, ($A - 12) / 2, 190);
+            $caja($f['dniReverso'] ?? null, 'Reverso del DNI', $M + ($A + 12) / 2, $y, ($A - 12) / 2, 190);
+            $y += 204;
+        }
+        $linea('Las imágenes y fotos de esta hoja son evidencia aportada por el firmante desde su dispositivo. No validan su identidad ante RENIEC ni constituyen una firma digital certificada. AutograFlow no guarda la ubicación si el firmante no la autoriza.', 7.5, '', self::GRIS);
     }
 }

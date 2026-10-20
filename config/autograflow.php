@@ -33,6 +33,8 @@ return [
         'firmantes' => 20,
         'campos' => 400,
         'imagen_bytes' => 600_000,
+        // Fotos del DNI (frente y reverso, JPG): más grandes que una firma para que se lean en el certificado.
+        'dni_bytes' => 1_500_000,
         'texto' => 500,
     ],
 ];

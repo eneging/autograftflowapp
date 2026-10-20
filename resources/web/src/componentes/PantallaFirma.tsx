@@ -139,6 +139,7 @@ export function PantallaFirma({ titulo, tipo = "firma", inicial, alTerminar, alC
         {conConfeccion && <button type="button" className={confeccionando ? "primary" : ""} onClick={() => setConfeccionando(true)}>✍️ Confeccionar sello</button>}
         <button type="button" onClick={() => subir.current?.click()}>🖼️ Subir {tipo === "firma" ? "firma PNG" : txt.nombre}</button>
         <button type="button" onClick={() => camara.current?.click()}>📷 Fotografiar {txt.nombre}</button>
+        {imagen && tipo !== "huella" && <button type="button" title="Si la foto salió de lado o de cabeza" onClick={async () => setImagen(await girarImagen(imagen))}>↻ Girar 90°</button>}
         <input ref={subir} type="file" accept="image/png,image/jpeg" hidden onChange={(e) => { alElegirArchivo(e.target.files?.[0]); e.target.value = ""; }} />
         <input ref={camara} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { alElegirArchivo(e.target.files?.[0]); e.target.value = ""; }} />
       </div>
@@ -230,6 +231,19 @@ async function limpiarImagenFirma(archivo: File): Promise<string> {
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+/** Gira una imagen 90° en el sentido del reloj (firma o sello fotografiados de lado). */
+async function girarImagen(src: string): Promise<string> {
+  const img = await new Promise<HTMLImageElement>((ok, mal) => { const i = new Image(); i.onload = () => ok(i); i.onerror = mal; i.src = src; });
+  const c = document.createElement("canvas");
+  c.width = img.naturalHeight;
+  c.height = img.naturalWidth;
+  const ctx = c.getContext("2d")!;
+  ctx.translate(c.width, 0);
+  ctx.rotate(Math.PI / 2);
+  ctx.drawImage(img, 0, 0);
+  return c.toDataURL("image/png");
 }
 
 /** Sello rectangular de doble borde con el texto centrado (el primer renglón en negrita). */

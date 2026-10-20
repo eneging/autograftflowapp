@@ -32,7 +32,9 @@ class DocumentosController extends Controlador
         }
         $campos = json_decode((string) $r->input('campos', '[]'), true);
         $nombre = trim(preg_replace('/\.pdf$/i', '', (string) $r->input('nombre', ''))) ?: 'Documento';
-        $res = Documentos::crear($r->user(), $nombre, $r->file('original')->get(), $r->file('preparado')->get(), is_array($campos) ? $campos : [], $this->origen($r));
+        $formulario = $r->input('formulario');
+        $res = Documentos::crear($r->user(), $nombre, $r->file('original')->get(), $r->file('preparado')->get(), is_array($campos) ? $campos : [], $this->origen($r),
+            is_string($formulario) && $formulario !== '' ? $formulario : null);
         return response()->json($res, 201);
     }
 
@@ -58,6 +60,7 @@ class DocumentosController extends Controlador
             'firmantes.*.nombre' => 'required|string|min:2|max:120',
             'firmantes.*.telefono' => ['nullable', 'string', 'max:30', 'regex:/^$|^[+\d][\d\s()-]{6,}$/'],
             'firmantes.*.email' => 'nullable|email|max:160',
+            'firmantes.*.pedirDni' => 'boolean',
             'campos' => "present|array|max:{$l['campos']}",
             'campos.*.firmante' => 'required|string|max:40',
             'campos.*.tipo' => 'required|in:'.implode(',', Documentos::TIPOS),
@@ -66,12 +69,16 @@ class DocumentosController extends Controlador
             'campos.*.w' => 'required|numeric|min:6|max:2000', 'campos.*.h' => 'required|numeric|min:6|max:2000',
             'campos.*.etiqueta' => 'nullable|string|max:120',
             'campos.*.obligatorio' => 'boolean',
-            'bloquearDibujo' => 'boolean', 'bloquearSello' => 'boolean',
+            'campos.*.valor' => 'nullable', // lo que escribió quien prepara el documento: lo revisa Documentos::guardar
+            'campos.*.nombrePdf' => 'nullable|string|max:200',
+            'bloquearDibujo' => 'boolean', 'bloquearSello' => 'boolean', 'flujo' => 'boolean', 'certificado' => 'boolean',
         ], ['firmantes.*.nombre.*' => 'Escribe el nombre del firmante', 'firmantes.*.telefono.*' => 'Teléfono inválido', 'firmantes.*.email.*' => 'Correo inválido']);
         Documentos::guardar($r->user()->cuenta_id, $id, [
             'nombre' => trim($d['nombre']), 'orden' => $d['orden'], 'mensaje' => trim($d['mensaje'] ?? ''),
             'bloquearDibujo' => (bool) ($d['bloquearDibujo'] ?? false), 'bloquearSello' => (bool) ($d['bloquearSello'] ?? false),
-            'firmantes' => array_map(fn ($f) => ['clave' => $f['clave'], 'nombre' => trim($f['nombre']), 'telefono' => trim($f['telefono'] ?? ''), 'email' => trim($f['email'] ?? '')], $d['firmantes']),
+            'flujo' => (bool) ($d['flujo'] ?? false), 'certificado' => (bool) ($d['certificado'] ?? false),
+            'firmantes' => array_map(fn ($f) => ['clave' => $f['clave'], 'nombre' => trim($f['nombre']), 'telefono' => trim($f['telefono'] ?? ''), 'email' => trim($f['email'] ?? ''),
+                'pedirDni' => (bool) ($f['pedirDni'] ?? false)], $d['firmantes']),
             'campos' => array_map(fn ($c) => [...$c, 'etiqueta' => trim($c['etiqueta'] ?? ''), 'obligatorio' => (bool) ($c['obligatorio'] ?? true)], $d['campos']),
         ]);
         return ['ok' => true];
@@ -80,6 +87,12 @@ class DocumentosController extends Controlador
     public function enviar(Request $r, int $id)
     {
         Documentos::enviar($r->user(), $id, $this->origen($r));
+        return Documentos::detalle($r->user()->cuenta_id, $id);
+    }
+
+    public function eliminarPagina(Request $r, int $id, int $pagina)
+    {
+        Documentos::eliminarPagina($r->user()->cuenta_id, $id, $pagina, $this->origen($r));
         return Documentos::detalle($r->user()->cuenta_id, $id);
     }
 

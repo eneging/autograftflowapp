@@ -162,28 +162,33 @@ function enTinta(src: HTMLCanvasElement, pol: number, nivel: number) {
 
 interface Estado { gris: HTMLCanvasElement; tinta: HTMLCanvasElement | null; pol: number; nivel: number; optimizar: boolean }
 
-/** Encaja la foto del dedo en el óvalo y devuelve un PNG (solo el óvalo, fondo transparente). */
-export function EncajarHuella({ archivo, alUsar, alCancelar }: { archivo: File; alUsar: (png: string) => void; alCancelar: () => void }) {
+/**
+ * Encaja la foto del dedo en el óvalo y devuelve un PNG (solo el óvalo, fondo transparente).
+ * deDni: la huella sale del reverso del DNI, que ya está impresa: no se optimiza como tinta (se conservan sus tonos).
+ */
+export function EncajarHuella({ archivo, alUsar, alCancelar, deDni = false }: { archivo: File; alUsar: (png: string) => void; alCancelar: () => void; deDni?: boolean }) {
   const lienzo = useRef<HTMLCanvasElement>(null);
   const caja = useRef<HTMLDivElement>(null);
   const [e, setE] = useState<Estado | null>(null);
   const [error, setError] = useState("");
-  const vista = useRef({ zoom: 1, tx: 0, ty: 0, W: 320, H: 400, dpr: 1 });
+  // ang: giro fino en grados (el botón «↻ Girar» gira la foto 90°).
+  const vista = useRef({ zoom: 1, tx: 0, ty: 0, ang: 0, W: 320, H: 400, dpr: 1 });
   const dedos = useRef(new Map<number, { x: number; y: number }>());
   const pellizco = useRef<{ d: number; z: number; mx?: number; my?: number } | null>(null);
   const [zoom, setZoomUI] = useState(1);
+  const [angulo, setAnguloUI] = useState(0);
 
   useEffect(() => {
-    cargarImagen(archivo).then((im) => { const gris = enGris(im); setE({ gris, tinta: enTinta(gris, 1, 3), pol: 1, nivel: 3, optimizar: true }); })
+    cargarImagen(archivo).then((im) => { const gris = enGris(im); setE({ gris, tinta: deDni ? null : enTinta(gris, 1, 3), pol: 1, nivel: 3, optimizar: !deDni }); })
       .catch((x) => setError(x.message));
-  }, [archivo]);
+  }, [archivo, deDni]);
 
   const geom = () => { const { W, H } = vista.current, ow = Math.round(W * 0.6), oh = Math.round(ow * OVALO); return { W, H, ow, oh, ox: (W - ow) / 2, oy: (H - oh) / 2 }; };
   const fuente = (s: Estado) => (s.optimizar && s.tinta ? s.tinta : s.gris);
   const base = (s: Estado) => { const g = geom(), f = s.gris; return Math.max(g.ow / f.width, g.oh / f.height); };
   const pintar = (ctx: CanvasRenderingContext2D, s: Estado) => {
     const g = geom(), f = fuente(s), k = base(s) * vista.current.zoom;
-    ctx.save(); ctx.translate(g.W / 2 + vista.current.tx, g.H / 2 + vista.current.ty); ctx.scale(k, k);
+    ctx.save(); ctx.translate(g.W / 2 + vista.current.tx, g.H / 2 + vista.current.ty); ctx.rotate((vista.current.ang * Math.PI) / 180); ctx.scale(k, k);
     ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.drawImage(f, -f.width / 2, -f.height / 2); ctx.restore();
   };
   const dibujar = useCallback(() => {
@@ -243,15 +248,18 @@ export function EncajarHuella({ archivo, alUsar, alCancelar }: { archivo: File; 
   const cambiar = (cambio: Partial<Estado>) => setE((s) => {
     if (!s) return s;
     const n = { ...s, ...cambio };
-    if (cambio.gris || cambio.pol !== undefined || cambio.nivel !== undefined) n.tinta = enTinta(n.gris, n.pol, n.nivel);
+    if (cambio.gris || cambio.pol !== undefined || cambio.nivel !== undefined || (cambio.optimizar && !n.tinta)) n.tinta = enTinta(n.gris, n.pol, n.nivel);
     return n;
   });
+  const fijarAngulo = (a: number) => { vista.current.ang = a; setAnguloUI(a); dibujar(); };
 
   return (
     <div className="fpFitModal">
       <div className="fpFitCard" role="dialog" aria-modal="true" aria-label="Encaja tu dedo en el óvalo">
-        <h2>Encaja tu dedo en el óvalo</h2>
-        <p>Arrastra la foto y acércala (pellizca con dos dedos o usa la barra) hasta que la yema llene el óvalo. Solo se usará lo que quede dentro.</p>
+        <h2>{deDni ? "Ajusta el área de la huella del DNI" : "Encaja tu dedo en el óvalo"}</h2>
+        <p>{deDni
+          ? "Mueve y amplía la foto del reverso hasta que la huella impresa llene el óvalo. Puedes pellizcar para ampliar, arrastrar para centrar y girar poco a poco. Solo se usará lo que quede dentro."
+          : "Arrastra la foto y acércala (pellizca con dos dedos o usa la barra) hasta que la yema llene el óvalo. Solo se usará lo que quede dentro."}</p>
         {error ? <div className="afAlerta">{error}</div> : !e ? <p id="loading">Procesando la foto…</p> : null}
         <div ref={caja} className="fpFitStage">
           <canvas
@@ -279,6 +287,7 @@ export function EncajarHuella({ archivo, alUsar, alCancelar }: { archivo: File; 
           />
         </div>
         <div className="fpFitZoomRow"><span>🔍−</span><input type="range" min={1} max={8} step={0.01} value={zoom} aria-label="Zoom" onChange={(ev) => { const g = geom(); fijarZoom(Number(ev.target.value), g.W / 2, g.H / 2); }} /><span>🔍+</span></div>
+        <div className="fpFitZoomRow"><span>Giro fino</span><input type="range" min={-15} max={15} step={0.25} value={angulo} aria-label="Giro fino de la huella, en grados" onChange={(ev) => fijarAngulo(Number(ev.target.value))} /><output>{angulo}°</output></div>
         {e && (
           <div className="fpFitOptRow">
             <label className="checkrow compacto"><input type="checkbox" checked={e.optimizar} onChange={(ev) => cambiar({ optimizar: ev.target.checked })} /><strong>Optimizar como tinta</strong></label>
@@ -290,7 +299,7 @@ export function EncajarHuella({ archivo, alUsar, alCancelar }: { archivo: File; 
         )}
         <div className="fpFitActions">
           <button type="button" onClick={alCancelar}>Cancelar</button>
-          <button type="button" disabled={!e} onClick={() => { vista.current = { ...vista.current, zoom: 1, tx: 0, ty: 0 }; setZoomUI(1); cambiar({ gris: girar(e!.gris) }); }}>↻ Girar</button>
+          <button type="button" disabled={!e} onClick={() => { vista.current = { ...vista.current, zoom: 1, tx: 0, ty: 0, ang: 0 }; setZoomUI(1); setAnguloUI(0); cambiar({ gris: girar(e!.gris) }); }}>↻ Girar 90°</button>
           <button type="button" className="primary" disabled={!e} onClick={() => alUsar(resultado())}>✓ Usar huella</button>
         </div>
       </div>

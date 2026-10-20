@@ -288,6 +288,103 @@ class PlataformaTest extends TestCase
         $this->assertStringContainsString('plan gratuito', $this->texto($final));
     }
 
+    public function test_quitar_pagina_firma_con_dni_y_certificado_de_evidencias(): void
+    {
+        $this->registrar();
+        MercadoPago::activarManual(DB::table('users')->where('email', 'ana@ejemplo.com')->value('cuenta_id'), 'profesional');
+
+        // Quitar una página del borrador: se borran sus campos y los de la página siguiente suben una
+        $id = $this->subir();
+        $this->preparar($id, 1); // texto en la página 1, firma en la 2
+        $det = $this->deleteJson("/api/documentos/{$id}/paginas/1", [], self::H)->assertOk()->json();
+        $this->assertCount(1, $det['paginas']);
+        $this->assertSame([['firma', 1]], array_map(fn ($c) => [$c['tipo'], $c['pagina']], $det['campos']));
+        $this->assertSame(1, (new Fpdi)->setSourceFile(StreamReader::createByString($this->get("/api/documentos/{$id}/archivo")->getContent())));
+        $this->deleteJson("/api/documentos/{$id}/paginas/1", [], self::H)->assertStatus(400); // debe quedar al menos una
+
+        // Firmante con DNI: necesita un espacio para la firma y otro para la huella
+        $guardar = fn (array $campos) => $this->putJson("/api/documentos/{$id}", ['nombre' => 'Contrato', 'orden' => 'secuencial', 'mensaje' => '', 'flujo' => true, 'certificado' => true,
+            'firmantes' => [['clave' => 'f0', 'nombre' => 'Luis Gómez', 'telefono' => '', 'email' => '', 'pedirDni' => true]], 'campos' => $campos], self::H)->assertOk();
+        $firma = ['firmante' => 'f0', 'tipo' => 'firma', 'pagina' => 1, 'x' => 60, 'y' => 540, 'w' => 180, 'h' => 50, 'etiqueta' => '', 'obligatorio' => true];
+        $guardar([$firma]);
+        $this->postJson("/api/documentos/{$id}/enviar", [], self::H)->assertStatus(400)->assertJsonPath('error', fn ($e) => str_contains($e, 'huella'));
+        $guardar([$firma, ['tipo' => 'huella', 'x' => 300, 'w' => 60, 'h' => 80, 'etiqueta' => 'Índice derecho'] + $firma]);
+        $this->getJson("/api/documentos/{$id}")->assertJson(['flujo' => true, 'certificado' => true, 'firmantes' => [['pedirDni' => true]]]);
+        $t = $this->postJson("/api/documentos/{$id}/enviar", [], self::H)->assertOk()->json('firmantes.0.token');
+        $vista = $this->getJson("/api/firmar/{$t}")->assertJson(['documento' => ['flujo' => true, 'certificado' => true, 'bloquearDibujo' => true], 'yo' => ['pedirDni' => true]])->json();
+
+        // Sin las fotos del DNI no se puede firmar
+        $valores = collect($vista['campos'])->where('mio', true)->mapWithKeys(fn ($c) => [(string) $c['id'] => $this->firmaDataUrl()])->all();
+        $this->postJson("/api/firmar/{$t}", ['valores' => $valores], self::H)->assertStatus(400)->assertJsonStructure(['campos' => ['dni_frente', 'dni_reverso']]);
+        $foto = $this->firmaDataUrl();
+        $this->postJson("/api/firmar/{$t}", ['valores' => $valores, 'evidencias' => [
+            'dni' => ['frente' => $foto, 'reverso' => $foto],
+            'momentos' => ['dniFrente' => '2026-10-20T15:00:00Z', 'firma' => '2026-10-20T15:01:00Z', 'huella' => 'no es una fecha'],
+            'ubicacion' => ['lat' => -12.04637, 'lng' => -77.04279, 'precision' => 35],
+        ]], self::H)->assertOk()->assertJson(['completo' => true]);
+        $f = DB::table('firmantes')->where('token', $t)->first();
+        $this->assertNotNull($f->dni_frente);
+        $this->assertNotNull($f->dni_reverso);
+        $this->assertSame(['dniFrente' => '2026-10-20T15:00:00Z', 'firma' => '2026-10-20T15:01:00Z'], json_decode($f->evidencias, true)['momentos']);
+
+        // PDF final: la página + el certificado + la hoja de evidencias con la ubicación
+        $final = $this->get("/api/documentos/{$id}/final")->getContent();
+        $this->assertSame(3, (new Fpdi)->setSourceFile(StreamReader::createByString($final)));
+        $texto = $this->texto($final);
+        $this->assertStringContainsString('Evidencias', $texto);
+        $this->assertStringContainsString('-12.04637', $texto);
+    }
+
+    public function test_campos_que_llena_el_preparador_y_campos_calculados(): void
+    {
+        $this->registrar();
+        $pdf = file_get_contents(base_path('tests/fixtures/contrato.pdf'));
+        $formulario = ['objects' => ['Total' => [['id' => '9R', 'type' => 'text', 'value' => '']]], 'calculationOrder' => ['9R'], 'actions' => [], 'numPages' => 2];
+        $id = $this->post('/api/documentos', [
+            'original' => UploadedFile::fake()->createWithContent('reembolso.pdf', $pdf),
+            'preparado' => UploadedFile::fake()->createWithContent('preparado.pdf', $pdf),
+            'campos' => json_encode([
+                ['tipo' => 'texto', 'pagina' => 1, 'x' => 190, 'y' => 349, 'w' => 250, 'h' => 18, 'etiqueta' => 'Nombre', 'nombrePdf' => 'Nombre'],
+                ['tipo' => 'calculo', 'pagina' => 1, 'x' => 190, 'y' => 380, 'w' => 120, 'h' => 18, 'etiqueta' => 'Total', 'nombrePdf' => 'Total'],
+                ['tipo' => 'firma', 'pagina' => 2, 'x' => 60, 'y' => 540, 'w' => 180, 'h' => 50, 'etiqueta' => 'Firma'],
+            ]),
+            'formulario' => json_encode($formulario),
+            'nombre' => 'Reembolso.pdf',
+        ], self::H)->assertCreated()->json('id');
+        // Los datos y el cálculo detectados quedan para quien prepara (y el PDF); la firma, para el Firmante 1
+        $det = $this->getJson("/api/documentos/{$id}")->assertJsonPath('formulario.calculationOrder', ['9R'])->json();
+        $this->assertSame(['preparador', 'preparador', $det['firmantes'][0]['clave']], array_column($det['campos'], 'firmante'));
+        $this->assertSame(['Nombre', 'Total', ''], array_column($det['campos'], 'nombrePdf'));
+
+        $f = [['clave' => 'f0', 'nombre' => 'Luis Gómez', 'telefono' => '', 'email' => '']];
+        $base = ['pagina' => 1, 'x' => 190, 'w' => 120, 'h' => 18, 'etiqueta' => '', 'obligatorio' => true];
+        $campos = [
+            ['firmante' => 'preparador', 'tipo' => 'texto', 'y' => 349, 'valor' => 'Ana Torres', 'nombrePdf' => 'Nombre'] + $base,
+            ['firmante' => 'preparador', 'tipo' => 'casilla', 'y' => 420, 'w' => 14, 'h' => 14, 'valor' => true] + $base,
+            ['firmante' => 'preparador', 'tipo' => 'calculo', 'y' => 380, 'nombrePdf' => 'Total'] + $base,
+            ['firmante' => 'f0', 'tipo' => 'firma', 'pagina' => 2, 'y' => 540, 'w' => 180, 'h' => 50] + $base,
+        ];
+        $guardar = fn (array $c) => $this->putJson("/api/documentos/{$id}", ['nombre' => 'Reembolso', 'orden' => 'secuencial', 'mensaje' => '', 'firmantes' => $f, 'campos' => $c], self::H);
+        // La firma no la puede «llenar» quien prepara
+        $guardar([['firmante' => 'preparador', 'tipo' => 'firma', 'y' => 500] + $base])->assertStatus(400);
+        $guardar($campos)->assertOk();
+        $this->assertSame(['Ana Torres', true, null, null], array_column($this->getJson("/api/documentos/{$id}")->json('campos'), 'valor'));
+
+        // El firmante ve lo que escribió quien preparó, el campo calculado y los scripts del PDF
+        $t = $this->postJson("/api/documentos/{$id}/enviar", [], self::H)->assertOk()->json('firmantes.0.token');
+        $v = $this->getJson("/api/firmar/{$t}")->assertJsonPath('formulario.calculationOrder', ['9R'])->json();
+        $porTipo = collect($v['campos'])->keyBy('tipo');
+        $this->assertSame(['Ana Torres', false], [$porTipo['texto']['valor'], $porTipo['texto']['mio']]);
+        $calculo = $porTipo['calculo']['id'];
+
+        // Al firmar envía el resultado del cálculo; queda impreso en el PDF final junto con lo del preparador
+        $this->postJson("/api/firmar/{$t}", ['valores' => [(string) $porTipo['firma']['id'] => $this->firmaDataUrl()], 'calculos' => [(string) $calculo => '25.50']], self::H)
+            ->assertOk()->assertJson(['completo' => true]);
+        $texto = $this->texto($this->get("/api/documentos/{$id}/final")->getContent());
+        $this->assertStringContainsString('Ana Torres', $texto);
+        $this->assertStringContainsString('25.50', $texto);
+    }
+
     /** Correos enviados en la prueba (MAIL_MAILER=array): [para, asunto, html]. */
     private function correos(): array
     {
