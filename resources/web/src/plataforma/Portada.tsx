@@ -36,6 +36,7 @@ export function Inicio({ soloPlanes = false }: { soloPlanes?: boolean }) {
         <div className="accountBar">
           <div className="accountInfo">👤 <strong>{usuario.nombre}</strong> · 🟢 {PLANES[usuario.plan]?.nombre ?? "Gratis"}</div>
           <Link className="boton success" to="/app">Ir a AutograFlow →</Link>
+          {usuario.invitado && <Link className="boton primary" to="/registro">👤 Crear cuenta</Link>}
         </div>
       ) : (
         <div className="landingLoginBar">
@@ -74,6 +75,70 @@ function Presentacion() {
   );
 }
 
+/** Casilla de aceptación de los Términos y Condiciones y la Política de Privacidad (crear cuenta y entrar sin cuenta). */
+function AceptoTerminos({ acepto, alCambiar, error, sinCuenta = false }: { acepto: boolean; alCambiar: (v: boolean) => void; error?: boolean; sinCuenta?: boolean }) {
+  const [legal, setLegal] = useState<TipoLegal | null>(null);
+  const abrir = (tipo: TipoLegal) => (e: { preventDefault: () => void }) => { e.preventDefault(); setLegal(tipo); };
+  return (
+    <>
+      <label className={`checkrow termsCheck ${error ? "con-error" : ""}`}>
+        <input type="checkbox" checked={acepto} onChange={(e) => alCambiar(e.target.checked)} />
+        <div>
+          <strong>{sinCuenta ? "He leído y acepto los Términos y Condiciones y estoy de acuerdo con la Política de Privacidad" : "He leído y acepto los Términos y Condiciones y la Política de Privacidad"}</strong>
+          <p className="termsDeclare">Al marcar esta casilla declaras que <b>has leído completamente, entiendes y aceptas</b> los Términos y Condiciones y la Política de Privacidad.{sinCuenta && " Debes confirmarlo cada vez que entras sin cuenta."}</p>
+          <div className="small">Léelos aquí: <a href="#" onClick={abrir("terminos")}>Términos y Condiciones</a> · <a href="#" onClick={abrir("privacidad")}>Política de Privacidad</a></div>
+        </div>
+      </label>
+      {legal && <VentanaLegal tipo={legal} alCerrar={() => setLegal(null)} />}
+    </>
+  );
+}
+
+/**
+ * «Entrar sin cuenta» (plan Gratis): 2 documentos diarios y 1 firmante por documento. Hay que aceptar los Términos
+ * y Condiciones cada vez: la sesión sin cuenta termina al cerrar el navegador.
+ */
+export function SinCuenta() {
+  const { usuario, recargar } = usarSesion();
+  const navegar = useNavigate();
+  const [acepto, setAcepto] = useState(false);
+  const [aviso, setAviso] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  if (usuario && !usuario.invitado && !enviando) return <Navigate to="/app" replace />;
+  const gratis = PLANES.gratis;
+
+  async function entrar(e: FormEvent) {
+    e.preventDefault();
+    if (!acepto) return setAviso("Debes confirmar que has leído y aceptas los Términos y Condiciones y la Política de Privacidad para continuar.");
+    setEnviando(true);
+    setAviso("");
+    try {
+      await plataforma.invitado(true);
+      await recargar();
+      navegar("/app", { replace: true });
+    } catch (err) {
+      setAviso(err instanceof ErrorApi ? err.message : "No se pudo continuar. Inténtalo de nuevo.");
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <PortadaMarco>
+      <div className="flowBackRow"><Link to="/">← Ver planes</Link></div>
+      <form className="authForm" onSubmit={entrar} noValidate>
+        <h1>Entrar sin cuenta</h1>
+        <span className="small centro bloque">
+          Prueba Gratis: {gratis.documentos} documentos diarios y {gratis.firmantesSinCuenta ?? 1} firmante por documento. Para continuar debes aceptar las condiciones cada vez que entras.
+        </span>
+        <AceptoTerminos acepto={acepto} alCambiar={setAcepto} sinCuenta />
+        {aviso && <div className="afAlerta" role="alert">{aviso}</div>}
+        <button className="success ancho" disabled={enviando}>{enviando ? "Un momento…" : "🚀 Entrar sin cuenta"}</button>
+        <p className="small centro">¿Prefieres guardar tus documentos y usar hasta {gratis.firmantesPorDocumento} firmantes? <Link to="/registro?plan=gratis">Crea tu cuenta gratis</Link></p>
+      </form>
+    </PortadaMarco>
+  );
+}
+
 /** Iniciar sesión o crear una cuenta (con el plan elegido en la portada, si lo hay). */
 export function Acceso({ modo }: { modo: "ingresar" | "registro" }) {
   const { usuario, recargar } = usarSesion();
@@ -85,12 +150,12 @@ export function Acceso({ modo }: { modo: "ingresar" | "registro" }) {
   const [datos, setDatos] = useState({ nombre: "", empresa: "", email: "", clave: "", clave2: "", codigoEquipo: "" });
   const [unirme, setUnirme] = useState(false);
   const [acepto, setAcepto] = useState(false);
-  const [legal, setLegal] = useState<TipoLegal | null>(null);
   const [errores, setErrores] = useState<Record<string, string>>({});
   const [aviso, setAviso] = useState("");
   const [enviando, setEnviando] = useState(false);
 
-  if (usuario && !enviando) return <Navigate to={volver} replace />;
+  // Quien entró sin cuenta puede crear su cuenta (conserva sus documentos) o iniciar sesión con la suya.
+  if (usuario && !usuario.invitado && !enviando) return <Navigate to={volver} replace />;
   const campo = (k: keyof typeof datos) => ({ value: datos[k], onChange: (e: { target: { value: string } }) => setDatos({ ...datos, [k]: e.target.value }) });
   const registro = modo === "registro";
 
@@ -129,7 +194,13 @@ export function Acceso({ modo }: { modo: "ingresar" | "registro" }) {
       <div className="flowBackRow">
         <Link to="/">← Ver planes</Link>
         {planElegido && <span className="chosenPlanChip">Plan elegido: {PLANES[planElegido].nombre}</span>}
+        {planElegido === "gratis" && !usuario && (
+          <div className="guestAltRow">¿Prefieres no crear cuenta? <Link to="/sin-cuenta">Entrar sin cuenta →</Link></div>
+        )}
       </div>
+      {usuario?.invitado && registro && (
+        <div className="okNotice">Estás usando AutograFlow sin cuenta. Al crear tu cuenta conservas los documentos de esta sesión.</div>
+      )}
       <div className="authTabs" role="tablist">
         {registro ? <Link role="tab" aria-selected={false} to={otro} replace>Iniciar sesión</Link> : <span role="tab" aria-selected className="active">Iniciar sesión</span>}
         {registro ? <span role="tab" aria-selected className="active">Crear cuenta</span> : <Link role="tab" aria-selected={false} to={otro} replace>Crear cuenta</Link>}
@@ -161,21 +232,14 @@ export function Acceso({ modo }: { modo: "ingresar" | "registro" }) {
               <div className={`orgJoinField field ${errores.codigoEquipo ? "con-error" : ""}`}><label htmlFor="codigoEquipo">Código de organización</label>
                 <input id="codigoEquipo" {...campo("codigoEquipo")} placeholder="Ej. AF-ORG-5K8PQ" autoComplete="off" />{error("codigoEquipo")}</div>
             )}
-            <label className={`checkrow termsCheck ${errores.acepto ? "con-error" : ""}`}>
-              <input type="checkbox" checked={acepto} onChange={(e) => setAcepto(e.target.checked)} />
-              <div>
-                <strong>He leído y acepto los Términos y Condiciones y la Política de Privacidad</strong>
-                <p className="termsDeclare">Al marcar esta casilla declaras que <b>has leído completamente, entiendes y aceptas</b> los Términos y Condiciones y la Política de Privacidad.</p>
-                <div className="small">Léelos aquí: <a href="#" onClick={(e) => { e.preventDefault(); setLegal("terminos"); }}>Términos y Condiciones</a> · <a href="#" onClick={(e) => { e.preventDefault(); setLegal("privacidad"); }}>Política de Privacidad</a></div>
-              </div>
-            </label>
+            <AceptoTerminos acepto={acepto} alCambiar={setAcepto} error={!!errores.acepto} />
           </>
         )}
         {aviso && <div className="afAlerta" role="alert">{aviso}</div>}
         <button className="primary ancho" disabled={enviando}>{enviando ? "Un momento…" : registro ? "👤 Crear cuenta" : "🔐 Ingresar"}</button>
         {!registro && <p className="small centro"><Link to="/olvide">¿Olvidaste tu contraseña?</Link></p>}
+        {!registro && !usuario && <p className="small centro"><Link to="/sin-cuenta">🚀 Entrar sin cuenta</Link></p>}
       </form>
-      {legal && <VentanaLegal tipo={legal} alCerrar={() => setLegal(null)} />}
     </PortadaMarco>
   );
 }

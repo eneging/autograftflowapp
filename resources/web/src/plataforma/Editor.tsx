@@ -4,7 +4,7 @@ import {
   COLORES_FIRMANTE, DEDOS, ETIQUETA_TIPO, LIMITES_PLATAFORMA, PREPARADOR, TAMANO_CAMPO, TIPOS_CAMPO, TIPOS_DATO, etiquetaDedo, leerDedo,
   type CampoEditor, type Dedo, type DocumentoDetalle, type FirmanteEditor, type Mano, type TipoCampo,
 } from "../../../shared/plataforma";
-import type { EstadoCuenta } from "../../../shared/planes";
+import { PLANES, type EstadoCuenta } from "../../../shared/planes";
 import { ErrorApi, plataforma, urls, type Contacto } from "./api";
 import { calcularPdf } from "./calculos";
 import { usarSesion } from "./sesion";
@@ -170,7 +170,11 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
   // ------------------------------------------------ firmantes
   function cantidad(valor: number) {
     const n = Math.min(Math.max(1, Math.round(valor) || 1), LIMITES_PLATAFORMA.firmantes);
-    if (n > maxFirmantes) { setLimitePlan(true); setAviso(`Tu plan permite hasta ${maxFirmantes} firmante${maxFirmantes === 1 ? "" : "s"} por documento. Elige un plan para agregar más.`); }
+    if (n > maxFirmantes) {
+      setLimitePlan(true);
+      setAviso(estado?.invitado ? `Sin cuenta puedes usar 1 solo firmante. Crea tu cuenta gratis para usar hasta ${PLANES.gratis.firmantesPorDocumento} firmantes, o adquiere un plan para más.`
+        : `Tu plan permite hasta ${maxFirmantes} firmante${maxFirmantes === 1 ? "" : "s"} por documento. Elige un plan para agregar más.`);
+    }
     const final = Math.min(n, maxFirmantes);
     if (final > firmantes.length) {
       const nuevos = Array.from({ length: final - firmantes.length }, (_, i) => ({ clave: nuevaClave("f"), nombre: `Firmante ${firmantes.length + i + 1}`, telefono: "", email: "", pedirDni: false }));
@@ -327,11 +331,15 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
             <div className="participantCountRow">
               <label htmlFor="cantidadFirmantes">Personas que deben firmar</label>
               <input id="cantidadFirmantes" type="number" min={1} max={maxFirmantes} value={firmantes.length} inputMode="numeric" onChange={(e) => cantidad(Number(e.target.value))} />
-              <span>{maxFirmantes < LIMITES_PLATAFORMA.firmantes ? `de 1 a ${maxFirmantes} (Gratis)` : `de 1 a ${maxFirmantes}`}</span>
+              <span>{estado?.invitado ? "1 (sin cuenta)" : maxFirmantes < LIMITES_PLATAFORMA.firmantes ? `de 1 a ${maxFirmantes} (Gratis)` : `de 1 a ${maxFirmantes}`}</span>
             </div>
             <p className="small">Usa 1 para un solo firmante o aumenta el número para agregar participantes en orden.</p>
             {maxFirmantes < LIMITES_PLATAFORMA.firmantes && (
-              <div className="signerLimitNote"><span>El plan Gratis permite hasta {maxFirmantes} firmantes (solo firma). Para más firmantes, sellos y huellas, adquiere un plan.</span> <Link className="boton primary botonChico" to="/planes">Ver planes</Link></div>
+              estado?.invitado ? (
+                <div className="signerLimitNote"><span>Sin cuenta puedes usar 1 solo firmante (solo firma). Crea tu cuenta gratis para usar hasta {PLANES.gratis.firmantesPorDocumento} firmantes, o adquiere un plan para más.</span> <Link className="boton primary botonChico" to="/registro">Crear cuenta</Link></div>
+              ) : (
+                <div className="signerLimitNote"><span>El plan Gratis permite hasta {maxFirmantes} firmantes (solo firma). Para más firmantes, sellos y huellas, adquiere un plan.</span> <Link className="boton primary botonChico" to="/planes">Ver planes</Link></div>
+              )
             )}
             <label htmlFor="participanteActivo" className="participantSelectLabel">Configurar participante</label>
             <select id="participanteActivo" value={activo} onChange={(e) => { setActivo(e.target.value); setHerramienta(null); }}>

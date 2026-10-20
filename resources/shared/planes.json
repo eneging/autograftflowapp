@@ -4,9 +4,9 @@
   "planes": {
     "gratis": {
       "id": "gratis", "nombre": "Gratis", "icono": "✨", "precio": 0, "dias": null, "creditos": 0,
-      "documentos": 2, "periodo": "dia", "firmantesPorDocumento": 2, "selloHuella": false, "marcaAgua": true, "usuarios": 1,
+      "documentos": 2, "periodo": "dia", "firmantesPorDocumento": 2, "firmantesSinCuenta": 1, "selloHuella": false, "marcaAgua": true, "usuarios": 1,
       "resumen": "2 documentos diarios", "nota": "Se renuevan cada día",
-      "ventajas": ["Sin tarjeta ni compromiso", "Certificado de firmas en cada PDF", "Solo firma (sello y huella con un plan). Hasta 2 firmantes", "Lleva la marca «Firmado con AutograFlow»"]
+      "ventajas": ["Sin tarjeta ni compromiso", "También puedes entrar sin cuenta", "Certificado de firmas en cada PDF", "Solo firma (sello y huella con un plan). Con cuenta: hasta 2 firmantes; sin cuenta: 1", "Lleva la marca «Firmado con AutograFlow»"]
     },
     "ocasional": {
       "id": "ocasional", "nombre": "Ocasional", "icono": "📄", "precio": 4.9, "dias": null, "creditos": 10,

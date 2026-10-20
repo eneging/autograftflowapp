@@ -92,6 +92,7 @@ function Derecha({ firmante }: { firmante: boolean }) {
   if (firmante) return <span className="small headNota">Firma electrónica de documentos</span>;
   if (usuario === undefined) return null;
   if (!usuario) return <Link className="boton primary botonChico" to="/ingresar">🔐 Iniciar sesión</Link>;
+  if (usuario.invitado) return <Link className="boton primary botonChico" to="/registro">👤 Crear cuenta</Link>;
   return <span className="small headNota">{PLANES[usuario.plan]?.nombre ?? "Gratis"} · {usuario.nombre}</span>;
 }
 
@@ -122,7 +123,23 @@ function MenuPrincipal() {
       {abierto && (
         <nav className="menuDropdown" role="menu">
           <div className="menuTitle">Menú</div>
-          {usuario ? (
+          {usuario?.invitado ? (
+            <>
+              {opcion("📄", "#2563eb", "Mis documentos", "/app")}
+              {opcion("📋", "#4d148c", "Mi Plan", "/app/cuenta")}
+              <div className="menuDivider" />
+              {opcion("👤", "#ff6200", "Crear cuenta gratis", "/registro")}
+              {opcion("🔐", "#0e9f6e", "Iniciar sesión", "/ingresar")}
+              {opcion("💎", "#4d148c", "Planes", "/planes")}
+              {opcion("🔍", "#0891b2", "Verificar un PDF", "/verificar")}
+              {opcion("🧾", "#b45309", "Plantilla de reembolso", "/reembolso")}
+              <div className="menuDivider" />
+              <div className="accountInfo">👤 <strong>{usuario.nombre}</strong><br />🟢 Plan Gratis · {PLANES.gratis.documentos} documentos diarios y {PLANES.gratis.firmantesSinCuenta ?? 1} firmante</div>
+              <button type="button" className="menuLogoutBtn" role="menuitem" onClick={async () => { await salir(); navegar("/"); }}>
+                <span className="menuIcon" style={{ background: "#e0294f" }}>🚪</span>Salir
+              </button>
+            </>
+          ) : usuario ? (
             <>
               {opcion("📄", "#2563eb", "Mis documentos", "/app")}
               {opcion("📋", "#4d148c", "Mi Plan", "/app/cuenta")}
@@ -143,6 +160,7 @@ function MenuPrincipal() {
               {opcion("💎", "#4d148c", "Planes", "/planes")}
               {opcion("🔐", "#0e9f6e", "Iniciar sesión", "/ingresar")}
               {opcion("👤", "#ff6200", "Crear cuenta", "/registro")}
+              {opcion("🚀", "#0e9f6e", "Entrar sin cuenta", "/sin-cuenta")}
               <div className="menuDivider" />
               {opcion("🔍", "#0891b2", "Verificar un PDF", "/verificar")}
               {opcion("🧾", "#b45309", "Plantilla de reembolso", "/reembolso")}

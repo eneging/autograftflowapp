@@ -95,7 +95,7 @@ class Documentos
             foreach ($campos as $c) {
                 DB::table('campos')->insert($c + ['documento_id' => $id, 'firmante_id' => in_array($c['tipo'], self::TIPOS_IMAGEN, true) ? $f : null, 'obligatorio' => $c['tipo'] === 'firma']);
             }
-            self::evento($id, 'creado', "Documento creado por {$u->name} ({$u->email})", $origen);
+            self::evento($id, 'creado', 'Documento creado por '.Invitados::firma($u->name, $u->email), $origen);
             return $id;
         });
         return ['id' => $id, 'camposDetectados' => count($campos)];
@@ -442,7 +442,7 @@ class Documentos
         $q = DB::table('firmantes as f')->join('documentos as d', 'd.id', '=', 'f.documento_id')->join('users as u', 'u.id', '=', 'd.user_id')
             ->join('cuentas as c', 'c.id', '=', 'd.cuenta_id')->where('f.token', $t)
             ->select('f.*', 'd.nombre as doc_nombre', 'd.estado as doc_estado', 'd.orden as doc_orden', 'd.mensaje as doc_mensaje',
-                'd.paginas as doc_paginas', 'd.bloquear_dibujo', 'd.bloquear_sello', 'd.flujo', 'd.certificado_evidencias', 'd.archivo', 'd.archivo_final', 'd.cuenta_id', 'u.name as remitente', 'c.nombre as empresa', 'c.logo as cuenta_logo');
+                'd.paginas as doc_paginas', 'd.bloquear_dibujo', 'd.bloquear_sello', 'd.flujo', 'd.certificado_evidencias', 'd.archivo', 'd.archivo_final', 'd.cuenta_id', 'u.name as remitente', 'c.nombre as empresa', 'c.logo as cuenta_logo', 'c.invitado as cuenta_invitado');
         return ($bloquear ? $q->lockForUpdate() : $q)->first() ?? throw new ErrorUso('Enlace no válido', 404);
     }
 
@@ -473,7 +473,7 @@ class Documentos
         return [
             'documento' => [
                 'nombre' => $f->doc_nombre, 'estado' => $f->doc_estado, 'mensaje' => $f->doc_mensaje, 'paginas' => json_decode($f->doc_paginas, true),
-                'remitente' => $f->remitente, 'empresa' => $f->empresa, 'logo' => (bool) $f->cuenta_logo && ! Planes::esGratis($f->cuenta_id),
+                'remitente' => $f->cuenta_invitado ? Invitados::REMITENTE : $f->remitente, 'empresa' => $f->cuenta_invitado ? '' : $f->empresa, 'logo' => (bool) $f->cuenta_logo && ! Planes::esGratis($f->cuenta_id),
                 'bloquearDibujo' => (bool) $f->bloquear_dibujo || (bool) $f->pedir_dni, 'bloquearSello' => (bool) $f->bloquear_sello,
                 'flujo' => (bool) $f->flujo, 'certificado' => (bool) $f->certificado_evidencias,
             ],
@@ -668,7 +668,7 @@ class Documentos
         $eventos[] = ['creadoEn' => $completadoEn, 'detalle' => 'Documento completado por todos los firmantes', 'firmante' => null, 'ip' => null];
 
         $final = PdfFinal::generar(self::disco()->get($d->archivo), [
-            'id' => $id, 'nombre' => $d->nombre, 'remitente' => "{$d->u_nombre} ({$d->u_email})", 'sha256Original' => $d->sha256_original,
+            'id' => $id, 'nombre' => $d->nombre, 'remitente' => Invitados::firma($d->u_nombre, $d->u_email), 'sha256Original' => $d->sha256_original,
             'enviadoEn' => $d->enviado_en, 'completadoEn' => $completadoEn, 'marcaAgua' => $gratis,
             'logo' => ! $gratis && $d->cuenta_logo ? rescue(fn () => Imagenes::leer($d->cuenta_logo), null, false) : null,
             'urlVerificacion' => rtrim(config('app.url'), '/').'/verificar',

@@ -7,15 +7,15 @@ import { usarSesion } from "./sesion";
 
 const CLASE_PLAN: Record<IdPlan, string> = { gratis: "planFree", ocasional: "planOccasional", profesional: "", empresarial: "business" };
 
-/** Lleva a pagar a Mercado Pago (o a crear la cuenta primero, con el plan elegido). */
+/** Lleva a pagar a Mercado Pago (o a crear la cuenta primero, con el plan elegido; también sin cuenta). */
 export function usarCompra() {
   const { usuario } = usarSesion();
   const navegar = useNavigate();
   const [comprando, setComprando] = useState<string | null>(null);
   const [error, setError] = useState("");
   async function comprar(plan: IdPlan) {
-    if (!usuario) return navegar(`/registro?plan=${plan}`);
-    if (plan === "gratis") return navegar("/app");
+    if (plan === "gratis" && usuario) return navegar("/app");
+    if (!usuario || usuario.invitado) return navegar(`/registro?plan=${plan}`);
     setComprando(plan);
     setError("");
     try {
@@ -67,12 +67,15 @@ export function GrillaPlanes({ c, elegido, alElegir, actual }: { c: Catalogo; el
   );
 }
 
-/** Tarjetas + botón de compra (se usa en la portada y en «Mi Plan»). */
+/** Tarjetas + botón de compra (se usa en la portada y en «Mi Plan»). Con «Gratis» y sin sesión, también «Entrar sin cuenta». */
 export function ElegirPlan({ c, actual, inicial }: { c: Catalogo; actual?: IdPlan; inicial?: IdPlan | null }) {
   const { usuario } = usarSesion();
+  const navegar = useNavigate();
   const [elegido, setElegido] = useState<IdPlan | null>(inicial ?? null);
   const { comprar, comprando, error } = usarCompra();
   const plan = elegido ? c.planes.find((p) => p.id === elegido) : null;
+  // Sin cuenta se ve como sin sesión: para comprar primero se crea la cuenta (y conserva sus documentos).
+  const conCuenta = !!usuario && !usuario.invitado;
   return (
     <>
       <GrillaPlanes c={c} elegido={elegido} alElegir={setElegido} actual={actual} />
@@ -80,9 +83,15 @@ export function ElegirPlan({ c, actual, inicial }: { c: Catalogo; actual?: IdPla
       <div className="planAction">
         <button type="button" className={plan?.id === "gratis" && usuario ? "success" : "primary"} disabled={!plan || comprando !== null}
           onClick={() => plan && comprar(plan.id)}>
-          {comprando ? "Abriendo Mercado Pago…" : plan ? textoAccion(plan, !!usuario, actual, c.moneda) : "Elige un plan"}
+          {comprando ? "Abriendo Mercado Pago…" : !plan ? "Elige un plan" : plan.id === "gratis" && usuario ? "Ir a mis documentos →" : textoAccion(plan, conCuenta, actual, c.moneda)}
         </button>
+        {plan?.id === "gratis" && !usuario && (
+          <button type="button" className="success" onClick={() => navegar("/sin-cuenta")}>🚀 Entrar sin cuenta</button>
+        )}
       </div>
+      {plan?.id === "gratis" && !usuario && (
+        <p className="small centro">Sin cuenta: {plan.documentos} documentos diarios y {plan.firmantesSinCuenta ?? 1} firmante por documento. Con tu cuenta gratis: hasta {plan.firmantesPorDocumento} firmantes.</p>
+      )}
       {error && <div className="afAlerta centro" role="alert">{error}</div>}
       <div className="demoNote">
         🔒 Pagos seguros con <strong>Mercado Pago</strong> (tarjeta, Yape y otros medios). El plan se activa en cuanto se confirma el pago y no se renueva solo.
@@ -103,6 +112,7 @@ export function MiPlan() {
   }, []);
   if (!c || !d) return <div className="card"><p id="loading">Cargando…</p></div>;
   const e = d.estado, plan = PLANES[e.plan];
+  if (e.invitado) return <MiPlanSinCuenta c={c} e={e} />;
   const vencido = PLANES[e.planContratado]?.dias && e.plan !== e.planContratado;
   const cuando = e.periodo === "dia" ? "hoy" : "este mes";
   return (
@@ -153,6 +163,31 @@ export function MiPlan() {
     </>
   );
 }
+/** «Mi Plan» al entrar sin cuenta: cupo de hoy y la invitación a crear la cuenta (para comprar un plan). */
+function MiPlanSinCuenta({ c, e }: { c: Catalogo; e: EstadoCuenta }) {
+  return (
+    <>
+      <div className="card">
+        <div className="sidePanelHead"><div><h1>📋 Mi Plan</h1><p className="small">Estás usando AutograFlow sin cuenta.</p></div></div>
+        <div className="kpiGrid">
+          <div className="kpiCard"><div className="kpiVal">✨ Gratis sin cuenta</div><div className="kpiLbl">Tipo de acceso</div></div>
+          <div className="kpiCard"><div className="kpiVal">{e.usados} / {e.limite}</div><div className="kpiLbl">Documentos usados hoy</div>
+            <div className="progreso"><span style={{ width: `${Math.min(100, (e.usados / Math.max(1, e.limite ?? 1)) * 100)}%` }} /></div></div>
+          <div className="kpiCard"><div className="kpiVal">{e.firmantesPorDocumento}</div><div className="kpiLbl">Firmante por documento · solo firma</div></div>
+        </div>
+        <div className="guestAltRow">
+          Crea tu cuenta gratis para usar hasta {PLANES.gratis.firmantesPorDocumento} firmantes, guardar tus documentos y comprar un plan.
+          Tus documentos de esta sesión pasan a tu nueva cuenta. <Link to="/registro">Crear cuenta →</Link>
+        </div>
+      </div>
+      <div className="card">
+        <h2>Planes</h2>
+        <ElegirPlan c={c} actual={e.plan} />
+      </div>
+    </>
+  );
+}
+
 const ESTADO_PAGO: Record<PagoFila["estado"], string> = { pendiente: "Pendiente", aprobado: "Aprobado", rechazado: "Rechazado", cancelado: "Cancelado" };
 
 /** Vuelta desde Mercado Pago: confirma el pago con el servidor y muestra el resultado. */
@@ -210,11 +245,11 @@ export function CupoPanel({ estado }: { estado: EstadoCuenta | null }) {
   return (
     <div className={`cupo ${pocos ? "pocos" : ""}`}>
       <span>
-        {PLANES[e.plan].icono} Plan <strong>{PLANES[e.plan].nombre}</strong> ·{" "}
+        {PLANES[e.plan].icono} Plan <strong>{PLANES[e.plan].nombre}{e.invitado ? " sin cuenta" : ""}</strong> ·{" "}
         {e.limite === null ? "documentos ilimitados" : `${e.usados} de ${e.limite} documentos ${cuando}`}
         {e.creditos ? ` · ${e.creditos} comprados` : ""}
       </span>
-      <Link to={pocos ? "/planes" : "/app/cuenta"}>{pocos ? "Ver planes" : "Mi Plan"}</Link>
+      {e.invitado ? <Link to="/registro">Crear cuenta</Link> : <Link to={pocos ? "/planes" : "/app/cuenta"}>{pocos ? "Ver planes" : "Mi Plan"}</Link>}
     </div>
   );
 }

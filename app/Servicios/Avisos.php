@@ -13,7 +13,7 @@ class Avisos
 {
     public static function enviar(string $para, string $asunto, string $titulo, array $parrafos, ?array $boton = null): bool
     {
-        if ($para === '' || ! filter_var($para, FILTER_VALIDATE_EMAIL)) {
+        if ($para === '' || ! filter_var($para, FILTER_VALIDATE_EMAIL) || Invitados::esCorreo($para)) {
             return false;
         }
         try {
@@ -30,6 +30,9 @@ class Avisos
     {
         $d = DB::table('documentos as d')->join('users as u', 'u.id', '=', 'd.user_id')->where('d.id', $documentoId)
             ->first(['d.id', 'd.nombre', 'd.orden', 'd.mensaje', 'd.estado', 'u.name as remitente', 'u.email as remitente_email']);
+        if ($d && Invitados::esCorreo($d->remitente_email)) {
+            $d->remitente = Invitados::REMITENTE;
+        }
         return [$d, DB::table('firmantes')->where('documento_id', $documentoId)->orderBy('orden')->get()];
     }
 

@@ -20,6 +20,8 @@ export interface Plan {
   documentos: number | null;
   periodo: "dia" | "mes";
   firmantesPorDocumento: number;
+  /** Firmantes por documento al entrar sin cuenta (solo el plan Gratis). */
+  firmantesSinCuenta?: number;
   /** Campos de sello y huella. */
   selloHuella: boolean;
   /** Lleva la marca «Firmado con AutograFlow» en cada página del PDF final. */
@@ -55,6 +57,8 @@ export interface EstadoCuenta {
   usuarios: number;
   moneda: string;
   pagosActivos: boolean;
+  /** Entró sin cuenta: Gratis con 1 firmante; no puede comprar planes hasta crear su cuenta. */
+  invitado: boolean;
 }
 
 export interface PagoFila {

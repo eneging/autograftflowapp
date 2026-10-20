@@ -24,7 +24,7 @@ async function pedir<T>(url: string, opciones: RequestInit = {}): Promise<T> {
 }
 const json = (metodo: string, datos?: unknown): RequestInit => ({ method: metodo, body: datos === undefined ? undefined : JSON.stringify(datos) });
 
-export interface Usuario { id: number; cuentaId: number; nombre: string; email: string; cuenta: string; plan: IdPlan; titular: boolean }
+export interface Usuario { id: number; cuentaId: number; nombre: string; email: string; cuenta: string; plan: IdPlan; titular: boolean; invitado: boolean }
 export interface Contacto { nombre: string; telefono: string; email: string; documentos: number; firmados: number; ultimo: string | null }
 export interface Equipo {
   nombre: string; plazas: number; activo: boolean; soyTitular: boolean; codigo: string | null;
@@ -36,7 +36,10 @@ export interface FilaDocumento {
 
 export const plataforma = {
   yo: () => pedir<Usuario>("/api/auth/yo"),
-  registrar: (d: { nombre: string; empresa: string; email: string; clave: string; acepto: boolean; codigoEquipo: string }) => pedir("/api/auth/registro", json("POST", d)),
+  registrar: (d: { nombre: string; empresa: string; email: string; clave: string; acepto: boolean; codigoEquipo: string }) =>
+    pedir<{ ok: boolean; conservoDocumentos?: boolean }>("/api/auth/registro", json("POST", d)),
+  /** «Entrar sin cuenta»: hay que aceptar los Términos y Condiciones cada vez. */
+  invitado: (acepto: boolean) => pedir("/api/auth/invitado", json("POST", { acepto })),
   ingresar: (d: { email: string; clave: string }) => pedir("/api/auth/ingresar", json("POST", d)),
   salir: () => pedir("/api/auth/salir", json("POST", {})),
   olvide: (email: string) => pedir("/api/auth/olvide", json("POST", { email })),

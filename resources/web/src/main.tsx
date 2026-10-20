@@ -6,7 +6,7 @@ import { NuevaSolicitud } from "./paginas/NuevaSolicitud";
 import { VerSolicitud } from "./paginas/VerSolicitud";
 import { Aprobar } from "./paginas/Aprobar";
 import { Admin } from "./paginas/Admin";
-import { Acceso, Inicio } from "./plataforma/Portada";
+import { Acceso, Inicio, SinCuenta } from "./plataforma/Portada";
 import { Panel } from "./plataforma/Panel";
 import { ConSesion, SesionProveedor } from "./plataforma/sesion";
 import { MiPlan, ResultadoPago } from "./plataforma/Planes";
@@ -34,6 +34,7 @@ createRoot(document.getElementById("root")!).render(
             <Route path="/" element={<Inicio />} />
             <Route path="/ingresar" element={<Acceso modo="ingresar" />} />
             <Route path="/registro" element={<Acceso modo="registro" />} />
+            <Route path="/sin-cuenta" element={<SinCuenta />} />
             <Route path="/olvide" element={<Olvide />} />
             <Route path="/restablecer" element={<Restablecer />} />
             <Route path="/app" element={<ConSesion><Panel /></ConSesion>} />

@@ -20,6 +20,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->validateCsrfTokens(except: ['api/*']);
         // Detrás del proxy del hosting (o de Cloudflare), la IP real del firmante llega en X-Forwarded-For.
         $middleware->trustProxies(at: '*');
+        // Sin cuenta: la sesión se borra al cerrar el navegador (hay que volver a aceptar los Términos).
+        $middleware->web(append: [\App\Http\Middleware\SesionInvitado::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // Los errores de uso (enlace vencido, límite del plan…) son respuestas normales: no van al registro de errores.

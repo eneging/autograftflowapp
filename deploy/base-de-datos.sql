@@ -73,6 +73,8 @@ CREATE TABLE IF NOT EXISTS `consumos` (
 CREATE TABLE IF NOT EXISTS `cuentas` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `nombre` varchar(120) NOT NULL,
+  `invitado` tinyint(1) NOT NULL DEFAULT 0,
+  `ip_invitado` varchar(64) DEFAULT NULL,
   `plan` varchar(30) NOT NULL DEFAULT 'gratis',
   `plan_vence` datetime DEFAULT NULL,
   `creditos` int(11) NOT NULL DEFAULT 0,
@@ -81,7 +83,8 @@ CREATE TABLE IF NOT EXISTS `cuentas` (
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `cuentas_codigo_equipo_unique` (`codigo_equipo`)
+  UNIQUE KEY `cuentas_codigo_equipo_unique` (`codigo_equipo`),
+  KEY `cuentas_invitado_ip_invitado_index` (`invitado`,`ip_invitado`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -301,6 +304,7 @@ CREATE TABLE IF NOT EXISTS `users` (
   `email` varchar(255) NOT NULL,
   `email_verified_at` timestamp NULL DEFAULT NULL,
   `password` varchar(255) NOT NULL,
+  `terminos_aceptados_en` datetime DEFAULT NULL,
   `remember_token` varchar(100) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
@@ -333,7 +337,7 @@ CREATE TABLE IF NOT EXISTS `users` (
 
 LOCK TABLES `migrations` WRITE;
 /*!40000 ALTER TABLE `migrations` DISABLE KEYS */;
-INSERT INTO `migrations` VALUES (1,'0001_01_01_000000_create_users_table',1),(2,'0001_01_01_000001_create_cache_table',1),(3,'0001_01_01_000002_create_jobs_table',1),(4,'2026_10_07_000001_crear_tablas_autograflow',1),(5,'2026_10_09_000001_equipo_y_bloqueos',2),(6,'2026_10_20_000001_evidencias_y_flujo',3),(7,'2026_10_20_000002_campos_del_preparador_y_calculos',3);
+INSERT INTO `migrations` VALUES (1,'0001_01_01_000000_create_users_table',1),(2,'0001_01_01_000001_create_cache_table',1),(3,'0001_01_01_000002_create_jobs_table',1),(4,'2026_10_07_000001_crear_tablas_autograflow',1),(5,'2026_10_09_000001_equipo_y_bloqueos',2),(6,'2026_10_20_000001_evidencias_y_flujo',3),(7,'2026_10_20_000002_campos_del_preparador_y_calculos',3),(8,'2026_10_21_000001_entrar_sin_cuenta',4);
 /*!40000 ALTER TABLE `migrations` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

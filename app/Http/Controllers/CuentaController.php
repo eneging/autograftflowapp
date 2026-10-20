@@ -48,6 +48,9 @@ class CuentaController extends Controlador
     public function comprar(Request $r)
     {
         $d = $this->validar($r->all(), ['producto' => 'required|string|max:40'], ['producto.*' => 'Elige un plan']);
+        if (DB::table('cuentas')->where('id', $r->user()->cuenta_id)->value('invitado')) {
+            throw new ErrorUso('Crea tu cuenta gratis para comprar un plan: así tus pagos y documentos quedan guardados.', 403);
+        }
         return response()->json(MercadoPago::crearPago($r->user(), $d['producto']), 201);
     }
 

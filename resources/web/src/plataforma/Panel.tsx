@@ -46,7 +46,13 @@ export function Panel() {
     <>
       <div className="card">
         <h1>Preparar documento</h1>
-        <p>Hola, {usuario?.nombre}. Sube un PDF, marca dónde firma cada persona y envíalo por WhatsApp.</p>
+        <p>{usuario?.invitado ? "Hola." : `Hola, ${usuario?.nombre}.`} Sube un PDF, marca dónde firma cada persona y envíalo por WhatsApp.</p>
+        {usuario?.invitado && (
+          <div className="guestAltRow">
+            Estás sin cuenta: tus documentos se guardan solo mientras dure esta sesión (hasta que cierres el navegador).
+            Crea tu cuenta gratis para conservarlos y usar hasta 2 firmantes. <Link to="/registro">Crear cuenta →</Link>
+          </div>
+        )}
         <CupoPanel estado={estado} />
         <div className="step">
           <div className="stepTitle"><span className="stepNumber">1</span>Documento PDF</div>

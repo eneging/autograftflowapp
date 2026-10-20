@@ -432,6 +432,57 @@ class PlataformaTest extends TestCase
         $this->assertSame('Recordatorio: «Contrato» espera tu firma', last($this->correos())[1]);
     }
 
+    public function test_entrar_sin_cuenta(): void
+    {
+        // Hay que aceptar los Términos y Condiciones y la Política de Privacidad
+        $this->postJson('/api/auth/invitado', [], self::H)->assertStatus(400);
+        $this->postJson('/api/auth/invitado', ['acepto' => false], self::H)->assertStatus(400);
+        $this->postJson('/api/auth/invitado', ['acepto' => true], self::H)->assertCreated();
+        $this->getJson('/api/auth/yo')->assertOk()->assertJson(['invitado' => true, 'email' => '', 'plan' => 'gratis', 'nombre' => 'Invitado (sin cuenta)']);
+        $this->assertNotNull(DB::table('users')->value('terminos_aceptados_en'));
+        $this->getJson('/api/cuenta')->assertJson(['estado' => ['invitado' => true, 'firmantesPorDocumento' => 1, 'limite' => 2]]);
+        // Sin cuenta: 1 firmante por documento y no se pueden comprar planes
+        $id = $this->subir();
+        $this->preparar($id, 2);
+        $this->postJson("/api/documentos/{$id}/enviar", [], self::H)->assertStatus(402)->assertJsonPath('error', fn ($e) => str_contains($e, 'Sin cuenta'));
+        $this->preparar($id, 1);
+        $det = $this->postJson("/api/documentos/{$id}/enviar", [], self::H)->assertOk()->json();
+        $this->assertSame([['p0@ejemplo.com', 'Un usuario de AutograFlow te envió «Contrato» para firmar']], array_map(fn ($c) => [$c[0], $c[1]], $this->correos()));
+        $this->getJson("/api/firmar/{$det['firmantes'][0]['token']}")->assertJsonPath('documento.remitente', 'Un usuario de AutograFlow')->assertJsonPath('documento.empresa', '');
+        $this->postJson('/api/pagos', ['producto' => 'profesional'], self::H)->assertStatus(403);
+        $d2 = $this->subir();
+        $this->preparar($d2, 1);
+        $this->postJson("/api/documentos/{$d2}/enviar", [], self::H)->assertOk();
+
+        // Al volver a entrar sin cuenta (otra cuenta temporal) el cupo de hoy sigue siendo el de la misma IP
+        $this->postJson('/api/auth/salir', [], self::H);
+        Auth::forgetGuards();
+        $this->postJson('/api/auth/invitado', ['acepto' => true], self::H)->assertCreated();
+        $this->getJson('/api/cuenta')->assertJson(['estado' => ['usados' => 2, 'disponibles' => 0]]);
+        $d3 = $this->subir();
+        $this->preparar($d3, 1);
+        $this->postJson("/api/documentos/{$d3}/enviar", [], self::H)->assertStatus(402)->assertJsonPath('error', fn ($e) => str_contains($e, 'documentos gratis de hoy'));
+
+        // Al crear su cuenta conserva sus documentos y pasa al plan Gratis con cuenta (2 firmantes)
+        $this->postJson('/api/auth/registro', ['nombre' => 'Ana Torres', 'empresa' => '', 'email' => 'ana@ejemplo.com', 'clave' => 'clave-segura-1', 'acepto' => true], self::H)
+            ->assertCreated()->assertJson(['conservoDocumentos' => true]);
+        $this->getJson('/api/auth/yo')->assertJson(['invitado' => false, 'email' => 'ana@ejemplo.com', 'nombre' => 'Ana Torres', 'cuenta' => 'Ana Torres']);
+        $this->assertSame([$d3], array_column($this->getJson('/api/documentos')->json(), 'id'));
+        $this->getJson('/api/cuenta')->assertJson(['estado' => ['invitado' => false, 'firmantesPorDocumento' => 2, 'usados' => 0]]);
+        $this->postJson("/api/documentos/{$d3}/enviar", [], self::H)->assertOk();
+        // Con cuenta, «Entrar sin cuenta» no cambia nada
+        $this->postJson('/api/auth/invitado', ['acepto' => true], self::H)->assertOk();
+        $this->getJson('/api/auth/yo')->assertJson(['invitado' => false]);
+    }
+
+    public function test_la_sesion_sin_cuenta_vence(): void
+    {
+        $this->postJson('/api/auth/invitado', ['acepto' => true], self::H)->assertCreated();
+        $this->getJson('/api/auth/yo')->assertOk();
+        $this->travel(13)->hours();
+        $this->getJson('/api/auth/yo')->assertStatus(401);
+    }
+
     /** Texto que escribió TCPDF en el PDF (operadores «[(texto)] TJ» dentro de los flujos comprimidos). */
     private function texto(string $pdf): string
     {

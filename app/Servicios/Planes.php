@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
  *  - Gratis y Ocasional: 2 documentos por día (en la zona horaria de ZONA_HORARIA). Ocasional suma 10 créditos y no vence.
  *  - Profesional: 180 documentos por mes durante 30 días. Empresarial: ilimitado durante 365 días, hasta 5 usuarios.
  *  - Los créditos (documentos comprados) no vencen y se usan cuando se acaba el cupo del periodo.
+ *  - Sin cuenta (Invitados): Gratis con 1 firmante por documento; los 2 documentos diarios se cuentan por IP.
  */
 class Planes
 {
@@ -80,12 +81,23 @@ class Planes
         $c = ($bloquear ? $q->lockForUpdate() : $q)->first();
         $vence = $c->plan_vence ? Carbon::parse($c->plan_vence) : null;
         $plan = self::vigente($c->plan, $vence, (int) $c->creditos);
-        $usados = DB::table('consumos')->where('cuenta_id', $cuentaId)->where('origen', 'plan')
-            ->where('creado_en', '>=', self::inicioPeriodo(self::plan($plan)['periodo']))->count();
+        $desde = self::inicioPeriodo(self::plan($plan)['periodo']);
+        $invitado = (bool) ($c->invitado ?? false);
+        // Sin cuenta, el cupo diario es de la IP (todas sus entradas sin cuenta), no de cada cuenta temporal.
+        $usados = $invitado && $c->ip_invitado
+            ? DB::table('consumos as co')->join('cuentas as cu', 'cu.id', '=', 'co.cuenta_id')->where('cu.invitado', true)
+                ->where('cu.ip_invitado', $c->ip_invitado)->where('co.origen', 'plan')->where('co.creado_en', '>=', $desde)->count()
+            : DB::table('consumos')->where('cuenta_id', $cuentaId)->where('origen', 'plan')->where('creado_en', '>=', $desde)->count();
         return [
             'plan' => $plan, 'contratado' => isset(self::catalogo()['planes'][$c->plan]) ? $c->plan : 'gratis',
-            'vence' => $vence, 'creditos' => (int) $c->creditos, 'usados' => $usados,
+            'vence' => $vence, 'creditos' => (int) $c->creditos, 'usados' => $usados, 'invitado' => $invitado,
         ];
+    }
+
+    /** Firmantes por documento: sin cuenta, los del plan Gratis sin cuenta (1). */
+    private static function firmantes(array $p, bool $invitado): int
+    {
+        return $invitado ? (int) ($p['firmantesSinCuenta'] ?? $p['firmantesPorDocumento']) : (int) $p['firmantesPorDocumento'];
     }
 
     /** Estado que ve el cliente en «Mi plan». */
@@ -98,7 +110,7 @@ class Planes
             'plan' => $d['plan'], 'planContratado' => $d['contratado'],
             'vence' => self::plan($d['plan'])['dias'] ? $d['vence']?->toIso8601ZuluString() : null,
             'usados' => $d['usados'], 'limite' => $limite, 'periodo' => $p['periodo'], 'creditos' => $d['creditos'],
-            'firmantesPorDocumento' => $p['firmantesPorDocumento'], 'selloHuella' => $p['selloHuella'],
+            'firmantesPorDocumento' => self::firmantes($p, $d['invitado']), 'selloHuella' => $p['selloHuella'], 'invitado' => $d['invitado'],
             'disponibles' => $limite === null ? null : max(0, $limite - $d['usados']) + $d['creditos'],
             'usuarios' => $p['usuarios'], 'moneda' => config('autograflow.moneda'), 'pagosActivos' => MercadoPago::activo(),
         ];
@@ -112,8 +124,11 @@ class Planes
     {
         $d = self::datos($cuentaId, true);
         $p = self::plan($d['plan']);
-        if ($firmantes > $p['firmantesPorDocumento']) {
-            throw new ErrorUso("Tu plan {$p['nombre']} permite hasta {$p['firmantesPorDocumento']} firmantes por documento. Elige un plan para agregar más.", 402);
+        $max = self::firmantes($p, $d['invitado']);
+        if ($firmantes > $max) {
+            throw new ErrorUso($d['invitado']
+                ? "Sin cuenta puedes usar {$max} solo firmante por documento. Crea tu cuenta gratis para usar hasta {$p['firmantesPorDocumento']} firmantes, o adquiere un plan para más."
+                : "Tu plan {$p['nombre']} permite hasta {$max} firmantes por documento. Elige un plan para agregar más.", 402);
         }
         if (! $p['selloHuella'] && array_intersect(['sello', 'huella'], $tipos)) {
             throw new ErrorUso("El sello y la huella están disponibles en los planes de pago. El plan {$p['nombre']} permite solo firmas.", 402);
@@ -121,7 +136,9 @@ class Planes
         $origen = self::origen($d['usados'], $p['documentos'], $d['creditos']);
         if (! $origen) {
             $cuando = $p['periodo'] === 'dia' ? 'hoy' : 'este mes';
-            throw new ErrorUso("Ya usaste los {$p['documentos']} documentos de {$cuando} de tu plan {$p['nombre']}. ".
+            throw new ErrorUso($d['invitado']
+                ? "Ya usaste tus {$p['documentos']} documentos gratis de hoy. Vuelve mañana, o crea tu cuenta y elige un plan para seguir enviando."
+                : "Ya usaste los {$p['documentos']} documentos de {$cuando} de tu plan {$p['nombre']}. ".
                 ($p['periodo'] === 'dia' ? 'Mañana recibirás más, o compra el plan Ocasional (10 documentos) o un plan mensual.' : 'Recarga 10 documentos o cambia de plan para seguir enviando.'), 402);
         }
         if ($origen === 'credito') {

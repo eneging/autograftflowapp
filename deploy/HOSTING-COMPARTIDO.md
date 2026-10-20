@@ -111,4 +111,4 @@ Las imágenes ya quedan guardadas en Cloudinary.
 ## Actualizar a una versión nueva
 
 1. Vuelve a hacer el paso 1 en tu PC y sube los archivos, **sin borrar** `.env` ni `storage`.
-2. Ejecuta `php artisan migrate --force && php artisan config:cache`. Sin Terminal, importa en phpMyAdmin el SQL de actualización de esa versión: [deploy/actualizar-2026-10-09.sql](actualizar-2026-10-09.sql) agrega el equipo Empresarial y los bloqueos de firma y sello, y pasa los planes antiguos «Básico» y «Pro» al Profesional.
+2. Ejecuta `php artisan migrate --force && php artisan config:cache`. Sin Terminal, importa en phpMyAdmin el SQL de actualización de esa versión: [deploy/actualizar-2026-10-09.sql](actualizar-2026-10-09.sql) agrega el equipo Empresarial y los bloqueos de firma y sello, y pasa los planes antiguos «Básico» y «Pro» al Profesional; [deploy/actualizar-2026-10-20.sql](actualizar-2026-10-20.sql) agrega la firma con DNI, el certificado de evidencias y los campos calculados; y [deploy/actualizar-2026-10-21.sql](actualizar-2026-10-21.sql) agrega «Entrar sin cuenta». Importa en orden los que te falten.
