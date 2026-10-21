@@ -868,12 +868,14 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
                 >
                   {/* Como el prototipo: los datos (texto, fecha, casilla) son solo un recuadro; su nombre está en el título y en «Texto del firmante».
                       Los que llenas tú se escriben aquí mismo; los ƒx muestran el resultado del cálculo del PDF. */}
-                  {mio && c.tipo !== "casilla" && (
+                  {/* En «Bloquear campos» no se escribe: el recuadro de texto se quitaría el toque y el campo no se bloquearía. */}
+                  {mio && c.tipo !== "casilla" && !(modoBloqueo && c.nombrePdf) && (
                     <input className="campoEntrada" type={c.tipo === "fecha" ? "date" : "text"} maxLength={500} aria-label={c.etiqueta || ETIQUETA_TIPO[c.tipo]}
                       value={typeof c.valor === "string" ? c.valor : ""} onPointerDown={(e) => e.stopPropagation()} onFocus={() => setSel(c.k)}
                       onChange={(e) => cambiarCampo(c.k, { valor: e.target.value })} />
                   )}
                   {mio && c.tipo === "casilla" && c.valor === true && <span className="marcaCasilla">✓</span>}
+                  {mio && c.tipo !== "casilla" && modoBloqueo && c.nombrePdf && typeof c.valor === "string" && c.valor && <span className="campoEditorTexto valorLleno">{c.valor}</span>}
                   {c.bloqueado && <span className="campoBloqueado">{c.tipo === "casilla" ? "🔒" : "🔒 Bloqueado"}</span>}
                   {c.tipo === "calculo" && <span className="campoCalculo">ƒx {calculo[c.nombrePdf] ?? ""}</span>}
                   {ES_IMAGEN(c.tipo) && c.firmante === miClave && misImagenes[c.tipo]
