@@ -59,6 +59,12 @@ export const plataforma = {
   documento: (id: number) => pedir<DocumentoDetalle>(`/api/documentos/${id}`),
   guardar: (id: number, d: DatosGuardarDocumento) => pedir(`/api/documentos/${id}`, json("PUT", d)),
   enviar: (id: number) => pedir<DocumentoDetalle>(`/api/documentos/${id}/enviar`, json("POST", {})),
+  /** Crea un documento del editor a partir de la plantilla incluida «Solicitud de reembolso». */
+  desdePlantillaReembolso: async () => {
+    const r = await fetch("/api/plantillas/reembolso.pdf", { credentials: "same-origin", headers: { "X-AutograFlow": "1" } });
+    if (!r.ok) throw new ErrorApi("No se pudo abrir la plantilla.", r.status);
+    return plataforma.subir(new File([await r.blob()], "Solicitud de reembolso.pdf", { type: "application/pdf" }));
+  },
   plantilla: (id: number, es: boolean) => pedir(`/api/documentos/${id}/plantilla`, json("POST", { es })),
   duplicar: (id: number) => pedir<{ id: number }>(`/api/documentos/${id}/duplicar`, json("POST", {})),
   eliminarPagina: (id: number, pagina: number) => pedir<DocumentoDetalle>(`/api/documentos/${id}/paginas/${pagina}`, { method: "DELETE" }),

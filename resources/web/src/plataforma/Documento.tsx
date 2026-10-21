@@ -115,6 +115,13 @@ function Seguimiento({ d, recargar }: { d: DocumentoDetalle; recargar: () => voi
   const textoInvitacion = (nombre: string, token: string) =>
     `Hola ${nombre}, ${usuario?.nombre ?? "te"} te envió «${d.nombre}» para firmar en AutograFlow.${d.mensaje ? ` ${d.mensaje}` : ""} Ábrelo aquí: ${urls.enlaceFirmante(token)}`;
 
+  /** Completado, rechazado o anulado: se borra del todo (también el PDF firmado y su verificación). */
+  async function eliminarDefinitivo() {
+    if (!confirm(`¿Eliminar «${d.nombre}» definitivamente? Se borran el PDF${d.estado === "completado" ? " firmado" : ""}, las firmas y el historial, y ya no se podrá verificar en AutograFlow. Descárgalo antes si lo necesitas. No se puede deshacer.`)) return;
+    try { await plataforma.eliminar(d.id); navegar("/app"); }
+    catch (e) { alert((e as Error).message); }
+  }
+
   async function anular() {
     if (!confirm("¿Anular este documento? Los firmantes ya no podrán firmarlo.")) return;
     await plataforma.eliminar(d.id);
@@ -184,6 +191,7 @@ function Seguimiento({ d, recargar }: { d: DocumentoDetalle; recargar: () => voi
         <div className="row">
           <button type="button" onClick={async () => { navegar(`/app/d/${(await plataforma.duplicar(d.id)).id}`); }}>📄 Usar de nuevo (copia en borrador)</button>
           {d.estado === "en_firma" && <button type="button" className="danger" onClick={anular}>Anular documento</button>}
+          {d.estado !== "en_firma" && <button type="button" className="danger" onClick={eliminarDefinitivo}>🗑️ Eliminar documento</button>}
         </div>
       </div>
 

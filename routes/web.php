@@ -64,6 +64,7 @@ Route::prefix('api')->middleware(CabeceraAutograFlow::class)->group(function () 
         Route::post('cuenta/equipo/codigo', [CuentaController::class, 'nuevoCodigoEquipo']);
         Route::delete('cuenta/equipo/{usuario}', [CuentaController::class, 'quitarMiembro'])->whereNumber('usuario');
         Route::get('contactos', [DocumentosController::class, 'contactos']);
+        Route::get('plantillas/reembolso.pdf', [DocumentosController::class, 'pdfPlantillaReembolso']);
         Route::get('cuenta/logo', [CuentaController::class, 'logo']);
         Route::put('cuenta/logo', [CuentaController::class, 'subirLogo']);
         Route::delete('cuenta/logo', [CuentaController::class, 'quitarLogo']);

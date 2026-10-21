@@ -294,6 +294,22 @@ class PlataformaTest extends TestCase
         $this->postJson('/api/auth/invitado', ['acepto' => true], self::H)->assertStatus(409);
     }
 
+    public function test_eliminar_documento_terminado(): void
+    {
+        $this->registrar()->assertCreated();
+        $id = $this->subir();
+        $this->preparar($id, 1);
+        $t = $this->postJson("/api/documentos/{$id}/enviar", [], self::H)->assertOk()->json('firmantes.0.token');
+        // En firma: el primer «eliminar» lo anula; el segundo lo borra del todo
+        $this->deleteJson("/api/documentos/{$id}", [], self::H)->assertJson(['resultado' => 'anulado']);
+        $this->deleteJson("/api/documentos/{$id}", [], self::H)->assertJson(['resultado' => 'eliminado']);
+        $this->getJson("/api/documentos/{$id}")->assertNotFound();
+        $this->getJson("/api/firmar/{$t}")->assertNotFound();
+        $this->assertFalse(Storage::disk('local')->exists("documentos/{$id}/original.pdf"));
+        // El documento enviado sigue contando en el cupo del plan
+        $this->assertSame(1, DB::table('consumos')->where('documento_id', $id)->count());
+    }
+
     public function test_texto_del_firmante_y_campos_bloqueados(): void
     {
         $this->registrar()->assertCreated();
@@ -423,7 +439,8 @@ class PlataformaTest extends TestCase
         $base = ['pagina' => 1, 'x' => 190, 'w' => 120, 'h' => 18, 'etiqueta' => '', 'obligatorio' => true];
         $campos = [
             ['firmante' => 'preparador', 'tipo' => 'texto', 'y' => 349, 'valor' => 'Ana Torres', 'nombrePdf' => 'Nombre'] + $base,
-            ['firmante' => 'preparador', 'tipo' => 'casilla', 'y' => 420, 'w' => 14, 'h' => 14, 'valor' => true] + $base,
+            // Casilla del propio PDF (en Gratis solo se llenan los campos que ya trae el PDF)
+            ['firmante' => 'preparador', 'tipo' => 'casilla', 'y' => 420, 'w' => 14, 'h' => 14, 'valor' => true, 'nombrePdf' => 'Acepto'] + $base,
             ['firmante' => 'preparador', 'tipo' => 'calculo', 'y' => 380, 'nombrePdf' => 'Total'] + $base,
             ['firmante' => 'f0', 'tipo' => 'firma', 'pagina' => 2, 'y' => 540, 'w' => 180, 'h' => 50] + $base,
         ];

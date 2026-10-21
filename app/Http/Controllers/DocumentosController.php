@@ -120,6 +120,12 @@ class DocumentosController extends Controlador
         return ['resultado' => Documentos::eliminar($r->user(), $id, $this->origen($r))];
     }
 
+    /** PDF de la plantilla incluida «Solicitud de reembolso», para convertirla en un documento editable del editor. */
+    public function pdfPlantillaReembolso()
+    {
+        return $this->responderPdf(file_get_contents(resource_path('pdf/plantilla-reembolso.pdf')), 'Solicitud de reembolso', false);
+    }
+
     public function archivo(Request $r, int $id)
     {
         $d = Documentos::documentoDe($r->user()->cuenta_id, $id);

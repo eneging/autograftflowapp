@@ -1,28 +1,51 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { PLANES, type IdPlan } from "../../../shared/planes";
-import { BotonTema, Logo } from "../componentes/Marco";
+import { BotonTema, Logo, LogoMarca } from "../componentes/Marco";
 import { VentanaLegal, type TipoLegal } from "../componentes/Legal";
 import { ErrorApi, plataforma, type Catalogo } from "./api";
 import { ElegirPlan } from "./Planes";
 import { marcarEntradaInvitado, usarSesion } from "./sesion";
 
-/** Fondo de color a pantalla completa con el logo grande y una tarjeta de vidrio (portada, planes y acceso). */
-export function PortadaMarco({ children, despues }: { children: ReactNode; despues?: ReactNode }) {
+/**
+ * Portada, planes y acceso (estilo Notion): barra superior con el logo y los accesos, un titular opcional y el
+ * contenido sobre el lienzo blanco. «angosta» centra una columna estrecha (iniciar sesión, crear cuenta…).
+ */
+export function PortadaMarco({ children, despues, titular, angosta = false }: { children: ReactNode; despues?: ReactNode; titular?: ReactNode; angosta?: boolean }) {
+  const { usuario } = usarSesion();
   return (
-    <div className="authWrap">
-      <div className="authHeader">
-        <Logo grande />
-        <div className="authTagline">Firma tus documentos de forma sencilla.</div>
+    <div className="landing">
+      <nav className="landingNav">
+        <Logo />
+        <div className="landingNavDer">
+          <Link className="navLink soloEscritorio" to="/planes">Planes</Link>
+          <Link className="navLink soloEscritorio" to="/verificar">Verificar PDF</Link>
+          <BotonTema />
+          {usuario
+            ? <Link className="boton primary botonChico" to="/app">Ir a mis documentos</Link>
+            : <>
+                <Link className="navLink" to="/ingresar">Iniciar sesión</Link>
+                <Link className="boton oscuro botonChico" to="/registro">Probar gratis</Link>
+              </>}
+        </div>
+      </nav>
+      <div className={`authWrap ${angosta ? "angosta" : ""}`}>
+        {titular && <header className="authHeader">{titular}</header>}
+        <div className="authCard">{children}</div>
+        {despues}
       </div>
-      <div className="authCard">
-        <div className="authLangRow"><BotonTema /></div>
-        {children}
-      </div>
-      {despues}
     </div>
   );
 }
+
+/** Titular de la portada. */
+const TITULAR = (
+  <>
+    <LogoMarca tam={64} />
+    <h1 className="heroTitulo">Firma tus documentos.<br /><span>Sin papeles ni complicaciones.</span></h1>
+    <p className="heroTexto">Sube un PDF, marca dónde firma cada persona y envíalo por WhatsApp. Cada firmante firma desde su celular y tú recibes el PDF con su certificado.</p>
+  </>
+);
 
 /** Portada: primero los planes; después crear la cuenta o iniciar sesión. Con sesión, «/» lleva a «Mis documentos». */
 export function Inicio({ soloPlanes = false }: { soloPlanes?: boolean }) {
@@ -31,21 +54,15 @@ export function Inicio({ soloPlanes = false }: { soloPlanes?: boolean }) {
   useEffect(() => { plataforma.planes().then(setC).catch(() => {}); }, []);
   if (usuario && !soloPlanes) return <Navigate to="/app" replace />;
   return (
-    <PortadaMarco despues={<Presentacion />}>
-      {usuario ? (
+    <PortadaMarco titular={usuario ? undefined : TITULAR} despues={<Presentacion />}>
+      {usuario && (
         <div className="accountBar">
-          <div className="accountInfo">👤 <strong>{usuario.nombre}</strong> · 🟢 {PLANES[usuario.plan]?.nombre ?? "Gratis"}</div>
-          <Link className="boton success" to="/app">Ir a AutograFlow →</Link>
-          {usuario.invitado && <Link className="boton primary" to="/registro">👤 Crear mi cuenta</Link>}
-        </div>
-      ) : (
-        <div className="landingLoginBar">
-          <span>¿Ya tienes una cuenta o suscripción?</span>
-          <Link className="boton primary" to="/ingresar">🔐 Iniciar sesión</Link>
+          <div className="accountInfo"><strong>{usuario.nombre}</strong> · Plan {PLANES[usuario.plan]?.nombre ?? "Gratis"}</div>
+          {usuario.invitado && <Link className="boton botonChico" to="/registro">Crear mi cuenta</Link>}
         </div>
       )}
-      <h1 className="plansTitle">Elige tu tarifa de acceso</h1>
-      <p className="plansSub">Elige cuántos documentos necesitas.</p>
+      <h2 className="plansTitle">Elige tu plan</h2>
+      <p className="plansSub">Empieza gratis. Paga solo si necesitas más documentos, más firmantes, sellos o huellas.</p>
       {c ? <ElegirPlan c={c} actual={usuario?.plan} /> : <p id="loading">Cargando planes…</p>}
     </PortadaMarco>
   );
@@ -127,7 +144,7 @@ export function Acceso({ modo }: { modo: "ingresar" | "registro" }) {
   const otro = `${registro ? "/ingresar" : "/registro"}${search}`;
   const error = (k: string) => errores[k] && <span className="error">{errores[k]}</span>;
   return (
-    <PortadaMarco>
+    <PortadaMarco angosta>
       <div className="flowBackRow">
         <Link to={usuario ? "/planes" : "/"}>← Ver planes</Link>
         {planElegido && <span className="chosenPlanChip">Plan elegido: {PLANES[planElegido].nombre}</span>}
@@ -219,7 +236,7 @@ export function SinCuenta() {
   }
 
   return (
-    <PortadaMarco>
+    <PortadaMarco angosta>
       <div className="flowBackRow"><Link to="/">← Ver planes</Link></div>
       <form className="authForm" onSubmit={entrar} noValidate>
         <h1>Entrar sin cuenta</h1>

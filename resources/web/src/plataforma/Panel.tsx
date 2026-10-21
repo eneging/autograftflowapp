@@ -26,6 +26,23 @@ export function Panel() {
     plataforma.cuenta().then((d) => setEstado(d.estado)).catch(() => {});
   }, []);
 
+  /**
+   * Elimina un documento de la lista: el borrador y el terminado (completado, rechazado o anulado) se borran del todo;
+   * el que sigue en firma primero se anula (los firmantes ya no podrán firmarlo) y después se borra.
+   */
+  async function eliminarFila(d: FilaDocumento) {
+    const aviso = d.estado === "borrador" ? `¿Eliminar el borrador «${d.nombre}»?`
+      : d.estado === "en_firma" ? `«${d.nombre}» sigue en firma: se anulará (los firmantes ya no podrán firmarlo) y se eliminará con su historial. ¿Continuar?`
+      : `¿Eliminar «${d.nombre}» definitivamente? Se borran el PDF${d.estado === "completado" ? " firmado" : ""}, las firmas y el historial, y ya no se podrá verificar. Descárgalo antes si lo necesitas.`;
+    if (!confirm(`${aviso} No se puede deshacer.`)) return;
+    try {
+      if ((await plataforma.eliminar(d.id)).resultado === "anulado") await plataforma.eliminar(d.id);
+      setFilas((fs) => fs && fs.filter((x) => x.id !== d.id));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   async function subir(archivo?: File) {
     if (!archivo) return;
     if (archivo.type !== "application/pdf" && !/\.pdf$/i.test(archivo.name)) return setError("El archivo debe ser un PDF.");
@@ -79,7 +96,12 @@ export function Panel() {
                 <div className="filaDocTitulo">
                   <strong>📋 {d.nombre}</strong>
                   <span className="row">
-                    <Link className="boton" to={`/app/d/${d.id}`}>Editar</Link>
+                    <Link className="boton" to={`/app/d/${d.id}`}>✏️ Editar</Link>
+                    <button type="button" className="danger" onClick={async () => {
+                      if (!confirm(`¿Eliminar la plantilla «${d.nombre}»? Los documentos que creaste con ella no cambian. No se puede deshacer.`)) return;
+                      try { await plataforma.eliminar(d.id); setFilas((fs) => fs && fs.filter((x) => x.id !== d.id)); }
+                      catch (e) { setError((e as Error).message); }
+                    }}>🗑️ Eliminar</button>
                     <button type="button" className="primary" onClick={async () => navegar(`/app/d/${(await plataforma.duplicar(d.id)).id}`)}>Usar plantilla</button>
                   </span>
                 </div>
@@ -100,7 +122,11 @@ export function Panel() {
               <Link className="filaDoc" key={d.id} to={`/app/d/${d.id}`}>
                 <div className="filaDocTitulo">
                   <strong>{d.nombre}</strong>
-                  <InsigniaDoc estado={d.estado} />
+                  <span className="filaDocAcciones">
+                    <InsigniaDoc estado={d.estado} />
+                    <button type="button" className="botonIcono filaDocBorrar" title="Eliminar documento" aria-label={`Eliminar «${d.nombre}»`}
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); eliminarFila(d); }}>🗑️</button>
+                  </span>
                 </div>
                 <div className="filaDocInfo">
                   {d.estado === "borrador" ? `Creado ${fechaHora(d.creadoEn)}` : `Enviado ${fechaHora(d.enviadoEn)}`}

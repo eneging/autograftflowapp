@@ -70,6 +70,10 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
   const abrirTrasColocar = useRef(false);
   // «🔒 Bloquear campos»: al tocar un campo del PDF en el documento se bloquea o desbloquea.
   const [modoBloqueo, setModoBloqueo] = useState(false);
+  // «✱ Marcar campos obligatorios»: los campos de los firmantes son opcionales salvo los que se marquen aquí.
+  const [modoObligatorio, setModoObligatorio] = useState(false);
+  // «Campos del PDF»: los cálculos y cada campo de texto van minimizados («Mostrar contenido»).
+  const [verContenidoPdf, setVerContenidoPdf] = useState(false);
   // Quién llenaba cada campo antes de bloquearlo, para devolvérselo al desbloquear.
   const antesDeBloquear = useRef<Record<string, string>>({});
   // «Funciones avanzadas» (bloqueos, DNI, certificado y Flujo): se pueden minimizar; se recuerda la última elección.
@@ -162,7 +166,7 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
     // La firma y el sello repiten el nombre que ya tengan los otros campos del mismo tipo de este firmante.
     const nombreIgual = herramienta === "firma" || herramienta === "sello" ? campos.find((c) => c.firmante === activo && c.tipo === herramienta)?.etiqueta ?? "" : "";
     const nuevo: CampoLocal = {
-      k: nuevaClave("c"), firmante: mio ? PREPARADOR : activo, tipo: herramienta, pagina, obligatorio: !mio && herramienta !== "casilla",
+      k: nuevaClave("c"), firmante: mio ? PREPARADOR : activo, tipo: herramienta, pagina, obligatorio: !mio && ES_IMAGEN(herramienta),
       etiqueta: herramienta === "huella" ? etiquetaDedo(dedoDe(activo).mano, dedoDe(activo).dedo) : nombreIgual, nombrePdf: "", bloqueado: false,
       w: t.w, h: t.h, x: Math.min(Math.max(0, punto.x - t.w / 2), p.ancho - t.w), y: Math.min(Math.max(0, punto.y - t.h / 2), p.alto - t.h),
     };
@@ -403,7 +407,7 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
   }
 
   async function eliminar() {
-    if (!confirm("¿Eliminar este borrador? No se puede deshacer.")) return;
+    if (!confirm(esPlantilla ? "¿Eliminar esta plantilla? Ya no aparecerá en «Plantillas». Los documentos que creaste con ella no cambian. No se puede deshacer." : "¿Eliminar este borrador? No se puede deshacer.")) return;
     await plataforma.eliminar(inicial.id);
     navegar("/app");
   }
@@ -451,18 +455,46 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
   const casillasPdf = camposPdf.filter((c) => c.tipo === "casilla");
   const asignar = (ks: string[], firmante: string) => {
     setCampos((cs) => cs.map((c) => (ks.includes(c.k)
-      ? { ...c, firmante, valor: null, obligatorio: firmante !== PREPARADOR && c.tipo !== "casilla" } : c)));
+      ? { ...c, firmante, valor: null, obligatorio: false } : c)));
     // Un firmante que «solo firma» pasa a completar los campos que se le asignan (como en el prototipo).
     if (firmante !== PREPARADOR) setFirmantes((fs) => fs.map((f) => (f.clave === firmante && f.modoTexto === "solo" ? { ...f, modoTexto: "asignados" } : f)));
   };
   const casillasLibres = casillasPdf.filter((c) => !c.bloqueado);
   const bloqueados = camposPdf.filter((c) => c.bloqueado).length;
+  // Campos de texto, fecha y casilla que llena un firmante: opcionales salvo los marcados como obligatorios.
+  const datosFirmantes = campos.filter((c) => TIPOS_DATO.includes(c.tipo) && c.firmante !== PREPARADOR && !c.bloqueado);
+  const obligatorios = datosFirmantes.filter((c) => c.obligatorio).length;
+  const esRequerido = (c: CampoLocal) => TIPOS_DATO.includes(c.tipo) && c.firmante !== PREPARADOR && !c.bloqueado && c.obligatorio;
+  /**
+   * Hace obligatorio (u opcional) un campo de texto, fecha o casilla. Si lo llenabas tú, pasa al firmante que estás
+   * configurando, ya obligatorio: así el firmante tiene que llenarlo sí o sí.
+   */
+  function alternarObligatorio(c: CampoLocal) {
+    if (c.firmante !== PREPARADOR) { cambiarCampo(c.k, { obligatorio: !c.obligatorio }); return; }
+    if (!fActivo) { setAviso("Primero agrega un firmante."); return; }
+    setCampos((cs) => cs.map((x) => (x.k === c.k ? { ...x, firmante: fActivo.clave, valor: null, obligatorio: true } : x)));
+    setFirmantes((fs) => fs.map((f) => (f.clave === fActivo.clave && f.modoTexto === "solo" ? { ...f, modoTexto: "asignados" } : f)));
+  }
+  const quitarObligatorios = () => setCampos((cs) => cs.map((c) => (TIPOS_DATO.includes(c.tipo) && c.firmante !== PREPARADOR ? { ...c, obligatorio: false } : c)));
+  const barraObligatorios = campos.some((c) => TIPOS_DATO.includes(c.tipo) && !c.bloqueado) && (
+    <>
+      <div className="afLockBar">
+        <button type="button" className={modoObligatorio ? "primary" : ""} onClick={() => { setModoObligatorio(!modoObligatorio); setModoBloqueo(false); setHerramienta(null); }}>
+          {modoObligatorio ? "✓ Terminar de marcar" : "✱ Marcar campos obligatorios"}
+        </button>
+        {obligatorios > 0 && <button type="button" onClick={quitarObligatorios}>Quitar obligatorios ({obligatorios})</button>}
+      </div>
+      {modoObligatorio
+        ? <p className="small afLockHint">👆 Toca en el documento los campos y casillas que el firmante debe llenar sí o sí (se marcan con ✱). Vuelve a tocarlos para que sean opcionales. Los que llenabas tú pasan al Firmante {iActivo + 1}.</p>
+        : <p className="small">Los campos de los firmantes son opcionales{obligatorios ? `, salvo ${obligatorios} marcado${obligatorios === 1 ? "" : "s"} como obligatorio${obligatorios === 1 ? "" : "s"} (✱)` : ""}. La firma, el sello y la huella siempre se piden.</p>}
+    </>
+  );
   /** Bloquea (queda vacío y nadie lo llena) o desbloquea un campo del PDF; al desbloquear vuelve a quien lo llenaba. */
   function alternarBloqueo(c: CampoLocal) {
     if (c.bloqueado) {
       const antes = antesDeBloquear.current[c.k];
       const firmante = antes && (antes === PREPARADOR || firmantes.some((f) => f.clave === antes)) ? antes : PREPARADOR;
-      cambiarCampo(c.k, { bloqueado: false, firmante, obligatorio: firmante !== PREPARADOR && c.tipo !== "casilla" });
+      cambiarCampo(c.k, { bloqueado: false, firmante, obligatorio: false });
     } else {
       antesDeBloquear.current[c.k] = c.firmante;
       cambiarCampo(c.k, { bloqueado: true, firmante: PREPARADOR, valor: null, obligatorio: false });
@@ -474,7 +506,7 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
       if (!c.bloqueado) return c;
       const antes = antesDeBloquear.current[c.k];
       const firmante = antes && (antes === PREPARADOR || firmantes.some((f) => f.clave === antes)) ? antes : PREPARADOR;
-      return { ...c, bloqueado: false, firmante, obligatorio: firmante !== PREPARADOR && c.tipo !== "casilla" };
+      return { ...c, bloqueado: false, firmante, obligatorio: false };
     }));
   }
   /** Texto del firmante: solo firma, completa los campos que se le asignan o, además, agrega texto libre. */
@@ -519,8 +551,16 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
   return (
     <div className="grid editorGrid">
       <section className="card prepPanel">
-        <h1>Preparar documento</h1>
-        <p>Configura el PDF y los campos que necesitará cada participante para firmar, sellar o colocar su huella.</p>
+        <h1>{esPlantilla ? "Editar plantilla" : "Preparar documento"}</h1>
+        {esPlantilla ? (
+          <div className="avisoPlantilla">
+            <p>📋 <strong>Estás editando una plantilla.</strong> Cambia el PDF, los firmantes y los campos: los cambios se guardan solos. Para enviarla, pulsa «Usar esta plantilla» y se crea un documento nuevo con todo listo.</p>
+            <div className="row">
+              <button type="button" className="primary" onClick={async () => { await plataforma.guardar(inicial.id, datos); navegar(`/app/d/${(await plataforma.duplicar(inicial.id)).id}`); }}>📋 Usar esta plantilla</button>
+              <button type="button" className="danger" onClick={eliminar}>🗑️ Eliminar plantilla</button>
+            </div>
+          </div>
+        ) : <p>Configura el PDF y los campos que necesitará cada participante para firmar, sellar o colocar su huella.</p>}
 
         <div className="step">
           <div className="stepTitle"><span className="stepNumber">1</span>Documento PDF</div>
@@ -687,12 +727,12 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
               {camposMios.length > 0 && <small className="participantProgress">{camposMios.filter((c) => c.valor === true || (typeof c.valor === "string" && c.valor.trim())).length} de {camposMios.length} llenados · escribe en los recuadros rojos del documento</small>}
 
               <div className="participantFieldsHeading">Campos del PDF</div>
-              {!camposPdf.length && !camposCalculo.length ? <p className="small">Este PDF no trae campos para llenar. Puedes agregar cuadros de texto.</p> : (
+              {!camposPdf.length && !camposCalculo.length ? <><p className="small">Este PDF no trae campos para llenar. Puedes agregar cuadros de texto.</p>{barraObligatorios}</> : (
                 <>
                   <p className="small">Campos que ya trae este PDF: llénalos o deja que los llene un firmante.</p>
                   {camposPdf.length > 0 && (
                     <div className="afLockBar">
-                      <button type="button" className={modoBloqueo ? "primary" : ""} onClick={() => { setModoBloqueo(!modoBloqueo); setHerramienta(null); }}>
+                      <button type="button" className={modoBloqueo ? "primary" : ""} onClick={() => { setModoBloqueo(!modoBloqueo); setModoObligatorio(false); setHerramienta(null); }}>
                         {modoBloqueo ? "✓ Terminar de bloquear" : "🔒 Bloquear campos"}
                       </button>
                       {bloqueados > 0 && <button type="button" onClick={desbloquearTodos}>🔓 Desbloquear todos ({bloqueados})</button>}
@@ -701,8 +741,8 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
                   {modoBloqueo
                     ? <p className="small afLockHint">👆 Toca en el documento los campos y casillas que nadie debe llenar. Vuelve a tocarlos para desbloquearlos.</p>
                     : bloqueados === 0 && camposPdf.length > 0 && <p className="small">Los campos bloqueados quedan vacíos y nadie los puede llenar.</p>}
-                  <div className="afPdfFieldList">
-                    {casillasPdf.length > 0 && (
+                  {barraObligatorios}
+                  {casillasPdf.length > 0 && (
                       <div className="afPdfFieldRow">
                         <div className="afPdfFieldName">☑️ Casillas y opciones <span>· {casillasPdf.length}{casillasPdf.some((c) => c.bloqueado) ? ` · 🔒 ${casillasPdf.filter((c) => c.bloqueado).length}` : ""}{casillasLibres.length && casillasLibres.every((c) => c.firmante === PREPARADOR) ? ` · ${casillasLibres.filter((c) => c.valor === true).length} marcadas` : ""}</span></div>
                         {casillasLibres.length > 0 && (
@@ -714,6 +754,13 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
                         )}
                       </div>
                     )}
+                  {/* El resto (cálculos y cada campo de texto) va minimizado: solo se abre si hace falta. */}
+                  {(camposCalculo.length > 0 || textosPdf.length > 0) && (
+                    <button type="button" className="afMostrarContenido" aria-expanded={verContenidoPdf} onClick={() => setVerContenidoPdf(!verContenidoPdf)}>
+                      {verContenidoPdf ? "▲ Ocultar contenido" : `▼ Mostrar contenido (${textosPdf.length} campo${textosPdf.length === 1 ? "" : "s"}${camposCalculo.length ? ` · ${camposCalculo.length} ƒx` : ""})`}
+                    </button>
+                  )}
+                  {verContenidoPdf && <div className="afPdfFieldList">
                     {camposCalculo.length > 0 && (
                       <div className="afPdfFieldRow afCalcRow">
                         <div className="afPdfFieldName">ƒx Calculados por el PDF <span>· {camposCalculo.length}</span></div>
@@ -723,7 +770,7 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
                     {textosPdf.map((c, i) => (
                       <div className={`afPdfFieldRow ${sel === c.k ? "sel" : ""} ${c.bloqueado ? "locked" : ""}`} key={c.k}>
                         <div className="afPdfFieldTop">
-                          <button type="button" className="afPdfFieldName" title="Ir al campo" onClick={() => irACampo(c)}>{i + 1}. {c.etiqueta || c.nombrePdf} <span>· pág. {c.pagina}</span></button>
+                          <button type="button" className="afPdfFieldName" title="Ir al campo" onClick={() => irACampo(c)}>{i + 1}. {c.etiqueta || c.nombrePdf} <span>· pág. {c.pagina}{esRequerido(c) ? " · ✱ obligatorio" : ""}</span></button>
                           <button type="button" className="afRowLock" title={c.bloqueado ? "Desbloquear" : "Bloquear: nadie lo llena"} onClick={() => alternarBloqueo(c)}>{c.bloqueado ? "🔒" : "🔓"}</button>
                         </div>
                         {c.bloqueado ? <div className="small afLockedNote">🔒 Bloqueado: queda vacío y nadie lo puede llenar.</div> : (
@@ -739,7 +786,7 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
                         )}
                       </div>
                     ))}
-                  </div>
+                  </div>}
                 </>
               )}
             </div>
@@ -772,7 +819,7 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
               setEsPlantilla(!esPlantilla);
               setAviso(!esPlantilla ? "Guardado como plantilla: aparecerá en «Plantillas» para usarlo cuantas veces quieras." : "Ya no es una plantilla.");
             }}>{esPlantilla ? "Quitar de plantillas" : "📋 Guardar como plantilla"}</button>
-            <button type="button" className="danger" onClick={eliminar}>Eliminar borrador</button>
+            <button type="button" className="danger" onClick={eliminar}>{esPlantilla ? "🗑️ Eliminar plantilla" : "Eliminar borrador"}</button>
           </div>
           <p className="small">Al enviar, cada firmante recibe su enlace por WhatsApp o correo. Puedes seguir el avance y descargar el PDF firmado con su certificado.</p>
         </div>
@@ -854,11 +901,14 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
                 return (
                 <div
                   key={c.k} role="button" tabIndex={0}
-                  className={`campoEditor tipo-${c.tipo} ${sel === c.k ? "sel" : ""} ${c.firmante !== activo && c.firmante !== PREPARADOR ? "otroFirmante" : ""} ${mio ? "preparador" : ""} ${mio && lleno ? "lleno" : ""} ${c.bloqueado ? "bloqueado" : ""} ${modoBloqueo && c.nombrePdf && TIPOS_DATO.includes(c.tipo) && !c.bloqueado ? "bloqueable" : ""}`}
+                  className={`campoEditor tipo-${c.tipo} ${sel === c.k ? "sel" : ""} ${c.firmante !== activo && c.firmante !== PREPARADOR ? "otroFirmante" : ""} ${mio ? "preparador" : ""} ${mio && lleno ? "lleno" : ""} ${c.bloqueado ? "bloqueado" : ""} ${modoBloqueo && c.nombrePdf && TIPOS_DATO.includes(c.tipo) && !c.bloqueado ? "bloqueable" : ""} ${modoObligatorio && TIPOS_DATO.includes(c.tipo) && !c.bloqueado ? "marcable" : ""} ${esRequerido(c) ? "requerido" : ""}`}
                   style={{ ...posicion(c, p), "--c": colorCampo(c) } as CSSProperties}
                   onPointerDown={(e) => {
                     // «Bloquear campos»: tocar un campo del PDF lo bloquea o desbloquea.
                     if (modoBloqueo && c.nombrePdf && TIPOS_DATO.includes(c.tipo)) { e.stopPropagation(); e.preventDefault(); alternarBloqueo(c); return; }
+                    // «Marcar campos obligatorios»: tocar un campo de un firmante lo hace obligatorio u opcional.
+                    if (modoObligatorio && TIPOS_DATO.includes(c.tipo) && !c.bloqueado) { e.stopPropagation(); e.preventDefault(); alternarObligatorio(c); return; }
+                    if (modoObligatorio && ES_IMAGEN(c.tipo)) { e.stopPropagation(); e.preventDefault(); setAviso("La firma, el sello y la huella siempre son obligatorios."); return; }
                     // Las casillas que llenas tú se marcan con un toque (como en el prototipo).
                     if (mio && c.tipo === "casilla") { e.stopPropagation(); setSel(c.k); cambiarCampo(c.k, { valor: !(c.valor === true) }); return; }
                     empezarArrastre(e, c, "mover");
@@ -869,13 +919,14 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
                   {/* Como el prototipo: los datos (texto, fecha, casilla) son solo un recuadro; su nombre está en el título y en «Texto del firmante».
                       Los que llenas tú se escriben aquí mismo; los ƒx muestran el resultado del cálculo del PDF. */}
                   {/* En «Bloquear campos» no se escribe: el recuadro de texto se quitaría el toque y el campo no se bloquearía. */}
-                  {mio && c.tipo !== "casilla" && !(modoBloqueo && c.nombrePdf) && (
+                  {mio && c.tipo !== "casilla" && !(modoBloqueo && c.nombrePdf) && !modoObligatorio && (
                     <input className="campoEntrada" type={c.tipo === "fecha" ? "date" : "text"} maxLength={500} aria-label={c.etiqueta || ETIQUETA_TIPO[c.tipo]}
                       value={typeof c.valor === "string" ? c.valor : ""} onPointerDown={(e) => e.stopPropagation()} onFocus={() => setSel(c.k)}
                       onChange={(e) => cambiarCampo(c.k, { valor: e.target.value })} />
                   )}
                   {mio && c.tipo === "casilla" && c.valor === true && <span className="marcaCasilla">✓</span>}
-                  {mio && c.tipo !== "casilla" && modoBloqueo && c.nombrePdf && typeof c.valor === "string" && c.valor && <span className="campoEditorTexto valorLleno">{c.valor}</span>}
+                  {mio && c.tipo !== "casilla" && ((modoBloqueo && c.nombrePdf) || modoObligatorio) && typeof c.valor === "string" && c.valor && <span className="campoEditorTexto valorLleno">{c.valor}</span>}
+                  {esRequerido(c) && <span className="marcaObligatorio" aria-label="Obligatorio">✱</span>}
                   {c.bloqueado && <span className="campoBloqueado">{c.tipo === "casilla" ? "🔒" : "🔒 Bloqueado"}</span>}
                   {c.tipo === "calculo" && <span className="campoCalculo">ƒx {calculo[c.nombrePdf] ?? ""}</span>}
                   {ES_IMAGEN(c.tipo) && c.firmante === miClave && misImagenes[c.tipo]

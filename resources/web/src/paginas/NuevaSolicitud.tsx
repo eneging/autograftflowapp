@@ -6,7 +6,7 @@ import { api, ErrorApi } from "../api";
 import { Campo, propsNumero } from "../componentes/Campo";
 import { Documento } from "../componentes/Documento";
 import { Hoja } from "../componentes/Hoja";
-import { AvisoPrivacidad } from "../componentes/Marco";
+import { AvisoPrivacidad, AdministrarPlantillaIncluida } from "../componentes/Marco";
 import { PantallaFirma } from "../componentes/PantallaFirma";
 import { CAMPOS, PASOS, type Paso } from "../documento";
 import {
@@ -134,6 +134,7 @@ export function NuevaSolicitud() {
 
   return (
     <>
+      <AdministrarPlantillaIncluida />
       <div className="card">
         <h1>Documento listo para firmar — Firmante 1</h1>
         <div className="notice">

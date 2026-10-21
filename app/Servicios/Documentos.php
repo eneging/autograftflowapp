@@ -397,7 +397,17 @@ class Documentos
             return 'eliminado';
         }
         if ($d->estado !== 'en_firma') {
-            throw new ErrorUso('Solo se pueden anular documentos que siguen en firma', 409);
+            // Completado, rechazado o anulado: se borra del todo (PDF, firmas, fotos del DNI e historial) para no
+            // acumular espacio. El documento consumido del plan sigue contando (la tabla consumos no se toca).
+            $imagenes = DB::table('campos')->where('documento_id', $id)->whereNotNull('imagen')->pluck('imagen')
+                ->merge(DB::table('firmantes')->where('documento_id', $id)->get(['dni_frente', 'dni_reverso'])->flatMap(fn ($f) => [$f->dni_frente, $f->dni_reverso]))
+                ->filter()->unique();
+            DB::table('documentos')->where('id', $id)->delete();
+            self::disco()->deleteDirectory("documentos/{$id}");
+            foreach ($imagenes as $ref) {
+                rescue(fn () => Imagenes::borrar($ref), report: false);
+            }
+            return 'eliminado';
         }
         DB::table('documentos')->where('id', $id)->update(['estado' => 'anulado']);
         self::evento($id, 'anulado', "Anulado por {$u->name}", $origen);

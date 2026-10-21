@@ -26,7 +26,7 @@ export function Olvide() {
   }
 
   return (
-    <PortadaMarco><form className="authForm" onSubmit={enviar} noValidate>
+    <PortadaMarco angosta><form className="authForm" onSubmit={enviar} noValidate>
       <h1>Recupera tu contraseña</h1>
       {enviado ? (
         <div className="okNotice">
@@ -79,10 +79,10 @@ export function Restablecer() {
   }
 
   if (!token || !email)
-    return <PortadaMarco><div className="afAlerta">Este enlace no es válido.</div><p className="small centro"><Link to="/olvide">Pedir un enlace nuevo</Link></p></PortadaMarco>;
+    return <PortadaMarco angosta><div className="afAlerta">Este enlace no es válido.</div><p className="small centro"><Link to="/olvide">Pedir un enlace nuevo</Link></p></PortadaMarco>;
 
   return (
-    <PortadaMarco><form className="authForm" onSubmit={enviar} noValidate>
+    <PortadaMarco angosta><form className="authForm" onSubmit={enviar} noValidate>
       <h1>Crea tu nueva contraseña</h1>
       <p>Para la cuenta <strong>{email}</strong>.</p>
       <label className="field">
