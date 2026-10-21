@@ -165,7 +165,9 @@ export interface VistaFirmante {
     nombre: string; estado: EstadoDocumento; mensaje: string; paginas: Pagina[]; remitente: string; empresa: string; logo: boolean;
     bloquearDibujo: boolean; bloquearSello: boolean; flujo: boolean; certificado: boolean;
   };
-  yo: { orden: number; nombre: string; estado: EstadoFirmante; color: string; total: number; pedirDni: boolean; modoTexto: "solo" | "asignados" | "libre" };
+  yo: { orden: number; nombre: string; estado: EstadoFirmante; color: string; total: number; pedirDni: boolean; modoTexto: "solo" | "asignados" | "libre";
+    /** Hasta cuándo puede descargar su copia (null si aún no firma). */
+    copiaHasta: string | null };
   /** Falso si en orden secuencial todavía no le toca. */
   turno: boolean;
   esperando: string | null;

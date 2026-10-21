@@ -6,6 +6,7 @@ import { api, enlaceWhatsApp, ErrorApi, urlPdf } from "../api";
 import { compartirPdf, descargarPdf } from "../compartir";
 import { Documento } from "../componentes/Documento";
 import { AvisoPrivacidad } from "../componentes/Marco";
+import { ConsentimientoFirma } from "../componentes/Legal";
 import { PantallaFirma } from "../componentes/PantallaFirma";
 import { EstadoInsignia } from "../componentes/Estado";
 import { desdeDatos, hoy, reembolsoPorFila } from "../formulario";
@@ -22,6 +23,7 @@ export function Aprobar() {
   const [firma, setFirma] = useState<string | null>(null);
   const [firmando, setFirmando] = useState(false);
   const [revisando, setRevisando] = useState(false);
+  const [acepto, setAcepto] = useState(false);
   const [rechazando, setRechazando] = useState(false);
   const [motivo, setMotivo] = useState("");
   const [errores, setErrores] = useState<Record<string, string>>({});
@@ -98,9 +100,10 @@ export function Aprobar() {
       <div className="card">
         <h2 id="finishTitle">Previsualización del documento firmado</h2>
         <div className="signed">{doc({ imagen: firma, fecha: formatoFecha(hoy()) })}</div>
+        <ConsentimientoFirma acepto={acepto} alCambiar={setAcepto} />
         <div className="row" style={{ justifyContent: "center" }}>
           <button type="button" onClick={() => setRevisando(false)} disabled={enviando}>Volver a firmar</button>
-          <button type="button" className="success" onClick={() => decidir("aprobada")} disabled={enviando}>
+          <button type="button" className="success" onClick={() => decidir("aprobada")} disabled={enviando || !acepto}>
             {enviando ? "Guardando…" : "✓ Aprobar y guardar documento"}
           </button>
         </div>

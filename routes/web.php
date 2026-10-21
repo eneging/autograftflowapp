@@ -50,6 +50,7 @@ Route::prefix('api')->middleware(CabeceraAutograFlow::class)->group(function () 
         Route::post('rechazar', [FirmaController::class, 'rechazar']);
         Route::get('archivo', [FirmaController::class, 'archivo']);
         Route::get('final', [FirmaController::class, 'final']);
+        Route::get('copia', [FirmaController::class, 'copia']);
         Route::get('campos/{campo}/imagen', [FirmaController::class, 'imagenCampo'])->whereNumber('campo');
         Route::get('logo', [FirmaController::class, 'logo']);
     });
@@ -64,6 +65,9 @@ Route::prefix('api')->middleware(CabeceraAutograFlow::class)->group(function () 
         Route::post('cuenta/equipo/codigo', [CuentaController::class, 'nuevoCodigoEquipo']);
         Route::delete('cuenta/equipo/{usuario}', [CuentaController::class, 'quitarMiembro'])->whereNumber('usuario');
         Route::get('contactos', [DocumentosController::class, 'contactos']);
+        Route::post('contactos', [DocumentosController::class, 'guardarContacto']);
+        Route::put('contactos/{id}', [DocumentosController::class, 'guardarContacto'])->whereNumber('id');
+        Route::delete('contactos/{id}', [DocumentosController::class, 'eliminarContacto'])->whereNumber('id');
         Route::get('plantillas/reembolso.pdf', [DocumentosController::class, 'pdfPlantillaReembolso']);
         Route::get('cuenta/logo', [CuentaController::class, 'logo']);
         Route::put('cuenta/logo', [CuentaController::class, 'subirLogo']);

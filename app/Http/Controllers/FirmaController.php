@@ -35,7 +35,12 @@ class FirmaController extends Controlador
         if (! is_array($evidencias) || ! is_array($calculos) || ! is_array($libres)) {
             throw new ErrorUso('Revisa los datos');
         }
-        return Documentos::firmar($token, $valores, $this->origen($r), $evidencias, $calculos, $libres);
+        // Consentimiento del firmante (Términos para firmantes y Política de Privacidad, que incluyen los datos sensibles).
+        if (! $r->boolean('acepto')) {
+            throw new ErrorUso('Para firmar debes aceptar los Términos para firmantes y la Política de Privacidad.', 400, ['acepto' => 'Debes aceptar los términos']);
+        }
+        $version = mb_substr(preg_replace('/[^0-9A-Za-z.\-]/', '', (string) $r->input('versionLegal', '')), 0, 20) ?: 'sin versión';
+        return Documentos::firmar($token, $valores, $this->origen($r), $evidencias, $calculos, $libres, $version);
     }
 
     public function rechazar(Request $r, string $token)
@@ -60,10 +65,18 @@ class FirmaController extends Controlador
         return $this->responderPdf(Documentos::archivo($d, 'original'), $d->nombre, false);
     }
 
+    /** PDF firmado para el firmante: con el mismo plazo que «Descargar una copia». */
     public function final(Request $r, string $token)
     {
-        $d = $this->documento($token);
-        return $this->responderPdf(Documentos::archivo($d, 'final'), "{$d->nombre}_firmado", $r->boolean('descargar'));
+        [$pdf, $nombre] = Documentos::copiaFirmante($token);
+        return $this->responderPdf($pdf, $nombre, $r->boolean('descargar'));
+    }
+
+    /** «Descargar una copia»: el PDF con lo firmado (final si ya firmaron todos). */
+    public function copia(Request $r, string $token)
+    {
+        [$pdf, $nombre] = Documentos::copiaFirmante($token);
+        return $this->responderPdf($pdf, $nombre, $r->boolean('descargar'));
     }
 
     public function imagenCampo(string $token, int $campo)

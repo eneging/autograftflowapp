@@ -407,6 +407,10 @@ header.authHeader { background: transparent; border: 0; padding: 0; justify-cont
 .afDirHead { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .afDirHead h2 { margin: 0; }
 .afDirHead input { flex: 1 1 220px; max-width: 340px; margin-left: auto; }
+.accionesContacto { white-space: nowrap; text-align: right; }
+.accionesContacto button { padding: 2px 8px; font-size: 13px; }
+.contactoGuardado { margin-left: 6px; vertical-align: middle; }
+.errorCampo { display: block; color: var(--rojo, #e03e3e); margin-top: 4px; font-weight: 400; }
 .cupo { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding: 9px 12px; margin: 8px 0 4px; font-size: 14px; }
 .cupo.pocos { background: var(--naranjaBg); color: var(--naranjaInk); }
 .cupo strong { color: inherit; }
@@ -684,6 +688,20 @@ header.authHeader { background: transparent; border: 0; padding: 0; justify-cont
 .flujoSeccion .field { display: grid; gap: 5px; margin: 0; }
 .flujoSeccion input:not([type=checkbox]) { width: 100%; padding: 10px 12px; font-size: 16px; }
 .flujoSeccion input.invalido, .flujoSeccion .checkrow.invalido { border-color: var(--rojo); box-shadow: 0 0 0 3px rgba(224,62,62,.15); }
+.copiaFirmante { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.copiaFirmante h2 { font-size: 17px; margin-bottom: 4px; }
+.copiaFirmante .botonesPdf { border-bottom: 0; }
+.copiaVencida { margin-top: 14px; }
+.consentimientoFirmante { margin: 16px 0 10px; }
+.planAction { scroll-margin: 96px; }
+.planAction.resaltar button { animation: afResaltarAccion 1.2s ease-out 1; }
+@keyframes afResaltarAccion {
+  0% { box-shadow: 0 0 0 0 rgba(35, 131, 226, .55); transform: scale(1); }
+  30% { box-shadow: 0 0 0 8px rgba(35, 131, 226, .25); transform: scale(1.04); }
+  100% { box-shadow: 0 0 0 14px rgba(35, 131, 226, 0); transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) { .planAction.resaltar button { animation: none; } }
+.legalVersion { margin: -6px 0 10px; }
 .afCertificatePrivacyNote { padding: 9px 11px; border-radius: 6px; background: var(--gris); border: 0; }
 
 /* Administración y plantilla de reembolso */

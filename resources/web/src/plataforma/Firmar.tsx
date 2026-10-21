@@ -6,6 +6,7 @@ import { enlaceWhatsApp } from "../api";
 import { EncuadrarDni } from "../componentes/Dni";
 import { EncajarHuella } from "../componentes/Huella";
 import { AvisoPrivacidad } from "../componentes/Marco";
+import { VentanaLegal, VERSION_LEGAL, type TipoLegal } from "../componentes/Legal";
 import { PantallaFirma, type TipoImagen } from "../componentes/PantallaFirma";
 import { ErrorApi, plataforma, urls, type TextoLibre } from "./api";
 import { calcularPdf, type ValoresPdf } from "./calculos";
@@ -74,10 +75,7 @@ function Terminado({ v, token }: { v: VistaFirmante; token: string }) {
         {completo ? "Todos los firmantes completaron el documento. Ya puedes descargarlo con su certificado de firmas."
           : sig ? `Ahora le toca a ${sig.nombre} (Firmante ${v.yo.orden + 1}).` : "Tu firma quedó registrada. Cuando firmen los demás, el documento estará listo."}
       </div>
-      {completo && (
-        <BotonesPdfFirmado url={urls.finalFirmante(token)} urlDescarga={urls.finalFirmante(token, true)}
-          nombre={`${v.documento.nombre}_firmado`.replace(/\s+/g, "_")} texto={`Documento firmado: ${v.documento.nombre}`} />
-      )}
+      <CopiaFirmante v={v} token={token} completo={completo} />
       {!completo && sig && (
         <div className="siguiente">
           <strong>Firmante {v.yo.orden + 1} · {sig.nombre}</strong>
@@ -88,6 +86,30 @@ function Terminado({ v, token }: { v: VistaFirmante; token: string }) {
           </a>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * «Descargar una copia»: el PDF con su firma (el final si ya firmaron todos) durante unos días después de firmar.
+ * Cuando el plazo vence, ya no se puede: hay que pedirle una copia a quien envió el documento.
+ */
+function CopiaFirmante({ v, token, completo }: { v: VistaFirmante; token: string; completo: boolean }) {
+  const hasta = v.yo.copiaHasta ? new Date(v.yo.copiaHasta) : null;
+  if (!hasta) return null;
+  const fecha = hasta.toLocaleDateString("es", { day: "2-digit", month: "2-digit", year: "numeric" });
+  if (hasta.getTime() < Date.now())
+    return <div className="notice copiaVencida">⏳ La copia se podía descargar hasta el {fecha}. Si la necesitas, pídele una copia a {v.documento.remitente}, quien te envió el documento.</div>;
+  const nombre = `${v.documento.nombre}_${completo ? "firmado" : "copia"}`.replace(/\s+/g, "_");
+  return (
+    <div className="copiaFirmante">
+      <h2>Tu copia</h2>
+      <p className="small">{completo
+        ? "Descarga el PDF firmado por todos, con su certificado de firmas."
+        : "Descarga una copia del documento con tu firma. Las firmas que faltan aparecerán como pendientes."}{" "}
+        Disponible hasta el <strong>{fecha}</strong>; después tendrás que pedírsela a {v.documento.remitente}.</p>
+      <BotonesPdfFirmado url={urls.copiaFirmante(token)} urlDescarga={urls.copiaFirmante(token, true)} nombre={nombre}
+        texto={`Documento ${completo ? "firmado" : "con mi firma"}: ${v.documento.nombre}`} />
     </div>
   );
 }
@@ -110,6 +132,9 @@ function Llenar({ v, token, alTerminar }: { v: VistaFirmante; token: string; alT
   const [libres, setLibres] = useState<TextoLibre[]>([]);
   const [colocandoLibre, setColocandoLibre] = useState(false);
   const [revisando, setRevisando] = useState(false);
+  // Consentimiento del firmante antes de enviar (se registra con la versión de los textos aceptados).
+  const [acepto, setAcepto] = useState(false);
+  const [legal, setLegal] = useState<TipoLegal | null>(null);
   const [rechazando, setRechazando] = useState(false);
   const [motivo, setMotivo] = useState("");
   const [enviando, setEnviando] = useState(false);
@@ -212,7 +237,7 @@ function Llenar({ v, token, alTerminar }: { v: VistaFirmante; token: string; alT
       if (v.documento.certificado) evidencias.ubicacion = await pedirUbicacion();
       // Último cálculo con los datos definitivos (si el entorno del PDF no carga, se envía sin cálculos).
       const calculos = await calcular().catch(() => calculo);
-      await plataforma.firmar(token, Object.fromEntries(mios.map((c) => [String(c.id), valores[c.id] ?? (c.tipo === "casilla" ? false : "")])), evidencias, calculos, libres);
+      await plataforma.firmar(token, Object.fromEntries(mios.map((c) => [String(c.id), valores[c.id] ?? (c.tipo === "casilla" ? false : "")])), evidencias, calculos, libres, VERSION_LEGAL);
       alTerminar();
     } catch (e) {
       if (e instanceof ErrorApi && e.campos) setErrores(Object.fromEntries(Object.entries(e.campos).map(([k, m]) => [Number(k), m])));
@@ -291,10 +316,24 @@ function Llenar({ v, token, alTerminar }: { v: VistaFirmante; token: string; alT
         )}
         <NavPaginas actual={pagina} total={v.documento.paginas.length} alCambiar={setPagina} />
         <div className="signed">{vistaPagina(false)}</div>
+        <label className="checkrow termsCheck consentimientoFirmante">
+          <input type="checkbox" checked={acepto} onChange={(e) => setAcepto(e.target.checked)} />
+          <div>
+            <strong>He leído y acepto los Términos para firmantes y la Política de Privacidad</strong>
+            <p className="termsDeclare">
+              Declaro que soy la persona indicada como firmante, que leí el documento y que firmo de forma libre y voluntaria.
+              Autorizo el tratamiento de mis datos para firmar este documento: mi firma{imagenes.some((c) => c.tipo === "sello") ? ", mi sello" : ""}, los datos que llené, la fecha y hora, mi IP y mi dispositivo{v.documento.certificado ? ", y mi ubicación solo si la autorizo en mi navegador" : ""}, que verán quien me envió el documento y los demás firmantes en el PDF y su certificado.
+              {(pedirDni || imagenes.some((c) => c.tipo === "huella")) && <> Doy mi <b>consentimiento expreso</b> para el tratamiento de mis datos sensibles: {[imagenes.some((c) => c.tipo === "huella") && "mi huella dactilar", pedirDni && "las fotos de mi documento de identidad"].filter(Boolean).join(" y ")}, solo como imagen dentro de este documento.</>}
+            </p>
+            <div className="small">Léelos aquí: <a href="#" onClick={(e) => { e.preventDefault(); setLegal("firmantes"); }}>Términos para firmantes</a> · <a href="#" onClick={(e) => { e.preventDefault(); setLegal("privacidad"); }}>Política de Privacidad</a></div>
+          </div>
+        </label>
         <div className="row" style={{ justifyContent: "center" }}>
           <button type="button" onClick={() => setRevisando(false)} disabled={enviando}>Volver a firmar</button>
-          <button type="button" className="success" onClick={enviar} disabled={enviando}>{enviando ? "Enviando…" : "✓ Firmar y enviar"}</button>
+          <button type="button" className="success" onClick={enviar} disabled={enviando || !acepto} title={acepto ? undefined : "Primero acepta los términos"}>{enviando ? "Enviando…" : "✓ Firmar y enviar"}</button>
         </div>
+        {!acepto && <p className="small centro">Para enviar tu firma, marca la casilla de aceptación.</p>}
+        {legal && <VentanaLegal tipo={legal} alCerrar={() => setLegal(null)} />}
       </div>
     );
 

@@ -69,6 +69,8 @@ export function Inicio({ soloPlanes = false }: { soloPlanes?: boolean }) {
 }
 
 function Presentacion() {
+  const [legal, setLegal] = useState<TipoLegal | null>(null);
+  const abrir = (t: TipoLegal) => (e: { preventDefault: () => void }) => { e.preventDefault(); setLegal(t); };
   return (
     <>
       <section className="pasosAf">
@@ -88,6 +90,10 @@ function Presentacion() {
       <p className="pieAuth">
         <Link to="/verificar">🔍 Verificar un PDF firmado</Link> · <Link to="/reembolso">🧾 Plantilla de reembolso</Link>
       </p>
+      <p className="pieAuth pieLegal">
+        <a href="#" onClick={abrir("terminos")}>Términos y Condiciones</a> · <a href="#" onClick={abrir("firmantes")}>Términos para firmantes</a> · <a href="#" onClick={abrir("privacidad")}>Política de Privacidad</a>
+      </p>
+      {legal && <VentanaLegal tipo={legal} alCerrar={() => setLegal(null)} />}
     </>
   );
 }

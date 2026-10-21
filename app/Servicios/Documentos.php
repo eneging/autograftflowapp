@@ -3,6 +3,7 @@
 namespace App\Servicios;
 
 use App\Models\User;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -430,12 +431,17 @@ class Documentos
     }
 
     /**
-     * Directorio: las personas a las que la cuenta ya envió documentos (sin repetir), para completar
-     * nombre, WhatsApp y correo al preparar uno nuevo.
+     * Directorio: los contactos creados a mano y las personas a las que la cuenta ya envió documentos
+     * (sin repetir), para completar nombre, WhatsApp y correo al preparar uno nuevo. Si un nombre está
+     * guardado a mano, sus datos mandan sobre los que se usaron en los documentos.
      */
     public static function contactos(int $cuentaId): array
     {
         $vistos = [];
+        foreach (DB::table('contactos')->where('cuenta_id', $cuentaId)->orderBy('nombre')->get() as $g) {
+            $vistos[mb_strtolower(Str::ascii($g->nombre))] = ['id' => $g->id, 'nombre' => $g->nombre, 'telefono' => $g->telefono, 'email' => $g->email,
+                'documentos' => 0, 'firmados' => 0, 'ultimo' => null];
+        }
         $filas = DB::table('firmantes as f')->join('documentos as d', 'd.id', '=', 'f.documento_id')->where('d.cuenta_id', $cuentaId)
             ->orderByDesc('f.id')->limit(3000)->get(['f.nombre', 'f.telefono', 'f.email', 'f.firmado_en', 'd.created_at']);
         foreach ($filas as $f) {
@@ -444,14 +450,65 @@ class Documentos
                 continue;
             }
             $k = mb_strtolower(Str::ascii($nombre));
-            $c = $vistos[$k] ?? ['nombre' => $nombre, 'telefono' => '', 'email' => '', 'documentos' => 0, 'firmados' => 0, 'ultimo' => Fechas::iso($f->created_at)];
-            $c['telefono'] = $c['telefono'] ?: (string) $f->telefono;
-            $c['email'] = $c['email'] ?: (string) $f->email;
+            $c = $vistos[$k] ?? ['id' => null, 'nombre' => $nombre, 'telefono' => '', 'email' => '', 'documentos' => 0, 'firmados' => 0, 'ultimo' => null];
+            $c['ultimo'] ??= Fechas::iso($f->created_at);
+            if ($c['id'] === null) {
+                $c['telefono'] = $c['telefono'] ?: (string) $f->telefono;
+                $c['email'] = $c['email'] ?: (string) $f->email;
+            }
             $c['documentos']++;
             $c['firmados'] += $f->firmado_en ? 1 : 0;
             $vistos[$k] = $c;
         }
         return array_values($vistos);
+    }
+
+    /** Crea o edita un contacto del Directorio. Un nombre ya guardado se actualiza en vez de repetirse. */
+    public static function guardarContacto(int $cuentaId, ?int $id, array $d): array
+    {
+        $nombre = trim(preg_replace('/\s+/u', ' ', (string) ($d['nombre'] ?? '')));
+        $telefono = trim((string) ($d['telefono'] ?? ''));
+        $email = trim((string) ($d['email'] ?? ''));
+        $errores = [];
+        if (mb_strlen($nombre) < 2 || mb_strlen($nombre) > 120 || preg_match('/^Firmante \d+$/u', $nombre)) {
+            $errores['nombre'] = 'Escribe el nombre del contacto (de 2 a 120 caracteres)';
+        }
+        if ($telefono !== '' && (mb_strlen($telefono) > 30 || ! preg_match('/^[+\d][\d\s()-]{6,}$/', $telefono))) {
+            $errores['telefono'] = 'El número de WhatsApp no parece válido. Escríbelo con al menos 7 dígitos; si no es de Perú, incluye el código de país.';
+        }
+        if ($email !== '' && (mb_strlen($email) > 160 || ! filter_var($email, FILTER_VALIDATE_EMAIL))) {
+            $errores['email'] = 'El correo electrónico no parece válido.';
+        }
+        if (! $errores && $telefono === '' && $email === '') {
+            $errores['telefono'] = 'Escribe su WhatsApp o su correo para poder enviarle documentos.';
+        }
+        if ($errores) {
+            throw new ErrorUso('Revisa los datos del contacto', 400, $errores);
+        }
+        $clave = mb_strtolower(Str::ascii($nombre));
+        $mismo = DB::table('contactos')->where('cuenta_id', $cuentaId)->get(['id', 'nombre'])
+            ->first(fn ($c) => mb_strtolower(Str::ascii($c->nombre)) === $clave && $c->id !== $id);
+        if ($id !== null) {
+            DB::table('contactos')->where('cuenta_id', $cuentaId)->where('id', $id)->exists() ?: throw new ErrorUso('Contacto no encontrado', 404);
+            if ($mismo) {
+                throw new ErrorUso('Ya tienes otro contacto con ese nombre', 400, ['nombre' => 'Ya tienes otro contacto con ese nombre']);
+            }
+        } elseif ($mismo) {
+            $id = $mismo->id; // el nombre ya estaba guardado: se actualizan sus datos
+        }
+        $datos = ['nombre' => $nombre, 'telefono' => $telefono, 'email' => $email, 'updated_at' => now()];
+        if ($id === null) {
+            $id = DB::table('contactos')->insertGetId($datos + ['cuenta_id' => $cuentaId, 'created_at' => now()]);
+        } else {
+            DB::table('contactos')->where('id', $id)->update($datos);
+        }
+        return ['id' => $id, 'nombre' => $nombre, 'telefono' => $telefono, 'email' => $email];
+    }
+
+    /** Quita un contacto guardado a mano (las personas de documentos ya enviados siguen apareciendo). */
+    public static function eliminarContacto(int $cuentaId, int $id): void
+    {
+        DB::table('contactos')->where('cuenta_id', $cuentaId)->where('id', $id)->delete() ?: throw new ErrorUso('Contacto no encontrado', 404);
     }
 
     // ---------------------------------------------------------------- firmantes
@@ -499,7 +556,8 @@ class Documentos
                 'bloquearDibujo' => (bool) $f->bloquear_dibujo || (bool) $f->pedir_dni, 'bloquearSello' => (bool) $f->bloquear_sello,
                 'flujo' => (bool) $f->flujo, 'certificado' => (bool) $f->certificado_evidencias,
             ],
-            'yo' => ['orden' => $f->orden, 'nombre' => $f->nombre, 'estado' => $f->estado, 'color' => $f->color, 'total' => $firmantes->count(), 'pedirDni' => (bool) $f->pedir_dni, 'modoTexto' => $f->modo_texto ?? 'asignados'],
+            'yo' => ['orden' => $f->orden, 'nombre' => $f->nombre, 'estado' => $f->estado, 'color' => $f->color, 'total' => $firmantes->count(), 'pedirDni' => (bool) $f->pedir_dni, 'modoTexto' => $f->modo_texto ?? 'asignados',
+                'copiaHasta' => Fechas::iso(self::copiaHasta($f))],
             'turno' => $turno, 'esperando' => $esperando,
             // Sus campos, los ya llenados por otros (o por quien preparó el documento) y los que calcula el PDF.
             'campos' => DB::table('campos')->where('documento_id', $f->documento_id)
@@ -549,11 +607,11 @@ class Documentos
      * @param  array  $calculos  id del campo calculado → texto: lo que dieron los scripts del PDF en el navegador del firmante,
      *                           con todo lo llenado hasta ese momento (quien firma al último los calcula con todos los datos)
      */
-    public static function firmar(string $t, array $valores, array $origen, array $evidencias = [], array $calculos = [], array $libres = []): array
+    public static function firmar(string $t, array $valores, array $origen, array $evidencias = [], array $calculos = [], array $libres = [], ?string $versionLegal = null): array
     {
         $subidas = [];
         try {
-            $resultado = DB::transaction(function () use ($t, $valores, $origen, $evidencias, $calculos, $libres, &$subidas) {
+            $resultado = DB::transaction(function () use ($t, $valores, $origen, $evidencias, $calculos, $libres, $versionLegal, &$subidas) {
                 $f = self::firmantePorToken($t, true);
                 if ($f->doc_estado !== 'en_firma') {
                     throw new ErrorUso('Este documento ya no se puede firmar', 409);
@@ -625,6 +683,9 @@ class Documentos
                     'estado' => 'firmado', 'firmado_en' => now(), 'ip' => $origen['ip'], 'agente' => Str::limit((string) $origen['agente'], 297),
                     'evidencias' => self::limpiarEvidencias($evidencias),
                 ]);
+                if ($versionLegal) {
+                    self::evento($f->documento_id, 'aceptacion', "Aceptó los Términos para firmantes y la Política de Privacidad (versión {$versionLegal})", $origen, $f->id);
+                }
                 self::evento($f->documento_id, 'firmado', 'Firmó el documento', $origen, $f->id);
                 $pendientes = DB::table('firmantes')->where('documento_id', $f->documento_id)->where('estado', '<>', 'firmado')->count();
                 return ['documentoId' => $f->documento_id, 'completo' => $pendientes === 0];
@@ -700,6 +761,20 @@ class Documentos
     /** PDF final con todo lo firmado y el certificado de auditoría. */
     private static function completar(int $id): void
     {
+        $completadoEn = now();
+        $final = self::armarPdf($id, $completadoEn);
+        $ruta = "documentos/{$id}/firmado.pdf";
+        self::disco()->put($ruta, $final);
+        DB::table('documentos')->where('id', $id)->update(['estado' => 'completado', 'completado_en' => $completadoEn, 'archivo_final' => $ruta, 'sha256_final' => hash('sha256', $final)]);
+        self::evento($id, 'completado', 'Documento completado por todos los firmantes');
+    }
+
+    /**
+     * PDF con lo firmado hasta ahora y el certificado. Con $completadoEn es el PDF final; sin él, una copia parcial
+     * (los firmantes que faltan aparecen como pendientes y sus campos quedan vacíos).
+     */
+    private static function armarPdf(int $id, ?Carbon $completadoEn): string
+    {
         $d = DB::table('documentos as d')->join('users as u', 'u.id', '=', 'd.user_id')->join('cuentas as c', 'c.id', '=', 'd.cuenta_id')
             ->where('d.id', $id)->first(['d.*', 'u.name as u_nombre', 'u.email as u_email', 'c.logo as cuenta_logo']);
         $firmantes = DB::table('firmantes')->where('documento_id', $id)->orderBy('orden')->get();
@@ -709,13 +784,14 @@ class Documentos
             return $ref ? ($imagenes[$ref] ??= Imagenes::leer($ref)) : null;
         };
         $gratis = Planes::esGratis($d->cuenta_id);
-        $completadoEn = now();
         $eventos = DB::table('eventos as e')->leftJoin('firmantes as f', 'f.id', '=', 'e.firmante_id')->where('e.documento_id', $id)->orderBy('e.id')
             ->get(['e.creado_en', 'e.detalle', 'e.ip', 'f.nombre as firmante'])
             ->map(fn ($e) => ['creadoEn' => $e->creado_en, 'detalle' => $e->detalle, 'firmante' => $e->firmante, 'ip' => $e->ip])->all();
-        $eventos[] = ['creadoEn' => $completadoEn, 'detalle' => 'Documento completado por todos los firmantes', 'firmante' => null, 'ip' => null];
+        if ($completadoEn) {
+            $eventos[] = ['creadoEn' => $completadoEn, 'detalle' => 'Documento completado por todos los firmantes', 'firmante' => null, 'ip' => null];
+        }
 
-        $final = PdfFinal::generar(self::disco()->get($d->archivo), [
+        return PdfFinal::generar(self::disco()->get($d->archivo), [
             'id' => $id, 'nombre' => $d->nombre, 'remitente' => "{$d->u_nombre} ({$d->u_email})", 'sha256Original' => $d->sha256_original,
             'enviadoEn' => $d->enviado_en, 'completadoEn' => $completadoEn, 'marcaAgua' => $gratis,
             'logo' => ! $gratis && $d->cuenta_logo ? rescue(fn () => Imagenes::leer($d->cuenta_logo), null, false) : null,
@@ -735,10 +811,38 @@ class Documentos
             })->all(),
             'eventos' => $eventos,
         ]);
-        $ruta = "documentos/{$id}/firmado.pdf";
-        self::disco()->put($ruta, $final);
-        DB::table('documentos')->where('id', $id)->update(['estado' => 'completado', 'completado_en' => $completadoEn, 'archivo_final' => $ruta, 'sha256_final' => hash('sha256', $final)]);
-        self::evento($id, 'completado', 'Documento completado por todos los firmantes');
+    }
+
+    /** Hasta cuándo el firmante puede descargar su copia (null si todavía no firmó). */
+    public static function copiaHasta(object $f): ?Carbon
+    {
+        return $f->estado === 'firmado' && $f->firmado_en ? Carbon::parse($f->firmado_en, 'UTC')->addDays(config('autograflow.copia_dias')) : null;
+    }
+
+    /**
+     * «Descargar una copia» del firmante: el PDF firmado si ya firmaron todos o, si no, una copia con lo firmado hasta
+     * ahora. Solo durante los días de copia_dias después de firmar; luego hay que pedirla a quien envió el documento.
+     *
+     * @return array{0: string, 1: string} bytes del PDF y nombre del archivo
+     */
+    public static function copiaFirmante(string $t): array
+    {
+        $f = self::firmantePorToken($t);
+        if ($f->doc_estado === 'anulado') {
+            throw new ErrorUso('Este documento fue anulado por quien lo envió', 410);
+        }
+        $hasta = self::copiaHasta($f);
+        if (! $hasta) {
+            throw new ErrorUso('Primero firma el documento para descargar tu copia.', 409);
+        }
+        if ($hasta->isPast()) {
+            $fecha = $hasta->copy()->setTimezone(config('autograflow.zona'))->format('d/m/Y');
+            throw new ErrorUso("La copia se podía descargar hasta el {$fecha}. Pídele una copia a {$f->remitente}, quien te envió el documento.", 410);
+        }
+        if ($f->doc_estado === 'completado' && $f->archivo_final) {
+            return [self::disco()->get($f->archivo_final), "{$f->doc_nombre}_firmado"];
+        }
+        return [self::armarPdf($f->documento_id, null), "{$f->doc_nombre}_copia"];
     }
 
     // ---------------------------------------------------------------- verificación pública

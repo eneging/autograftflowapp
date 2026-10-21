@@ -24,14 +24,17 @@ class ReembolsoApiTest extends TestCase
         $this->assertSame('Escribe el nombre del beneficiario', $campos['datos.contacto.nombre']);
         $this->assertSame('Firma inválida', $campos['firma']);
 
-        $r = $this->postJson('/api/solicitudes', ['datos' => ReembolsoTest::base(), 'firma' => $firma], self::H)->assertCreated()->json();
+        // Sin aceptar los términos no se puede enviar
+        $this->postJson('/api/solicitudes', ['datos' => ReembolsoTest::base(), 'firma' => $firma], self::H)->assertStatus(400)->assertJsonPath('campos.acepto', fn ($m) => str_contains($m, 'Términos'));
+        $r = $this->postJson('/api/solicitudes', ['datos' => ReembolsoTest::base(), 'firma' => $firma, 'acepto' => true], self::H)->assertCreated()->json();
         $this->getJson("/api/solicitudes/{$r['tokenSolicitante']}")->assertJson(['rol' => 'solicitante', 'estado' => 'pendiente', 'tokenAprobador' => $r['tokenAprobador']]);
         $this->getJson("/api/solicitudes/{$r['tokenAprobador']}")->assertJson(['rol' => 'aprobador'])->assertJsonMissingPath('tokenAprobador');
 
         // El solicitante no puede aprobar; el aprobador necesita firmar; solo se decide una vez
         $this->postJson("/api/solicitudes/{$r['tokenSolicitante']}/decision", ['decision' => 'aprobada', 'nombre' => 'Yo', 'firma' => $firma], self::H)->assertStatus(403);
         $this->postJson("/api/solicitudes/{$r['tokenAprobador']}/decision", ['decision' => 'aprobada', 'nombre' => 'Carlos Ruiz'], self::H)->assertStatus(400);
-        $this->postJson("/api/solicitudes/{$r['tokenAprobador']}/decision", ['decision' => 'aprobada', 'nombre' => 'Carlos Ruiz', 'firma' => $firma], self::H)->assertOk();
+        $this->postJson("/api/solicitudes/{$r['tokenAprobador']}/decision", ['decision' => 'aprobada', 'nombre' => 'Carlos Ruiz', 'firma' => $firma], self::H)->assertStatus(400);
+        $this->postJson("/api/solicitudes/{$r['tokenAprobador']}/decision", ['decision' => 'aprobada', 'nombre' => 'Carlos Ruiz', 'firma' => $firma, 'acepto' => true], self::H)->assertOk();
         $this->postJson("/api/solicitudes/{$r['tokenAprobador']}/decision", ['decision' => 'rechazada', 'nombre' => 'Carlos Ruiz', 'motivo' => 'x'], self::H)->assertStatus(409);
 
         $this->get("/api/solicitudes/{$r['tokenSolicitante']}/pdf")->assertOk()->assertHeader('Content-Type', 'application/pdf');

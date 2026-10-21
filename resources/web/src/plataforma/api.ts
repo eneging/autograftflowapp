@@ -26,7 +26,7 @@ const json = (metodo: string, datos?: unknown): RequestInit => ({ method: metodo
 
 /** invitado: entró «sin cuenta» (Gratis, 1 firmante); su email llega vacío. */
 export interface Usuario { id: number; cuentaId: number; nombre: string; email: string; cuenta: string; plan: IdPlan; titular: boolean; invitado: boolean }
-export interface Contacto { nombre: string; telefono: string; email: string; documentos: number; firmados: number; ultimo: string | null }
+export interface Contacto { id: number | null; nombre: string; telefono: string; email: string; documentos: number; firmados: number; ultimo: string | null }
 export interface Equipo {
   nombre: string; plazas: number; activo: boolean; soyTitular: boolean; codigo: string | null;
   miembros: { id: number; nombre: string; email: string; titular: boolean; yo: boolean; documentos: number }[];
@@ -78,13 +78,16 @@ export const plataforma = {
   nuevoCodigoEquipo: () => pedir<{ codigo: string }>("/api/cuenta/equipo/codigo", json("POST", {})),
   quitarMiembro: (id: number) => pedir(`/api/cuenta/equipo/${id}`, { method: "DELETE" }),
   contactos: () => pedir<Contacto[]>("/api/contactos"),
+  guardarContacto: (c: { id: number | null; nombre: string; telefono: string; email: string }) =>
+    pedir<{ id: number }>(c.id ? `/api/contactos/${c.id}` : "/api/contactos", json(c.id ? "PUT" : "POST", { nombre: c.nombre, telefono: c.telefono, email: c.email })),
+  eliminarContacto: (id: number) => pedir<void>(`/api/contactos/${id}`, { method: "DELETE" }),
   cuenta: () => pedir<{ estado: EstadoCuenta; pagos: PagoFila[] }>("/api/cuenta"),
   comprar: (producto: string) => pedir<{ pagoId: number; url: string }>("/api/pagos", json("POST", { producto })),
   verificarPago: (id: number) => pedir<PagoFila>(`/api/pagos/${id}/verificar`, json("POST", {})),
 
   vista: (token: string) => pedir<VistaFirmante>(`/api/firmar/${encodeURIComponent(token)}`),
-  firmar: (token: string, valores: Record<string, string | boolean>, evidencias: Evidencias = {}, calculos: Record<string, string> = {}, libres: TextoLibre[] = []) =>
-    pedir<{ completo: boolean }>(`/api/firmar/${encodeURIComponent(token)}`, json("POST", { valores, evidencias, calculos, libres })),
+  firmar: (token: string, valores: Record<string, string | boolean>, evidencias: Evidencias = {}, calculos: Record<string, string> = {}, libres: TextoLibre[] = [], versionLegal = "") =>
+    pedir<{ completo: boolean }>(`/api/firmar/${encodeURIComponent(token)}`, json("POST", { valores, evidencias, calculos, libres, acepto: true, versionLegal })),
   rechazar: (token: string, motivo: string) => pedir(`/api/firmar/${encodeURIComponent(token)}/rechazar`, json("POST", { motivo })),
 };
 
@@ -109,6 +112,7 @@ export const urls = {
   imagenDueno: (id: number, campo: number) => `/api/documentos/${id}/campos/${campo}/imagen`,
   originalFirmante: (t: string) => `/api/firmar/${encodeURIComponent(t)}/archivo`,
   finalFirmante: (t: string, descargar = false) => `/api/firmar/${encodeURIComponent(t)}/final${descargar ? "?descargar=1" : ""}`,
+  copiaFirmante: (t: string, descargar = false) => `/api/firmar/${encodeURIComponent(t)}/copia${descargar ? "?descargar=1" : ""}`,
   imagenFirmante: (t: string, campo: number) => `/api/firmar/${encodeURIComponent(t)}/campos/${campo}/imagen`,
   enlaceFirmante: (t: string) => `${location.origin}/f/${t}`,
 };

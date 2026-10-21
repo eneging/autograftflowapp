@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ORDEN_PLANES, PLANES, formatoPrecio, type EstadoCuenta, type IdPlan, type PagoFila, type Plan } from "../../../shared/planes";
 import { ErrorApi, plataforma, urls, type Catalogo } from "./api";
 import { fechaHora } from "./Panel";
 import { usarSesion } from "./sesion";
+import { VentanaLegal } from "../componentes/Legal";
 
 const CLASE_PLAN: Record<IdPlan, string> = { gratis: "planFree", ocasional: "planOccasional", profesional: "", empresarial: "business" };
 
@@ -31,7 +32,8 @@ export function usarCompra() {
 
 /** Texto del botón principal según el plan elegido y la cuenta. */
 export function textoAccion(p: Plan, conSesion: boolean, actual: IdPlan | undefined, moneda: string) {
-  if (!conSesion) return `Continuar con ${p.nombre} →`;
+  // Gratis sin sesión: este botón lleva a crear la cuenta (el de al lado, «Entrar sin cuenta», entra sin ella).
+  if (!conSesion) return p.id === "gratis" ? "Continuar con cuenta" : `Continuar con ${p.nombre} →`;
   if (p.id === "gratis") return "Ir a mis documentos →";
   if (p.id === "ocasional") return `Comprar ${p.creditos} documentos — ${formatoPrecio(p.precio, moneda)}`;
   return `${actual === p.id ? "Renovar" : "Adquirir"} ${p.nombre} — ${formatoPrecio(p.precio, moneda)}`;
@@ -76,11 +78,28 @@ export function ElegirPlan({ c, actual, inicial }: { c: Catalogo; actual?: IdPla
   const navegar = useNavigate();
   const plan = elegido ? c.planes.find((p) => p.id === elegido) : null;
   const conCuenta = !!usuario && !usuario.invitado;
+  // Al elegir un plan se desliza hasta el botón de abajo y se resalta, para que se note que apareció.
+  const accion = useRef<HTMLDivElement>(null);
+  const [legal, setLegal] = useState<"terminos" | null>(null);
+  const [toque, setToque] = useState(0);
+  useEffect(() => {
+    if (!toque || !accion.current) return;
+    const quieto = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    accion.current.scrollIntoView({ behavior: quieto ? "auto" : "smooth", block: "center" });
+    const el = accion.current;
+    el.classList.remove("resaltar");
+    void el.offsetWidth; // reinicia la animación si se vuelve a elegir
+    el.classList.add("resaltar");
+  }, [toque]);
+  function elegir(id: IdPlan) {
+    setElegido(id);
+    setToque((n) => n + 1);
+  }
   return (
     <>
-      <GrillaPlanes c={c} elegido={elegido} alElegir={setElegido} actual={actual} />
+      <GrillaPlanes c={c} elegido={elegido} alElegir={elegir} actual={actual} />
       <p className="small centro">{c.notaIlimitado}</p>
-      <div className="planAction">
+      <div className="planAction" ref={accion}>
         <button type="button" className={plan?.id === "gratis" && usuario ? "success" : "primary"} disabled={!plan || comprando !== null}
           onClick={() => plan && comprar(plan.id)}>
           {comprando ? "Abriendo Mercado Pago…" : plan ? textoAccion(plan, conCuenta || (!!usuario && plan.id === "gratis"), actual, c.moneda) : "Elige un plan"}
@@ -92,9 +111,10 @@ export function ElegirPlan({ c, actual, inicial }: { c: Catalogo; actual?: IdPla
       </div>
       {error && <div className="afAlerta centro" role="alert">{error}</div>}
       <div className="demoNote">
-        🔒 Pagos seguros con <strong>Mercado Pago</strong> (tarjeta, Yape y otros medios). El plan se activa en cuanto se confirma el pago y no se renueva solo.
+        🔒 Pagos seguros con <strong>Mercado Pago</strong> (tarjeta, Yape y otros medios). El plan se activa en cuanto se confirma el pago y no se renueva solo. Los pagos no son reembolsables; si una falla nuestra te impide usarlo, te compensamos extendiendo tu plan (hasta 31 días) o reponiendo tus documentos. <a href="#" onClick={(e) => { e.preventDefault(); setLegal("terminos"); }}>Ver Términos</a>.
         {!c.pagosActivos && " Los pagos en línea aún no están activados en este servidor: escríbenos y lo activamos manualmente."}
       </div>
+      {legal && <VentanaLegal tipo={legal} alCerrar={() => setLegal(null)} />}
     </>
   );
 }

@@ -22,11 +22,11 @@ export const api = {
   crear: (datos: EntradaSolicitud, firma: string) =>
     pedir<{ numeroFactura: string; tokenSolicitante: string; tokenAprobador: string }>("/api/solicitudes", {
       method: "POST",
-      body: JSON.stringify({ datos, firma }),
+      body: JSON.stringify({ datos, firma, acepto: true }),
     }),
   ver: (token: string) => pedir<SolicitudPublica>(`/api/solicitudes/${encodeURIComponent(token)}`),
   decidir: (token: string, d: Decision) =>
-    pedir<{ ok: true }>(`/api/solicitudes/${encodeURIComponent(token)}/decision`, { method: "POST", body: JSON.stringify(d) }),
+    pedir<{ ok: true }>(`/api/solicitudes/${encodeURIComponent(token)}/decision`, { method: "POST", body: JSON.stringify({ ...d, acepto: d.decision === "aprobada" }) }),
   listar: (clave: string, filtro: { estado?: Estado | ""; buscar?: string }) =>
     pedir<FilaAdmin[]>(`/api/admin/solicitudes?${new URLSearchParams({ estado: filtro.estado ?? "", buscar: filtro.buscar ?? "" })}`, {
       headers: { "x-admin-password": clave },

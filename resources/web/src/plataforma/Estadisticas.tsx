@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { enlaceWhatsApp } from "../api";
-import { plataforma, type Contacto, type FilaDocumento } from "./api";
+import { ErrorApi, plataforma, type Contacto, type FilaDocumento } from "./api";
 import { fechaHora } from "./Panel";
 
 type Periodo = "semana" | "mes" | "anio";
@@ -34,10 +34,18 @@ export function Estadisticas() {
   const [contactos, setContactos] = useState<Contacto[] | null>(null);
   const [periodo, setPeriodo] = useState<Periodo>("mes");
   const [buscar, setBuscar] = useState("");
+  // Contacto que se está creando (id null) o editando.
+  const [editando, setEditando] = useState<Pick<Contacto, "id" | "nombre" | "telefono" | "email"> | null>(null);
+  const cargarContactos = () => plataforma.contactos().then(setContactos).catch(() => setContactos([]));
   useEffect(() => {
     plataforma.documentos().then((d) => setDocs(d.filter((x) => !x.esPlantilla))).catch(() => setDocs([]));
-    plataforma.contactos().then(setContactos).catch(() => setContactos([]));
+    cargarContactos();
   }, []);
+  async function eliminarContacto(c: Contacto) {
+    if (!c.id || !confirm(`¿Eliminar a «${c.nombre}» de tu Directorio?${c.documentos ? " Seguirá apareciendo con los datos de los documentos que ya le enviaste." : ""}`)) return;
+    try { await plataforma.eliminarContacto(c.id); } catch (e) { alert(e instanceof ErrorApi ? e.message : "No se pudo eliminar."); }
+    cargarContactos();
+  }
 
   const k = useMemo(() => {
     if (!docs) return null;
@@ -96,29 +104,101 @@ export function Estadisticas() {
           <h2>📇 Directorio</h2>
           <span className="small">{contactos ? `${contactos.length} contacto${contactos.length === 1 ? "" : "s"}` : ""}</span>
           <input type="search" placeholder="Buscar por nombre, número o correo" value={buscar} onChange={(e) => setBuscar(e.target.value)} />
+          <button type="button" className="primary" onClick={() => setEditando({ id: null, nombre: "", telefono: "", email: "" })}>＋ Nuevo contacto</button>
         </div>
-        <p className="small">Se arma solo con las personas a las que enviaste documentos. Al preparar uno nuevo, escribe su nombre y se completan su WhatsApp y su correo.</p>
+        <p className="small">Agrega contactos con su WhatsApp o correo, o deja que se agreguen solos al enviar documentos. Al preparar uno nuevo, escribe su nombre y se completan su WhatsApp y su correo.</p>
         <div className="tabla-envoltura">
           <table className="dataTable">
-            <thead><tr><th>Nombre</th><th>WhatsApp</th><th>Correo</th><th className="num">Documentos</th><th className="num">Firmó</th><th>Último</th></tr></thead>
+            <thead><tr><th>Nombre</th><th>WhatsApp</th><th>Correo</th><th className="num">Documentos</th><th className="num">Firmó</th><th>Último</th><th aria-label="Acciones"></th></tr></thead>
             <tbody>
               {lista.map((c) => (
                 <tr key={c.nombre}>
-                  <td><b>{c.nombre}</b></td>
+                  <td><b>{c.nombre}</b>{c.id && <span className="insignia contactoGuardado" title="Contacto guardado en tu Directorio">Guardado</span>}</td>
                   <td>{c.telefono ? <a href={enlaceWhatsApp(`Hola ${c.nombre}`, c.telefono)} target="_blank" rel="noopener noreferrer">💬 {c.telefono}</a> : <span className="small">—</span>}</td>
                   <td>{c.email ? <a href={`mailto:${c.email}`}>{c.email}</a> : <span className="small">—</span>}</td>
                   <td className="num">{c.documentos}</td>
                   <td className="num">{c.firmados}</td>
-                  <td>{fechaHora(c.ultimo).slice(0, 10)}</td>
+                  <td>{c.ultimo ? fechaHora(c.ultimo).slice(0, 10) : <span className="small">—</span>}</td>
+                  <td className="accionesContacto">
+                    <button type="button" title="Editar contacto" onClick={() => setEditando({ id: c.id, nombre: c.nombre, telefono: c.telefono, email: c.email })}>Editar</button>
+                    {c.id && <button type="button" className="danger" title="Eliminar contacto" onClick={() => eliminarContacto(c)}>Eliminar</button>}
+                  </td>
                 </tr>
               ))}
               {contactos && lista.length === 0 && (
-                <tr><td colSpan={6} className="small centro">{contactos.length ? "No hay contactos que coincidan con la búsqueda." : <>Aún no tienes contactos. Se agregan solos cuando envías un documento. <Link to="/app">Preparar uno</Link></>}</td></tr>
+                <tr><td colSpan={7} className="small centro">{contactos.length ? "No hay contactos que coincidan con la búsqueda." : <>Aún no tienes contactos. <a href="#" onClick={(e) => { e.preventDefault(); setEditando({ id: null, nombre: "", telefono: "", email: "" }); }}>Crea uno</a> o se agregarán solos cuando envíes un documento. <Link to="/app">Preparar uno</Link></>}</td></tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
+      {editando && <VentanaContacto inicial={editando} alCerrar={() => setEditando(null)} alGuardar={() => { setEditando(null); cargarContactos(); }} />}
     </>
+  );
+}
+
+/** Crear o editar un contacto del Directorio: nombre y, al menos, su WhatsApp o su correo. */
+function VentanaContacto({ inicial, alCerrar, alGuardar }: { inicial: Pick<Contacto, "id" | "nombre" | "telefono" | "email">; alCerrar: () => void; alGuardar: () => void }) {
+  const [nombre, setNombre] = useState(inicial.nombre);
+  const [telefono, setTelefono] = useState(inicial.telefono);
+  const [email, setEmail] = useState(inicial.email);
+  const [errores, setErrores] = useState<Record<string, string>>({});
+  const [error, setError] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && alCerrar();
+    document.addEventListener("keydown", esc);
+    return () => document.removeEventListener("keydown", esc);
+  }, [alCerrar]);
+  async function guardar(e: React.FormEvent) {
+    e.preventDefault();
+    const n = nombre.trim(), t = telefono.trim(), m = email.trim(), err: Record<string, string> = {};
+    if (n.length < 2) err.nombre = "Escribe el nombre del contacto.";
+    if (t && !/^[+\d][\d\s()-]{6,}$/.test(t)) err.telefono = "El número de WhatsApp no parece válido. Escríbelo con al menos 7 dígitos; si no es de Perú, incluye el código de país.";
+    if (m && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(m)) err.email = "El correo electrónico no parece válido.";
+    if (!t && !m && !err.telefono) err.telefono = "Escribe su WhatsApp o su correo para poder enviarle documentos.";
+    setErrores(err);
+    setError("");
+    if (Object.keys(err).length) return;
+    setGuardando(true);
+    try {
+      // Si el contacto venía de un documento (sin id), se guarda como contacto propio con estos datos.
+      await plataforma.guardarContacto({ id: inicial.id, nombre: n, telefono: t, email: m });
+      alGuardar();
+    } catch (ex) {
+      if (ex instanceof ErrorApi) { setErrores(ex.campos); setError(Object.keys(ex.campos).length ? "" : ex.message); } else setError("No se pudo guardar el contacto.");
+      setGuardando(false);
+    }
+  }
+  return (
+    <div className="nicknameEditor" onClick={(e) => e.target === e.currentTarget && alCerrar()}>
+      <form className="nicknameEditorCard" role="dialog" aria-modal="true" aria-label={inicial.id || inicial.nombre ? "Editar contacto" : "Nuevo contacto"} onSubmit={guardar} noValidate>
+        <h2>{inicial.id || inicial.nombre ? "Editar contacto" : "Nuevo contacto"}</h2>
+        <p>Con su WhatsApp o su correo podrás enviarle documentos directamente. Al preparar un documento, escribe su nombre y se completan solos.</p>
+        <div className="nicknameEditorFields">
+          <label>Nombre
+            <input value={nombre} maxLength={120} autoFocus autoComplete="off" placeholder="Ej. Juan Pérez" onChange={(e) => setNombre(e.target.value)} aria-invalid={!!errores.nombre} />
+            {errores.nombre && <small className="errorCampo">{errores.nombre}</small>}
+          </label>
+          <div className="nicknameContactWrap">
+            <label>WhatsApp
+              <input inputMode="tel" maxLength={30} value={telefono} placeholder="Ej. 987 654 321 o +51 987 654 321" onChange={(e) => setTelefono(e.target.value)} aria-invalid={!!errores.telefono} />
+              {errores.telefono && <small className="errorCampo">{errores.telefono}</small>}
+            </label>
+            <label>Correo electrónico
+              <input type="email" maxLength={160} value={email} placeholder="nombre@correo.com" onChange={(e) => setEmail(e.target.value)} aria-invalid={!!errores.email} />
+              {errores.email && <small className="errorCampo">{errores.email}</small>}
+            </label>
+            <small className="nicknameContactHint">Necesitas al menos uno de los dos. Si no es un número de Perú, incluye el código de país (ej. +34).</small>
+          </div>
+          <small className="small">Guarda solo datos de personas que te los dieron o que esperan recibir tus documentos.</small>
+        </div>
+        {error && <div className="afAlerta">{error}</div>}
+        <div className="nicknameEditorActions">
+          <button type="button" onClick={alCerrar} disabled={guardando}>Cancelar</button>
+          <button type="submit" className="primary" disabled={guardando}>{guardando ? "Guardando…" : "Guardar contacto"}</button>
+        </div>
+      </form>
+    </div>
   );
 }

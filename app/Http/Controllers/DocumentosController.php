@@ -43,6 +43,18 @@ class DocumentosController extends Controlador
         return Documentos::contactos($r->user()->cuenta_id);
     }
 
+    public function guardarContacto(Request $r, ?int $id = null)
+    {
+        $c = Documentos::guardarContacto($r->user()->cuenta_id, $id, $r->only(['nombre', 'telefono', 'email']));
+        return response()->json($c, $id === null ? 201 : 200);
+    }
+
+    public function eliminarContacto(Request $r, int $id)
+    {
+        Documentos::eliminarContacto($r->user()->cuenta_id, $id);
+        return response()->noContent();
+    }
+
     public function show(Request $r, int $id)
     {
         return Documentos::detalle($r->user()->cuenta_id, $id);

@@ -20,8 +20,11 @@ class ReembolsoController extends Controlador
         if (! preg_match(self::FIRMA, $firma)) {
             $errores['firma'] = 'Firma inválida';
         }
+        if (! $r->boolean('acepto')) {
+            $errores['acepto'] = 'Debes aceptar los Términos para firmantes y la Política de Privacidad';
+        }
         if ($errores) {
-            throw new ErrorUso('Revisa los datos del formulario', 400, collect($errores)->mapWithKeys(fn ($m, $k) => [$k === '_' || $k === 'firma' ? $k : "datos.{$k}" => $m])->all());
+            throw new ErrorUso('Revisa los datos del formulario', 400, collect($errores)->mapWithKeys(fn ($m, $k) => [in_array($k, ['_', 'firma', 'acepto'], true) ? $k : "datos.{$k}" => $m])->all());
         }
         return response()->json(Solicitudes::crear($datos, $firma), 201);
     }
@@ -60,7 +63,9 @@ class ReembolsoController extends Controlador
             'nombre' => 'required|string|min:3|max:120',
             'firma' => ['required_if:decision,aprobada', 'nullable', 'string', 'regex:'.self::FIRMA],
             'motivo' => 'required_if:decision,rechazada|nullable|string|max:500',
-        ], ['nombre.*' => 'Escribe tu nombre', 'firma.*' => 'Firma para aprobar', 'motivo.*' => 'Indica el motivo del rechazo']);
+            // Aprobar es firmar: requiere aceptar los Términos para firmantes y la Política de Privacidad.
+            'acepto' => 'accepted_if:decision,aprobada',
+        ], ['nombre.*' => 'Escribe tu nombre', 'firma.*' => 'Firma para aprobar', 'motivo.*' => 'Indica el motivo del rechazo', 'acepto.*' => 'Debes aceptar los Términos para firmantes y la Política de Privacidad']);
         if (! Solicitudes::decidir($token, [...$d, 'nombre' => trim($d['nombre']), 'motivo' => trim($d['motivo'] ?? '')])) {
             throw new ErrorUso('Esta solicitud ya fue aprobada o rechazada', 409);
         }

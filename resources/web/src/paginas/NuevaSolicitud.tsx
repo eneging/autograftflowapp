@@ -7,6 +7,7 @@ import { Campo, propsNumero } from "../componentes/Campo";
 import { Documento } from "../componentes/Documento";
 import { Hoja } from "../componentes/Hoja";
 import { AvisoPrivacidad, AdministrarPlantillaIncluida } from "../componentes/Marco";
+import { ConsentimientoFirma } from "../componentes/Legal";
 import { PantallaFirma } from "../componentes/PantallaFirma";
 import { CAMPOS, PASOS, type Paso } from "../documento";
 import {
@@ -41,6 +42,7 @@ export function NuevaSolicitud() {
   const [paso, setPaso] = useState<Paso | null>(null);
   const [firmando, setFirmando] = useState(false);
   const [revisando, setRevisando] = useState(false);
+  const [acepto, setAcepto] = useState(false);
   const [anexo, setAnexo] = useState(() => f.viajes.length > LIMITES.viajesEnFormulario || f.gastos.length > LIMITES.gastosEnFormulario);
   const [errores, setErrores] = useState<Errores>({});
   const [intentado, setIntentado] = useState(false);
@@ -123,9 +125,10 @@ export function NuevaSolicitud() {
           <p className="notice">Los viajes y gastos adicionales irán en una hoja anexa del PDF.</p>
         )}
         <p className="totalLinea">Total de gastos de viaje: <strong>{formatoMonto(t.total)}</strong></p>
+        <ConsentimientoFirma acepto={acepto} alCambiar={setAcepto} />
         <div className="row" style={{ justifyContent: "center" }}>
           <button type="button" onClick={() => setRevisando(false)} disabled={enviando}>Volver a firmar</button>
-          <button type="button" className="success" onClick={enviar} disabled={enviando}>
+          <button type="button" className="success" onClick={enviar} disabled={enviando || !acepto}>
             {enviando ? "Enviando…" : "✓ Enviar solicitud firmada"}
           </button>
         </div>

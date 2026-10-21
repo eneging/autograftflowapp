@@ -107,7 +107,7 @@ class PlataformaTest extends TestCase
                 $valores[(string) $c['id']] = $c['tipo'] === 'firma' ? $this->firmaDataUrl() : 'Luis Gómez';
             }
         }
-        return $this->postJson("/api/firmar/{$token}", ['valores' => $valores], self::H);
+        return $this->postJson("/api/firmar/{$token}", ['acepto' => true, 'valores' => $valores], self::H);
     }
 
     public function test_flujo_completo_de_firma_en_orden(): void
@@ -126,7 +126,7 @@ class PlataformaTest extends TestCase
         $this->firmarComo($t2)->assertStatus(409);
 
         // Firmante 1: falta un obligatorio → 400 con el campo marcado
-        $this->postJson("/api/firmar/{$t1}", ['valores' => []], self::H)->assertStatus(400)->assertJsonStructure(['campos']);
+        $this->postJson("/api/firmar/{$t1}", ['acepto' => true, 'valores' => []], self::H)->assertStatus(400)->assertJsonStructure(['campos']);
         $this->firmarComo($t1)->assertOk()->assertJson(['completo' => false]);
         $this->getJson("/api/firmar/{$t1}")->assertJson(['yo' => ['estado' => 'firmado'], 'siguiente' => ['nombre' => 'Persona 2']]);
 
@@ -294,6 +294,58 @@ class PlataformaTest extends TestCase
         $this->postJson('/api/auth/invitado', ['acepto' => true], self::H)->assertStatus(409);
     }
 
+    public function test_copia_del_firmante_con_plazo(): void
+    {
+        $this->registrar()->assertCreated();
+        $id = $this->subir();
+        $this->preparar($id, 2);
+        $det = $this->postJson("/api/documentos/{$id}/enviar", [], self::H)->assertOk()->json();
+        [$t1, $t2] = array_column($det['firmantes'], 'token');
+        // Antes de firmar no hay copia
+        $this->get("/api/firmar/{$t1}/copia")->assertStatus(409);
+        $this->getJson("/api/firmar/{$t1}")->assertJsonPath('yo.copiaHasta', null);
+        // Sin aceptar los Términos para firmantes y la Política de Privacidad no se puede firmar
+        $this->postJson("/api/firmar/{$t1}", ['valores' => []], self::H)->assertStatus(400)->assertJsonStructure(['campos' => ['acepto']]);
+        $this->firmarComo($t1)->assertOk();
+        // La aceptación queda en el historial del documento (y en el certificado), con la versión aceptada
+        $this->assertTrue(collect($this->getJson("/api/documentos/{$id}")->json('eventos'))->contains(fn ($e) => str_contains($e['detalle'], 'Aceptó los Términos para firmantes')));
+        // Firmó el primero (falta el segundo): copia parcial en PDF, con fecha límite
+        $this->assertNotNull($this->getJson("/api/firmar/{$t1}")->json('yo.copiaHasta'));
+        $copia = $this->get("/api/firmar/{$t1}/copia?descargar=1")->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF', $copia->getContent());
+        $this->assertStringContainsString('attachment', (string) $copia->headers->get('Content-Disposition'));
+        // El documento sigue en firma: la copia no lo completa
+        $this->getJson("/api/documentos/{$id}")->assertJsonPath('estado', 'en_firma');
+        // Pasado el plazo ya no se puede descargar: hay que pedirla a quien la envió
+        $this->travel(config('autograflow.copia_dias') + 1)->days();
+        $this->getJson("/api/firmar/{$t1}/copia")->assertStatus(410)->assertJsonPath('error', fn ($e) => str_contains($e, 'Pídele una copia'));
+        $this->getJson("/api/firmar/{$t2}/copia")->assertStatus(409);
+    }
+
+    public function test_contactos_del_directorio(): void
+    {
+        $this->registrar()->assertCreated();
+        // Validaciones: nombre y, al menos, WhatsApp o correo válidos
+        $this->postJson('/api/contactos', ['nombre' => 'Luis Rojas'], self::H)->assertStatus(400)->assertJsonStructure(['campos' => ['telefono']]);
+        $this->postJson('/api/contactos', ['nombre' => 'Luis Rojas', 'email' => 'no-es-correo'], self::H)->assertStatus(400)->assertJsonStructure(['campos' => ['email']]);
+        $id = $this->postJson('/api/contactos', ['nombre' => 'Luis Rojas', 'telefono' => '+51 987 654 321'], self::H)->assertCreated()->json('id');
+        // El mismo nombre no se repite: se actualizan sus datos
+        $this->postJson('/api/contactos', ['nombre' => 'luis rojas', 'email' => 'luis@ejemplo.com'], self::H)->assertCreated()->assertJsonPath('id', $id);
+        $this->putJson("/api/contactos/{$id}", ['nombre' => 'Luis Rojas', 'telefono' => '+51 987 654 321', 'email' => 'luis@ejemplo.com'], self::H)->assertOk();
+        // Los datos guardados mandan sobre los de los documentos enviados
+        $this->postJson('/api/contactos', ['nombre' => 'Persona 1', 'telefono' => '+51 911 111 111'], self::H)->assertCreated();
+        $this->preparar($this->subir());
+        $lista = collect($this->getJson('/api/contactos', self::H)->assertOk()->json())->keyBy('nombre');
+        $this->assertSame('+51 987 654 321', $lista['Luis Rojas']['telefono']);
+        $this->assertSame('luis@ejemplo.com', $lista['Luis Rojas']['email']);
+        $this->assertSame('+51 911 111 111', $lista['Persona 1']['telefono']);
+        $this->assertNull($lista['Persona 2']['id']);
+        // Otra cuenta no puede tocarlos
+        $this->registrar('otra@ejemplo.com')->assertCreated();
+        $this->deleteJson("/api/contactos/{$id}", [], self::H)->assertNotFound();
+        $this->assertSame([], $this->getJson('/api/contactos', self::H)->json());
+    }
+
     public function test_eliminar_documento_terminado(): void
     {
         $this->registrar()->assertCreated();
@@ -335,7 +387,7 @@ class PlataformaTest extends TestCase
         // El firmante con texto libre agrega su texto al firmar; queda como campo suyo, ya lleno
         $v = $this->getJson("/api/firmar/{$t0}")->assertJsonPath('yo.modoTexto', 'libre')->json();
         $valores = collect($v['campos'])->where('mio', true)->mapWithKeys(fn ($c) => [(string) $c['id'] => $this->firmaDataUrl()])->all();
-        $this->postJson("/api/firmar/{$t0}", ['valores' => $valores, 'libres' => [['pagina' => 1, 'x' => 50, 'y' => 60, 'w' => 120, 'h' => 16, 'texto' => 'Recibí conforme']]], self::H)->assertOk();
+        $this->postJson("/api/firmar/{$t0}", ['acepto' => true, 'valores' => $valores, 'libres' => [['pagina' => 1, 'x' => 50, 'y' => 60, 'w' => 120, 'h' => 16, 'texto' => 'Recibí conforme']]], self::H)->assertOk();
         $libre = collect($this->getJson("/api/documentos/{$id}")->json('campos'))->firstWhere('libre', true);
         $this->assertSame('Recibí conforme', $libre['valor']);
         $this->assertSame('texto', $libre['tipo']);
@@ -394,9 +446,9 @@ class PlataformaTest extends TestCase
 
         // Sin las fotos del DNI no se puede firmar
         $valores = collect($vista['campos'])->where('mio', true)->mapWithKeys(fn ($c) => [(string) $c['id'] => $this->firmaDataUrl()])->all();
-        $this->postJson("/api/firmar/{$t}", ['valores' => $valores], self::H)->assertStatus(400)->assertJsonStructure(['campos' => ['dni_frente', 'dni_reverso']]);
+        $this->postJson("/api/firmar/{$t}", ['acepto' => true, 'valores' => $valores], self::H)->assertStatus(400)->assertJsonStructure(['campos' => ['dni_frente', 'dni_reverso']]);
         $foto = $this->firmaDataUrl();
-        $this->postJson("/api/firmar/{$t}", ['valores' => $valores, 'evidencias' => [
+        $this->postJson("/api/firmar/{$t}", ['acepto' => true, 'valores' => $valores, 'evidencias' => [
             'dni' => ['frente' => $foto, 'reverso' => $foto],
             'momentos' => ['dniFrente' => '2026-10-20T15:00:00Z', 'firma' => '2026-10-20T15:01:00Z', 'huella' => 'no es una fecha'],
             'ubicacion' => ['lat' => -12.04637, 'lng' => -77.04279, 'precision' => 35],
@@ -458,7 +510,7 @@ class PlataformaTest extends TestCase
         $calculo = $porTipo['calculo']['id'];
 
         // Al firmar envía el resultado del cálculo; queda impreso en el PDF final junto con lo del preparador
-        $this->postJson("/api/firmar/{$t}", ['valores' => [(string) $porTipo['firma']['id'] => $this->firmaDataUrl()], 'calculos' => [(string) $calculo => '25.50']], self::H)
+        $this->postJson("/api/firmar/{$t}", ['acepto' => true, 'valores' => [(string) $porTipo['firma']['id'] => $this->firmaDataUrl()], 'calculos' => [(string) $calculo => '25.50']], self::H)
             ->assertOk()->assertJson(['completo' => true]);
         $texto = $this->texto($this->get("/api/documentos/{$id}/final")->getContent());
         $this->assertStringContainsString('Ana Torres', $texto);

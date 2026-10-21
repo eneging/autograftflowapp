@@ -12,6 +12,8 @@ return [
     'moneda' => (string) env('MONEDA', 'PEN'),
     // Zona horaria para las fechas que se imprimen en la plantilla de reembolso (la base guarda todo en UTC).
     'zona' => (string) env('ZONA_HORARIA', 'America/Lima'),
+    // Días que el firmante puede descargar su copia después de firmar; luego tiene que pedirla a quien le envió el documento.
+    'copia_dias' => (int) env('COPIA_DIAS', 7),
 
     'mercadopago' => [
         'token' => (string) env('MP_ACCESS_TOKEN', ''),

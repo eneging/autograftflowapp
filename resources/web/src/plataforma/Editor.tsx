@@ -5,6 +5,7 @@ import {
   type CampoEditor, type Dedo, type DocumentoDetalle, type FirmanteEditor, type Mano, type Momento, type TipoCampo,
 } from "../../../shared/plataforma";
 import { PantallaFirma } from "../componentes/PantallaFirma";
+import { VERSION_LEGAL } from "../componentes/Legal";
 import { PLANES, type EstadoCuenta } from "../../../shared/planes";
 import { ErrorApi, plataforma, urls, type Contacto } from "./api";
 import { calcularPdf } from "./calculos";
@@ -392,7 +393,7 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
       if (!completo) { navegar(`/f/${yo.token}`); return; }
       try {
         const valores = Object.fromEntries(mios.map((c) => [String(c.id), ES_IMAGEN(c.tipo) ? misImagenes[c.tipo]! : c.tipo === "casilla" ? false : ""]));
-        await plataforma.firmar(yo.token, valores, { momentos: misMomentos.current }, calculo);
+        await plataforma.firmar(yo.token, valores, { momentos: misMomentos.current }, calculo, [], VERSION_LEGAL);
         alEnviar(await plataforma.documento(inicial.id));
       } catch {
         // Si no se pudo aplicar (p. ej. una imagen inválida), se firma desde el enlace como cualquier firmante.
