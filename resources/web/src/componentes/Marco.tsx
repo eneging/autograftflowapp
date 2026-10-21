@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { usarT } from "./idioma";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { PLANES } from "../../../shared/planes";
 import { plataforma, type FilaDocumento } from "../plataforma/api";
@@ -344,14 +345,15 @@ export function AdministrarPlantillaIncluida() {
 
 /** Aviso de privacidad, adaptado a que la solicitud sí se guarda en el servidor. */
 export function AvisoPrivacidad() {
+  const t = usarT();
   return (
     <div className="privNotice">
-      🔒 <strong>Tu firma y tus datos se guardan de forma privada.</strong> Solo pueden verlos quien te envió el documento y quienes tengan su enlace.
+      🔒 <strong>{t("Tu firma y tus datos se guardan de forma privada.")}</strong> {t("Solo pueden verlos quien te envió el documento y quienes tengan su enlace.")}
       <details>
-        <summary>Ver Política de Privacidad</summary>
+        <summary>{t("Ver Política de Privacidad")}</summary>
         <div className="privBody">
-          <p>Este documento se llena y se firma en tu navegador. Al enviarlo, los datos, tu firma y el documento se guardan de forma privada para que quien te lo envió reciba el PDF firmado.</p>
-          <p>Cada firmante tiene un enlace secreto. No compartas tu enlace con personas que no deban ver tu información.</p>
+          <p>{t("Este documento se llena y se firma en tu navegador. Al enviarlo, los datos, tu firma y el documento se guardan de forma privada para que quien te lo envió reciba el PDF firmado.")}</p>
+          <p>{t("Cada firmante tiene un enlace secreto. No compartas tu enlace con personas que no deban ver tu información.")}</p>
         </div>
       </details>
     </div>

@@ -36,6 +36,9 @@ Route::prefix('api')->middleware(CabeceraAutograFlow::class)->group(function () 
         Route::post('{id}/plantilla', [DocumentosController::class, 'plantilla'])->whereNumber('id');
         Route::post('{id}/recordar/{firmante}', [DocumentosController::class, 'recordar'])->whereNumber(['id', 'firmante']);
         Route::post('{id}/duplicar', [DocumentosController::class, 'duplicar'])->whereNumber('id');
+        Route::post('{id}/enviar-a-varios', [DocumentosController::class, 'enviarAVarios'])->whereNumber('id');
+        Route::get('{id}/envios', [DocumentosController::class, 'envios'])->whereNumber('id');
+        Route::get('{id}/firmados.zip', [DocumentosController::class, 'zipFirmados'])->whereNumber('id');
         Route::delete('{id}/paginas/{pagina}', [DocumentosController::class, 'eliminarPagina'])->whereNumber(['id', 'pagina']);
         Route::delete('{id}', [DocumentosController::class, 'destroy'])->whereNumber('id');
         Route::get('{id}/archivo', [DocumentosController::class, 'archivo'])->whereNumber('id');

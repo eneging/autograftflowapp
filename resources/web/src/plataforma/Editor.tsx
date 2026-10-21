@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   COLORES_FIRMANTE, DEDOS, ETIQUETA_TIPO, LIMITES_PLATAFORMA, PREPARADOR, TAMANO_CAMPO, TIPOS_DATO, etiquetaDedo, leerDedo,
-  type CampoEditor, type Dedo, type DocumentoDetalle, type FirmanteEditor, type Mano, type Momento, type TipoCampo,
+  type CampoEditor, type Dedo, type DocumentoDetalle, type Idioma, type FirmanteEditor, type Mano, type Momento, type TipoCampo,
 } from "../../../shared/plataforma";
+import { MarcaCasilla } from "../componentes/MarcaCasilla";
+import { EnviarAVarios, HistorialPlantilla } from "./PlantillaEnvios";
 import { PantallaFirma } from "../componentes/PantallaFirma";
 import { VERSION_LEGAL } from "../componentes/Legal";
 import { PLANES, type EstadoCuenta } from "../../../shared/planes";
@@ -44,6 +46,8 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
   const [bloquearSello, setBloquearSello] = useState(inicial.bloquearSello);
   const [flujo, setFlujo] = useState(inicial.flujo);
   const [certificado, setCertificado] = useState(inicial.certificado);
+  // Idioma de la página del firmante: se detecta del texto del PDF al subirlo; el firmante también puede cambiarlo.
+  const [idioma, setIdioma] = useState<Idioma>(inicial.idioma ?? "es");
   const [firmantes, setFirmantes] = useState<FirmanteEditor[]>(() =>
     inicial.firmantes.map((f) => ({ clave: f.clave, nombre: f.nombre, telefono: f.telefono, email: f.email, pedirDni: f.pedirDni, modoTexto: f.modoTexto ?? "asignados" })));
   const [campos, setCampos] = useState<CampoLocal[]>(() => inicial.campos.map((c) => ({ ...c, k: `c${c.id}` })));
@@ -108,8 +112,8 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
   const color = useCallback((clave: string) => clave === PREPARADOR ? COLOR_PREPARADOR
     : COLORES_FIRMANTE[Math.max(0, firmantes.findIndex((f) => f.clave === clave)) % COLORES_FIRMANTE.length], [firmantes]);
   const datos = useMemo(() => ({
-    nombre: nombre.trim() || "Documento", orden, mensaje, firmantes, bloquearDibujo, bloquearSello, flujo, certificado, campos: campos.map(({ k: _k, ...c }) => c),
-  }), [nombre, orden, mensaje, firmantes, campos, bloquearDibujo, bloquearSello, flujo, certificado]);
+    nombre: nombre.trim() || "Documento", orden, mensaje, firmantes, bloquearDibujo, bloquearSello, flujo, certificado, idioma, campos: campos.map(({ k: _k, ...c }) => c),
+  }), [nombre, orden, mensaje, firmantes, campos, bloquearDibujo, bloquearSello, flujo, certificado, idioma]);
 
   // Guardado automático un momento después de cada cambio.
   const primera = useRef(true);
@@ -407,6 +411,10 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
     }
   }
 
+  // «Enviar a varios» y el historial de envíos de la plantilla (se recarga después de enviar).
+  const [enviandoVarios, setEnviandoVarios] = useState(false);
+  const [recargaHistorial, setRecargaHistorial] = useState(0);
+
   async function eliminar() {
     if (!confirm(esPlantilla ? "¿Eliminar esta plantilla? Ya no aparecerá en «Plantillas». Los documentos que creaste con ella no cambian. No se puede deshacer." : "¿Eliminar este borrador? No se puede deshacer.")) return;
     await plataforma.eliminar(inicial.id);
@@ -555,13 +563,20 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
         <h1>{esPlantilla ? "Editar plantilla" : "Preparar documento"}</h1>
         {esPlantilla ? (
           <div className="avisoPlantilla">
-            <p>📋 <strong>Estás editando una plantilla.</strong> Cambia el PDF, los firmantes y los campos: los cambios se guardan solos. Para enviarla, pulsa «Usar esta plantilla» y se crea un documento nuevo con todo listo.</p>
+            <p>📋 <strong>Estás editando una plantilla.</strong> Cambia el PDF, los firmantes y los campos: los cambios se guardan solos. Para enviarla a una o varias personas, pulsa «Enviar a varios»: se crea un documento para cada una. Con «Usar esta plantilla» creas uno solo y lo terminas de preparar.</p>
             <div className="row">
-              <button type="button" className="primary" onClick={async () => { await plataforma.guardar(inicial.id, datos); navegar(`/app/d/${(await plataforma.duplicar(inicial.id)).id}`); }}>📋 Usar esta plantilla</button>
+              <button type="button" className="primary" onClick={() => setEnviandoVarios(true)}>📨 Enviar a varios</button>
+              <button type="button" onClick={async () => { await plataforma.guardar(inicial.id, datos); navegar(`/app/d/${(await plataforma.duplicar(inicial.id)).id}`); }}>📋 Usar esta plantilla</button>
               <button type="button" className="danger" onClick={eliminar}>🗑️ Eliminar plantilla</button>
             </div>
+            <HistorialPlantilla plantilla={inicial.id} recarga={recargaHistorial} />
           </div>
         ) : <p>Configura el PDF y los campos que necesitará cada participante para firmar, sellar o colocar su huella.</p>}
+        {enviandoVarios && (
+          <EnviarAVarios plantilla={inicial.id} nombrePlantilla={nombre.trim() || "Documento"} firmantes={firmantes}
+            guardar={() => plataforma.guardar(inicial.id, datos)}
+            alCerrar={(hubo) => { setEnviandoVarios(false); if (hubo) setRecargaHistorial((n) => n + 1); }} />
+        )}
 
         <div className="step">
           <div className="stepTitle"><span className="stepNumber">1</span>Documento PDF</div>
@@ -797,12 +812,20 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
         <div className="privNote">🔒 <strong>Tus documentos y firmas se guardan de forma privada.</strong> Solo los ven tú y las personas a las que envíes su enlace.</div>
 
         <div className="step">
-          <div className="stepTitle"><span className="stepNumber">4</span>Orden y mensaje</div>
+          <div className="stepTitle"><span className="stepNumber">4</span>Orden, mensaje e idioma</div>
           {firmantes.length > 1 && <>
             <label className="checkrow"><input type="radio" name="orden" checked={orden === "secuencial"} onChange={() => setOrden("secuencial")} /><div><strong>En orden</strong><div className="small">Cada firmante recibe su enlace cuando firma el anterior. Cambia el orden con ↑ ↓.</div></div></label>
             <label className="checkrow"><input type="radio" name="orden" checked={orden === "paralelo"} onChange={() => setOrden("paralelo")} /><div><strong>Todos a la vez</strong><div className="small">Todos pueden firmar desde que se envía.</div></div></label>
           </>}
           <textarea className="mensajeDoc" value={mensaje} maxLength={500} rows={2} onChange={(e) => setMensaje(e.target.value)} placeholder="Mensaje para los firmantes (opcional). Ej. Por favor firma antes del viernes." aria-label="Mensaje para los firmantes" />
+          <label className="idiomaFirmante">
+            <span>🌐 Idioma de la página para firmar</span>
+            <select value={idioma} onChange={(e) => setIdioma(e.target.value as Idioma)}>
+              <option value="es">Español</option>
+              <option value="en">English (inglés)</option>
+            </select>
+            <small className="small">Los botones e instrucciones que verán los firmantes. Se eligió según el idioma del PDF; cada firmante también puede cambiarlo en su página. Los nombres de los campos son los del documento.</small>
+          </label>
         </div>
 
         <div className="step">
@@ -925,7 +948,7 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
                       value={typeof c.valor === "string" ? c.valor : ""} onPointerDown={(e) => e.stopPropagation()} onFocus={() => setSel(c.k)}
                       onChange={(e) => cambiarCampo(c.k, { valor: e.target.value })} />
                   )}
-                  {mio && c.tipo === "casilla" && c.valor === true && <span className="marcaCasilla">✓</span>}
+                  {mio && c.tipo === "casilla" && c.valor === true && <MarcaCasilla />}
                   {mio && c.tipo !== "casilla" && ((modoBloqueo && c.nombrePdf) || modoObligatorio) && typeof c.valor === "string" && c.valor && <span className="campoEditorTexto valorLleno">{c.valor}</span>}
                   {esRequerido(c) && <span className="marcaObligatorio" aria-label="Obligatorio">✱</span>}
                   {c.bloqueado && <span className="campoBloqueado">{c.tipo === "casilla" ? "🔒" : "🔒 Bloqueado"}</span>}

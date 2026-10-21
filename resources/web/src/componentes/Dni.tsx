@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { usarT } from "./idioma";
 
 /*
  * Encuadre de la foto del DNI (prototipo v43, «Requerir firma y huella capturando DNI»): un marco con la proporción
@@ -34,6 +35,7 @@ function girar(src: HTMLCanvasElement) {
 
 /** Ventana para encuadrar el frente o el reverso del DNI. */
 export function EncuadrarDni({ archivo, lado, alUsar, alCancelar }: { archivo: File; lado: "frente" | "reverso"; alUsar: (jpg: string) => void; alCancelar: () => void }) {
+  const t = usarT();
   const lienzo = useRef<HTMLCanvasElement>(null);
   const caja = useRef<HTMLDivElement>(null);
   const [foto, setFoto] = useState<HTMLCanvasElement | null>(null);
@@ -103,10 +105,10 @@ export function EncuadrarDni({ archivo, lado, alUsar, alCancelar }: { archivo: F
 
   return (
     <div className="fpFitModal">
-      <div className="fpFitCard dniCard" role="dialog" aria-modal="true" aria-label={`Encuadra el ${lado} del DNI`}>
-        <h2>Encuadra el {lado} del DNI</h2>
-        <p>Acerca y arrastra la foto hasta que la tarjeta completa llene el marco. Si salió de lado, gírala.</p>
-        {error ? <div className="afAlerta">{error}</div> : !foto ? <p id="loading">Procesando la foto…</p> : null}
+      <div className="fpFitCard dniCard" role="dialog" aria-modal="true" aria-label={t(`Encuadra el ${lado} del DNI`)}>
+        <h2>{t(`Encuadra el ${lado} del DNI`)}</h2>
+        <p>{t("Acerca y arrastra la foto hasta que la tarjeta completa llene el marco. Si salió de lado, gírala.")}</p>
+        {error ? <div className="afAlerta">{t(error)}</div> : !foto ? <p id="loading">{t("Procesando la foto…")}</p> : null}
         <div ref={caja} className="fpFitStage">
           <canvas
             ref={lienzo} className="fpFitCanvas"
@@ -129,9 +131,9 @@ export function EncuadrarDni({ archivo, lado, alUsar, alCancelar }: { archivo: F
         </div>
         <div className="fpFitZoomRow"><span>🔍−</span><input type="range" min={1} max={5} step={0.01} value={zoom} aria-label="Zoom" onChange={(ev) => fijarZoom(Number(ev.target.value))} /><span>🔍+</span></div>
         <div className="fpFitActions">
-          <button type="button" onClick={alCancelar}>Cancelar</button>
-          <button type="button" disabled={!foto} onClick={() => { Object.assign(vista.current, { zoom: 1, tx: 0, ty: 0 }); setZoomUI(1); setFoto(girar(foto!)); }}>↻ Girar 90°</button>
-          <button type="button" className="primary" disabled={!foto} onClick={() => alUsar(resultado())}>✓ Usar foto del DNI</button>
+          <button type="button" onClick={alCancelar}>{t("Cancelar")}</button>
+          <button type="button" disabled={!foto} onClick={() => { Object.assign(vista.current, { zoom: 1, tx: 0, ty: 0 }); setZoomUI(1); setFoto(girar(foto!)); }}>{t("↻ Girar 90°")}</button>
+          <button type="button" className="primary" disabled={!foto} onClick={() => alUsar(resultado())}>{t("✓ Usar foto del DNI")}</button>
         </div>
       </div>
     </div>

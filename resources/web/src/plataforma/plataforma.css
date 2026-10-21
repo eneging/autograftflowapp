@@ -99,7 +99,7 @@ header { display: flex; align-items: center; justify-content: space-between; gap
 .campoEditor.preparador.lleno.tipo-casilla { background: rgba(14, 159, 110, 0.15); border-color: #0e9f6e; }
 .campoEntrada { width: 100%; height: 100%; min-width: 0; border: 0 !important; background: transparent !important; box-shadow: none !important; padding: 0 3px; margin: 0;
   font: 500 clamp(8px, 1.2cqw, 14px) Helvetica, Arial, sans-serif; color: #111827; outline: none; cursor: text; border-radius: 0; }
-.campoEditor .marcaCasilla { color: #111827; font-weight: 900; font-size: clamp(8px, 1.6cqw, 16px); pointer-events: none; }
+.campoEditor .marcaCasilla { pointer-events: none; }
 /* ƒx: lo calcula el propio PDF (verde punteado). */
 .campoEditor.tipo-calculo, .campoFirma.tipo-calculo { border: 1.5px dotted #0e9f6e !important; background: rgba(14, 159, 110, 0.08) !important; justify-content: flex-start; cursor: default; }
 .campoCalculo { color: #0b6b4c; font-weight: 800; font-size: clamp(8px, 1.15cqw, 13px); padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
@@ -134,7 +134,8 @@ header { display: flex; align-items: center; justify-content: space-between; gap
 .campoFirma.otro { pointer-events: none; }
 .campoFirma img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
 .campoFirma .afTextShown { font-size: clamp(7px, 1.35cqw, 15px); }
-.marcaCasilla { font-weight: 900; color: #111827; font-size: clamp(9px, 1.5cqw, 18px); line-height: 1; }
+/* El visto ocupa la casilla entera (con un pequeño margen) y escala con ella: igual en computadora y en celular. */
+.marcaCasilla { display: block; width: 100%; height: 100%; padding: 6%; box-sizing: border-box; color: #0b1f44; flex: none; }
 
 /* Seguimiento */
 .listaFirmantes { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }

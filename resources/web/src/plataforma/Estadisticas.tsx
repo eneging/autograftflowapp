@@ -35,7 +35,9 @@ export function Estadisticas() {
   const [periodo, setPeriodo] = useState<Periodo>("mes");
   const [buscar, setBuscar] = useState("");
   // Contacto que se está creando (id null) o editando.
-  const [editando, setEditando] = useState<Pick<Contacto, "id" | "nombre" | "telefono" | "email"> | null>(null);
+  const [editando, setEditando] = useState<Pick<Contacto, "id" | "nombre" | "telefono" | "email" | "categoria"> | null>(null);
+  const [categoria, setCategoria] = useState("");
+  const categorias = useMemo(() => [...new Set((contactos ?? []).map((c) => c.categoria).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es")), [contactos]);
   const cargarContactos = () => plataforma.contactos().then(setContactos).catch(() => setContactos([]));
   useEffect(() => {
     plataforma.documentos().then((d) => setDocs(d.filter((x) => !x.esPlantilla))).catch(() => setDocs([]));
@@ -73,7 +75,11 @@ export function Estadisticas() {
     };
   }, [docs, periodo]);
 
-  const lista = (contactos ?? []).filter((c) => !buscar.trim() || `${c.nombre} ${c.telefono} ${c.email}`.toLowerCase().includes(buscar.trim().toLowerCase()));
+  // Filtro por categoría ("" = todas, "-" = sin categoría) y búsqueda; ordenados por categoría y nombre.
+  const lista = (contactos ?? [])
+    .filter((c) => (categoria === "" || (categoria === "-" ? !c.categoria : c.categoria === categoria))
+      && (!buscar.trim() || `${c.nombre} ${c.telefono} ${c.email} ${c.categoria}`.toLowerCase().includes(buscar.trim().toLowerCase())))
+    .sort((a, b) => (a.categoria || "￿").localeCompare(b.categoria || "￿", "es") || a.nombre.localeCompare(b.nombre, "es"));
   const horas = (h: number | null) => (h === null ? "—" : h < 1 ? `${Math.max(1, Math.round(h * 60))} min` : h < 48 ? `${h.toFixed(1)} h` : `${(h / 24).toFixed(1)} días`);
   return (
     <>
@@ -104,44 +110,56 @@ export function Estadisticas() {
           <h2>📇 Directorio</h2>
           <span className="small">{contactos ? `${contactos.length} contacto${contactos.length === 1 ? "" : "s"}` : ""}</span>
           <input type="search" placeholder="Buscar por nombre, número o correo" value={buscar} onChange={(e) => setBuscar(e.target.value)} />
-          <button type="button" className="primary" onClick={() => setEditando({ id: null, nombre: "", telefono: "", email: "" })}>＋ Nuevo contacto</button>
+          <button type="button" className="primary" onClick={() => setEditando({ id: null, nombre: "", telefono: "", email: "", categoria: categoria === "-" ? "" : categoria })}>＋ Nuevo contacto</button>
         </div>
-        <p className="small">Agrega contactos con su WhatsApp o correo, o deja que se agreguen solos al enviar documentos. Al preparar uno nuevo, escribe su nombre y se completan su WhatsApp y su correo.</p>
+        <p className="small">Agrega contactos con su WhatsApp o correo, o deja que se agreguen solos al enviar documentos. Agrúpalos por categoría (p. ej. «Docentes», «Clientes») para enviar una plantilla a todo un grupo con «📨 Enviar a varios».</p>
+        {categorias.length > 0 && (
+          <div className="filtroCategorias" role="group" aria-label="Filtrar por categoría">
+            {["", ...categorias, "-"].map((cat) => (
+              <button key={cat || "todas"} type="button" className={`botonChico ${categoria === cat ? "primary" : ""}`} aria-pressed={categoria === cat} onClick={() => setCategoria(cat)}>
+                {cat === "" ? "Todas" : cat === "-" ? "Sin categoría" : cat}
+                <span className="small"> {cat === "" ? contactos?.length : (contactos ?? []).filter((c) => (cat === "-" ? !c.categoria : c.categoria === cat)).length}</span>
+              </button>
+            ))}
+          </div>
+        )}
         <div className="tabla-envoltura">
           <table className="dataTable">
-            <thead><tr><th>Nombre</th><th>WhatsApp</th><th>Correo</th><th className="num">Documentos</th><th className="num">Firmó</th><th>Último</th><th aria-label="Acciones"></th></tr></thead>
+            <thead><tr><th>Nombre</th><th>Categoría</th><th>WhatsApp</th><th>Correo</th><th className="num">Documentos</th><th className="num">Firmó</th><th>Último</th><th aria-label="Acciones"></th></tr></thead>
             <tbody>
               {lista.map((c) => (
                 <tr key={c.nombre}>
                   <td><b>{c.nombre}</b>{c.id && <span className="insignia contactoGuardado" title="Contacto guardado en tu Directorio">Guardado</span>}</td>
+                  <td>{c.categoria ? <button type="button" className="enlace" onClick={() => setCategoria(c.categoria)}>{c.categoria}</button> : <span className="small">—</span>}</td>
                   <td>{c.telefono ? <a href={enlaceWhatsApp(`Hola ${c.nombre}`, c.telefono)} target="_blank" rel="noopener noreferrer">💬 {c.telefono}</a> : <span className="small">—</span>}</td>
                   <td>{c.email ? <a href={`mailto:${c.email}`}>{c.email}</a> : <span className="small">—</span>}</td>
                   <td className="num">{c.documentos}</td>
                   <td className="num">{c.firmados}</td>
                   <td>{c.ultimo ? fechaHora(c.ultimo).slice(0, 10) : <span className="small">—</span>}</td>
                   <td className="accionesContacto">
-                    <button type="button" title="Editar contacto" onClick={() => setEditando({ id: c.id, nombre: c.nombre, telefono: c.telefono, email: c.email })}>Editar</button>
+                    <button type="button" title="Editar contacto" onClick={() => setEditando({ id: c.id, nombre: c.nombre, telefono: c.telefono, email: c.email, categoria: c.categoria })}>Editar</button>
                     {c.id && <button type="button" className="danger" title="Eliminar contacto" onClick={() => eliminarContacto(c)}>Eliminar</button>}
                   </td>
                 </tr>
               ))}
               {contactos && lista.length === 0 && (
-                <tr><td colSpan={7} className="small centro">{contactos.length ? "No hay contactos que coincidan con la búsqueda." : <>Aún no tienes contactos. <a href="#" onClick={(e) => { e.preventDefault(); setEditando({ id: null, nombre: "", telefono: "", email: "" }); }}>Crea uno</a> o se agregarán solos cuando envíes un documento. <Link to="/app">Preparar uno</Link></>}</td></tr>
+                <tr><td colSpan={8} className="small centro">{contactos.length ? "No hay contactos que coincidan con la búsqueda." : <>Aún no tienes contactos. <a href="#" onClick={(e) => { e.preventDefault(); setEditando({ id: null, nombre: "", telefono: "", email: "", categoria: "" }); }}>Crea uno</a> o se agregarán solos cuando envíes un documento. <Link to="/app">Preparar uno</Link></>}</td></tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
-      {editando && <VentanaContacto inicial={editando} alCerrar={() => setEditando(null)} alGuardar={() => { setEditando(null); cargarContactos(); }} />}
+      {editando && <VentanaContacto inicial={editando} categorias={categorias} alCerrar={() => setEditando(null)} alGuardar={() => { setEditando(null); cargarContactos(); }} />}
     </>
   );
 }
 
 /** Crear o editar un contacto del Directorio: nombre y, al menos, su WhatsApp o su correo. */
-function VentanaContacto({ inicial, alCerrar, alGuardar }: { inicial: Pick<Contacto, "id" | "nombre" | "telefono" | "email">; alCerrar: () => void; alGuardar: () => void }) {
+function VentanaContacto({ inicial, categorias, alCerrar, alGuardar }: { inicial: Pick<Contacto, "id" | "nombre" | "telefono" | "email" | "categoria">; categorias: string[]; alCerrar: () => void; alGuardar: () => void }) {
   const [nombre, setNombre] = useState(inicial.nombre);
   const [telefono, setTelefono] = useState(inicial.telefono);
   const [email, setEmail] = useState(inicial.email);
+  const [cat, setCat] = useState(inicial.categoria);
   const [errores, setErrores] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);
@@ -163,7 +181,7 @@ function VentanaContacto({ inicial, alCerrar, alGuardar }: { inicial: Pick<Conta
     setGuardando(true);
     try {
       // Si el contacto venía de un documento (sin id), se guarda como contacto propio con estos datos.
-      await plataforma.guardarContacto({ id: inicial.id, nombre: n, telefono: t, email: m });
+      await plataforma.guardarContacto({ id: inicial.id, nombre: n, telefono: t, email: m, categoria: cat.trim() });
       alGuardar();
     } catch (ex) {
       if (ex instanceof ErrorApi) { setErrores(ex.campos); setError(Object.keys(ex.campos).length ? "" : ex.message); } else setError("No se pudo guardar el contacto.");
@@ -191,6 +209,11 @@ function VentanaContacto({ inicial, alCerrar, alGuardar }: { inicial: Pick<Conta
             </label>
             <small className="nicknameContactHint">Necesitas al menos uno de los dos. Si no es un número de Perú, incluye el código de país (ej. +34).</small>
           </div>
+          <label>Categoría (opcional)
+            <input value={cat} maxLength={57} list="afCategorias" autoComplete="off" placeholder="Ej. Docentes, Clientes, Proveedores" onChange={(e) => setCat(e.target.value)} />
+            <datalist id="afCategorias">{categorias.map((c) => <option key={c} value={c} />)}</datalist>
+            <small className="small">Elige una existente o escribe una nueva. Sirve para enviar a todo el grupo de una vez.</small>
+          </label>
           <small className="small">Guarda solo datos de personas que te los dieron o que esperan recibir tus documentos.</small>
         </div>
         {error && <div className="afAlerta">{error}</div>}

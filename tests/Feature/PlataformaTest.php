@@ -346,6 +346,86 @@ class PlataformaTest extends TestCase
         $this->assertSame([], $this->getJson('/api/contactos', self::H)->json());
     }
 
+    public function test_idioma_de_la_pagina_del_firmante(): void
+    {
+        $this->registrar()->assertCreated();
+        $pdf = file_get_contents(base_path('tests/fixtures/contrato.pdf'));
+        $id = $this->post('/api/documentos', [
+            'original' => UploadedFile::fake()->createWithContent('contract.pdf', $pdf),
+            'preparado' => UploadedFile::fake()->createWithContent('preparado.pdf', $pdf),
+            'campos' => '[]', 'nombre' => 'Contract.pdf', 'idioma' => 'en',
+        ], self::H)->assertCreated()->json('id');
+        $this->getJson("/api/documentos/{$id}", self::H)->assertJsonPath('idioma', 'en');
+        // Un valor no permitido al subir queda en español
+        $otro = $this->post('/api/documentos', [
+            'original' => UploadedFile::fake()->createWithContent('c.pdf', $pdf), 'preparado' => UploadedFile::fake()->createWithContent('p.pdf', $pdf),
+            'campos' => '[]', 'nombre' => 'C.pdf', 'idioma' => 'xx',
+        ], self::H)->assertCreated()->json('id');
+        $this->getJson("/api/documentos/{$otro}", self::H)->assertJsonPath('idioma', 'es');
+        // Quien prepara lo puede cambiar; el firmante lo recibe en su vista
+        $this->preparar($id, 1);
+        $det = $this->getJson("/api/documentos/{$id}", self::H)->json();
+        $this->putJson("/api/documentos/{$id}", [...array_intersect_key($det, array_flip(['nombre', 'orden', 'mensaje'])), 'idioma' => 'xx', 'firmantes' => [], 'campos' => []], self::H)->assertStatus(400);
+        $this->assertSame('en', $this->getJson("/api/documentos/{$id}", self::H)->json('idioma'));
+        $token = $this->postJson("/api/documentos/{$id}/enviar", [], self::H)->assertOk()->json('firmantes.0.token');
+        $this->getJson("/api/firmar/{$token}", self::H)->assertOk()->assertJsonPath('documento.idioma', 'en');
+    }
+
+    public function test_plantilla_enviar_a_varios_historial_y_zip(): void
+    {
+        $this->registrar()->assertCreated();
+        $id = $this->subir();
+        $this->preparar($id, 2, 'paralelo');
+        // Solo desde una plantilla
+        $this->postJson("/api/documentos/{$id}/enviar-a-varios", ['firmante' => 1, 'destinatarios' => [['nombre' => 'Eva', 'email' => 'eva@ejemplo.com']]], self::H)->assertStatus(409);
+        $this->postJson("/api/documentos/{$id}/plantilla", ['es' => true], self::H)->assertOk();
+        // Validación de los destinatarios
+        $this->postJson("/api/documentos/{$id}/enviar-a-varios", ['firmante' => 1, 'destinatarios' => [['nombre' => 'Eva']]], self::H)
+            ->assertStatus(400)->assertJsonStructure(['campos' => ['destinatarios.0.telefono']]);
+
+        // Plan Gratis: 2 documentos al día → el tercero no se envía y se avisa
+        $r = $this->postJson("/api/documentos/{$id}/enviar-a-varios", ['firmante' => 1, 'destinatarios' => [
+            ['nombre' => 'Eva Díaz', 'telefono' => '', 'email' => 'eva@ejemplo.com'],
+            ['nombre' => 'Raúl Soto', 'telefono' => '+51 911 222 333', 'email' => ''],
+            ['nombre' => 'Lía Paz', 'telefono' => '+51 911 222 444', 'email' => ''],
+        ]], self::H)->assertOk()->json();
+        $this->assertNotNull($r[0]['token']);
+        $this->assertNotNull($r[1]['token']);
+        $this->assertNull($r[2]['token']);
+        $this->assertNotNull($r[2]['error']);
+        $this->assertSame(2, DB::table('documentos')->where('plantilla_id', $id)->count()); // el que falló no deja borrador
+
+        // Cada documento lleva al destinatario en el lugar del Firmante 1; el Firmante 2 conserva los datos de la plantilla
+        $doc = $this->getJson("/api/documentos/{$r[0]['documentoId']}", self::H)->assertOk()->json();
+        $this->assertSame('en_firma', $doc['estado']);
+        $this->assertSame('Eva Díaz', $doc['firmantes'][0]['nombre']);
+        $this->assertSame('eva@ejemplo.com', $doc['firmantes'][0]['email']);
+        $this->assertSame('p1@ejemplo.com', $doc['firmantes'][1]['email']);
+        $this->assertStringContainsString('Eva Díaz', $doc['nombre']);
+
+        // Historial y ZIP
+        $this->getJson("/api/documentos/{$id}/envios", self::H)->assertOk()->assertJsonCount(2);
+        $this->get("/api/documentos/{$id}/firmados.zip", self::H)->assertNotFound();
+        $this->firmarComo($r[0]['token'])->assertOk();
+        $this->firmarComo($doc['firmantes'][1]['token'])->assertOk();
+        $envios = collect($this->getJson("/api/documentos/{$id}/envios", self::H)->json())->keyBy('id');
+        $this->assertSame('completado', $envios[$r[0]['documentoId']]['estado']);
+        $this->assertSame('firmado', $envios[$r[0]['documentoId']]['firmantes'][0]['estado']);
+        $zip = $this->get("/api/documentos/{$id}/firmados.zip", self::H)->assertOk()->assertHeader('Content-Type', 'application/zip')->getContent();
+        $tmp = tempnam(sys_get_temp_dir(), 'zt');
+        file_put_contents($tmp, $zip);
+        $z = new \ZipArchive;
+        $this->assertTrue($z->open($tmp) === true);
+        $this->assertSame(1, $z->numFiles);
+        $this->assertStringStartsWith('%PDF', $z->getFromIndex(0));
+        $z->close();
+        unlink($tmp);
+
+        // Contactos con categoría
+        $this->postJson('/api/contactos', ['nombre' => 'Ana Ríos', 'email' => 'ana.r@ejemplo.com', 'categoria' => '  Docentes '], self::H)->assertCreated()->assertJsonPath('categoria', 'Docentes');
+        $this->assertSame('Docentes', collect($this->getJson('/api/contactos', self::H)->json())->firstWhere('nombre', 'Ana Ríos')['categoria']);
+    }
+
     public function test_eliminar_documento_terminado(): void
     {
         $this->registrar()->assertCreated();

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DEDOS, type Dedo, type Mano } from "../../../shared/plataforma";
+import { textoDedoEn, usarIdioma, usarT } from "./idioma";
 
 /*
  * Huella (igual que el prototipo v43): consejos antes de tomar la foto, dibujo de las manos con el dedo pedido y
@@ -45,16 +46,17 @@ export function Manos({ mano, dedo }: { mano: Mano; dedo: Dedo }) {
       </g>
     );
   };
+  const t = usarT(), idioma = usarIdioma();
   const izq = mano === "izquierda";
   const rotulo = (x: number, t: string, sel: boolean) => (
     <text x={x} y={218} textAnchor="middle" fontFamily="system-ui, Arial, sans-serif" fontSize={13} fontWeight={sel ? 800 : 500} fill={sel ? hi : "#6b7280"}>{t}{sel ? " ✓" : ""}</text>
   );
   return (
-    <svg viewBox="0 0 360 226" role="img" aria-label={textoDedo({ mano, dedo })} className="manosSvg">
+    <svg viewBox="0 0 360 226" role="img" aria-label={textoDedoEn(idioma, { mano, dedo })} className="manosSvg">
       <g transform="translate(170,0) scale(-1,1)">{una(izq)}</g>
       <g transform="translate(190,0)">{una(!izq)}</g>
-      {rotulo(85, "Mano izquierda", izq)}
-      {rotulo(275, "Mano derecha", !izq)}
+      {rotulo(85, t("Mano izquierda"), izq)}
+      {rotulo(275, t("Mano derecha"), !izq)}
     </svg>
   );
 }
@@ -62,24 +64,25 @@ export function Manos({ mano, dedo }: { mano: Mano; dedo: Dedo }) {
 /** Ventana de consejos antes de subir o fotografiar la huella. */
 export function ConsejosHuella({ dedo, alEmpezar }: { dedo: { mano: Mano; dedo: Dedo } | null; alEmpezar: () => void }) {
   const [ejemplo, setEjemplo] = useState(false);
+  const t = usarT(), idioma = usarIdioma();
   return (
     <div className="fpFitModal">
-      <div className="fpFitCard fpTipsCard" role="dialog" aria-modal="true" aria-label="Antes de poner tu huella">
-        <h2>📸 Antes de poner tu huella</h2>
+      <div className="fpFitCard fpTipsCard" role="dialog" aria-modal="true" aria-label={t("Antes de poner tu huella")}>
+        <h2>{t("📸 Antes de poner tu huella")}</h2>
         <ol>
           <li>
-            Toma una foto <b>(en modo macro)</b> de la huella dactilar que te solicitaron.{dedo && <b> ({textoDedo(dedo)})</b>}
+            {t("Toma una foto")} <b>{t("(en modo macro)")}</b> {t("de la huella dactilar que te solicitaron.")}{dedo && <b> ({textoDedoEn(idioma, dedo)})</b>}
             {dedo && (
               <div className="fpTipsEx">
-                <button type="button" onClick={() => setEjemplo(!ejemplo)}>{ejemplo ? "Ocultar ejemplo" : "👀 Ver un ejemplo"}</button>
-                {ejemplo && <div className="fpTipsHands"><Manos {...dedo} /><p>{textoDedo(dedo)}</p></div>}
+                <button type="button" onClick={() => setEjemplo(!ejemplo)}>{t(ejemplo ? "Ocultar ejemplo" : "👀 Ver un ejemplo")}</button>
+                {ejemplo && <div className="fpTipsHands"><Manos {...dedo} /><p>{textoDedoEn(idioma, dedo)}</p></div>}
               </div>
             )}
           </li>
-          <li>Vuelve aquí y sube la foto desde tu galería con <b>«🖼️ Subir huella»</b>.</li>
+          <li>{t("Vuelve aquí y sube la foto desde tu galería con")} <b>{t("«🖼️ Subir huella»")}</b>.</li>
         </ol>
-        <div className="fpTipsNote">💡 También puedes usar <b>«📷 Fotografiar huella»</b>, pero quizá la cámara no use el modo macro. Si no sabes cómo encontrarlo, toma la foto de cerca, con buena luz y enfocando bien la yema del dedo.</div>
-        <div className="fpFitActions"><button type="button" className="primary" onClick={alEmpezar}>Empezar</button></div>
+        <div className="fpTipsNote">{t("💡 También puedes usar")} <b>{t("«📷 Fotografiar huella»")}</b>{t(", pero quizá la cámara no use el modo macro. Si no sabes cómo encontrarlo, toma la foto de cerca, con buena luz y enfocando bien la yema del dedo.")}</div>
+        <div className="fpFitActions"><button type="button" className="primary" onClick={alEmpezar}>{t("Empezar")}</button></div>
       </div>
     </div>
   );
@@ -167,6 +170,7 @@ interface Estado { gris: HTMLCanvasElement; tinta: HTMLCanvasElement | null; pol
  * deDni: la huella sale del reverso del DNI, que ya está impresa: no se optimiza como tinta (se conservan sus tonos).
  */
 export function EncajarHuella({ archivo, alUsar, alCancelar, deDni = false }: { archivo: File; alUsar: (png: string) => void; alCancelar: () => void; deDni?: boolean }) {
+  const t = usarT();
   const lienzo = useRef<HTMLCanvasElement>(null);
   const caja = useRef<HTMLDivElement>(null);
   const [e, setE] = useState<Estado | null>(null);
@@ -255,12 +259,12 @@ export function EncajarHuella({ archivo, alUsar, alCancelar, deDni = false }: { 
 
   return (
     <div className="fpFitModal">
-      <div className="fpFitCard" role="dialog" aria-modal="true" aria-label="Encaja tu dedo en el óvalo">
-        <h2>{deDni ? "Ajusta el área de la huella del DNI" : "Encaja tu dedo en el óvalo"}</h2>
-        <p>{deDni
+      <div className="fpFitCard" role="dialog" aria-modal="true" aria-label={t("Encaja tu dedo en el óvalo")}>
+        <h2>{t(deDni ? "Ajusta el área de la huella del DNI" : "Encaja tu dedo en el óvalo")}</h2>
+        <p>{t(deDni
           ? "Mueve y amplía la foto del reverso hasta que la huella impresa llene el óvalo. Puedes pellizcar para ampliar, arrastrar para centrar y girar poco a poco. Solo se usará lo que quede dentro."
-          : "Arrastra la foto y acércala (pellizca con dos dedos o usa la barra) hasta que la yema llene el óvalo. Solo se usará lo que quede dentro."}</p>
-        {error ? <div className="afAlerta">{error}</div> : !e ? <p id="loading">Procesando la foto…</p> : null}
+          : "Arrastra la foto y acércala (pellizca con dos dedos o usa la barra) hasta que la yema llene el óvalo. Solo se usará lo que quede dentro.")}</p>
+        {error ? <div className="afAlerta">{t(error)}</div> : !e ? <p id="loading">{t("Procesando la foto…")}</p> : null}
         <div ref={caja} className="fpFitStage">
           <canvas
             ref={lienzo} className="fpFitCanvas"
@@ -287,20 +291,20 @@ export function EncajarHuella({ archivo, alUsar, alCancelar, deDni = false }: { 
           />
         </div>
         <div className="fpFitZoomRow"><span>🔍−</span><input type="range" min={1} max={8} step={0.01} value={zoom} aria-label="Zoom" onChange={(ev) => { const g = geom(); fijarZoom(Number(ev.target.value), g.W / 2, g.H / 2); }} /><span>🔍+</span></div>
-        <div className="fpFitZoomRow"><span>Giro fino</span><input type="range" min={-15} max={15} step={0.25} value={angulo} aria-label="Giro fino de la huella, en grados" onChange={(ev) => fijarAngulo(Number(ev.target.value))} /><output>{angulo}°</output></div>
+        <div className="fpFitZoomRow"><span>{t("Giro fino")}</span><input type="range" min={-15} max={15} step={0.25} value={angulo} aria-label={t("Giro fino de la huella, en grados")} onChange={(ev) => fijarAngulo(Number(ev.target.value))} /><output>{angulo}°</output></div>
         {e && (
           <div className="fpFitOptRow">
-            <label className="checkrow compacto"><input type="checkbox" checked={e.optimizar} onChange={(ev) => cambiar({ optimizar: ev.target.checked })} /><strong>Optimizar como tinta</strong></label>
+            <label className="checkrow compacto"><input type="checkbox" checked={e.optimizar} onChange={(ev) => cambiar({ optimizar: ev.target.checked })} /><strong>{t("Optimizar como tinta")}</strong></label>
             {e.optimizar && <>
-              <label>Intensidad <input type="range" min={1} max={5} step={1} value={e.nivel} onChange={(ev) => cambiar({ nivel: Number(ev.target.value) })} /></label>
-              <button type="button" title="Úsalo si las líneas del dedo salen al revés" onClick={() => cambiar({ pol: -e.pol })}>⇄ Invertir</button>
+              <label>{t("Intensidad")} <input type="range" min={1} max={5} step={1} value={e.nivel} onChange={(ev) => cambiar({ nivel: Number(ev.target.value) })} /></label>
+              <button type="button" title={t("Úsalo si las líneas del dedo salen al revés")} onClick={() => cambiar({ pol: -e.pol })}>{t("⇄ Invertir")}</button>
             </>}
           </div>
         )}
         <div className="fpFitActions">
-          <button type="button" onClick={alCancelar}>Cancelar</button>
-          <button type="button" disabled={!e} onClick={() => { vista.current = { ...vista.current, zoom: 1, tx: 0, ty: 0, ang: 0 }; setZoomUI(1); setAnguloUI(0); cambiar({ gris: girar(e!.gris) }); }}>↻ Girar 90°</button>
-          <button type="button" className="primary" disabled={!e} onClick={() => alUsar(resultado())}>✓ Usar huella</button>
+          <button type="button" onClick={alCancelar}>{t("Cancelar")}</button>
+          <button type="button" disabled={!e} onClick={() => { vista.current = { ...vista.current, zoom: 1, tx: 0, ty: 0, ang: 0 }; setZoomUI(1); setAnguloUI(0); cambiar({ gris: girar(e!.gris) }); }}>{t("↻ Girar 90°")}</button>
+          <button type="button" className="primary" disabled={!e} onClick={() => alUsar(resultado())}>{t("✓ Usar huella")}</button>
         </div>
       </div>
     </div>

@@ -41,8 +41,9 @@ class Documentos
      * Guarda un PDF subido. La página ya lo preparó (enderezó las páginas y lo guardó sin «object streams»
      * para que FPDI pueda leerlo); aquí se comprueba que se pueda leer y se toman sus medidas reales.
      */
-    public static function crear(User $u, string $nombre, string $original, string $preparado, array $detectados, array $origen, ?string $formulario = null): array
+    public static function crear(User $u, string $nombre, string $original, string $preparado, array $detectados, array $origen, ?string $formulario = null, string $idioma = 'es'): array
     {
+        $idioma = in_array($idioma, ['es', 'en'], true) ? $idioma : 'es';
         // Campos y scripts de cálculo del PDF (los lee la página con pdf.js): se guardan tal cual si son JSON válido.
         if ($formulario !== null && (strlen($formulario) > 3_000_000 || ! is_array(json_decode($formulario, true)['objects'] ?? null))) {
             $formulario = null;
@@ -82,9 +83,9 @@ class Documentos
                 'w' => (float) $c['w'], 'h' => (float) $c['h'], 'etiqueta' => Str::limit((string) ($c['etiqueta'] ?? ''), 117), 'nombre_pdf' => $nombrePdf ?: null], $p);
         }
 
-        $id = DB::transaction(function () use ($u, $nombre, $original, $preparado, $paginas, $campos, $origen, $formulario) {
+        $id = DB::transaction(function () use ($u, $nombre, $original, $preparado, $paginas, $campos, $origen, $formulario, $idioma) {
             $id = DB::table('documentos')->insertGetId([
-                'cuenta_id' => $u->cuenta_id, 'user_id' => $u->id, 'nombre' => Str::limit($nombre, 157), 'archivo' => '',
+                'cuenta_id' => $u->cuenta_id, 'user_id' => $u->id, 'nombre' => Str::limit($nombre, 157), 'archivo' => '', 'idioma' => $idioma,
                 'sha256_original' => hash('sha256', $original), 'paginas' => json_encode($paginas), 'formulario' => $formulario, 'created_at' => now(), 'updated_at' => now(),
             ]);
             $ruta = "documentos/{$id}/original.pdf";
@@ -142,7 +143,7 @@ class Documentos
         return [
             'id' => $d->id, 'nombre' => $d->nombre, 'estado' => $d->estado, 'esPlantilla' => (bool) $d->es_plantilla, 'orden' => $d->orden,
             'bloquearDibujo' => (bool) $d->bloquear_dibujo, 'bloquearSello' => (bool) $d->bloquear_sello,
-            'flujo' => (bool) $d->flujo, 'certificado' => (bool) $d->certificado_evidencias,
+            'flujo' => (bool) $d->flujo, 'certificado' => (bool) $d->certificado_evidencias, 'idioma' => $d->idioma ?? 'es',
             'mensaje' => $d->mensaje, 'paginas' => json_decode($d->paginas, true), 'sha256Original' => $d->sha256_original, 'sha256Final' => $d->sha256_final,
             'creadoEn' => Fechas::iso($d->created_at), 'enviadoEn' => Fechas::iso($d->enviado_en), 'completadoEn' => Fechas::iso($d->completado_en),
             'firmantes' => DB::table('firmantes')->where('documento_id', $id)->orderBy('orden')->get()->map(fn ($f) => [
@@ -202,7 +203,7 @@ class Documentos
         DB::transaction(function () use ($id, $datos) {
             DB::table('documentos')->where('id', $id)->update(['nombre' => $datos['nombre'], 'orden' => $datos['orden'], 'mensaje' => $datos['mensaje'],
                 'bloquear_dibujo' => $datos['bloquearDibujo'] ?? false, 'bloquear_sello' => $datos['bloquearSello'] ?? false,
-                'flujo' => $datos['flujo'] ?? false, 'certificado_evidencias' => $datos['certificado'] ?? false, 'updated_at' => now()]);
+                'flujo' => $datos['flujo'] ?? false, 'certificado_evidencias' => $datos['certificado'] ?? false, 'updated_at' => now()] + (isset($datos['idioma']) ? ['idioma' => $datos['idioma']] : []));
             DB::table('campos')->where('documento_id', $id)->delete();
             DB::table('firmantes')->where('documento_id', $id)->delete();
             $ids = [];
@@ -322,8 +323,10 @@ class Documentos
             $nuevo = DB::table('documentos')->insertGetId([
                 'cuenta_id' => $u->cuenta_id, 'user_id' => $u->id, 'nombre' => $d->nombre, 'orden' => $d->orden, 'mensaje' => $d->mensaje,
                 'bloquear_dibujo' => $d->bloquear_dibujo, 'bloquear_sello' => $d->bloquear_sello,
-                'flujo' => $d->flujo, 'certificado_evidencias' => $d->certificado_evidencias,
+                'flujo' => $d->flujo, 'certificado_evidencias' => $d->certificado_evidencias, 'idioma' => $d->idioma ?? 'es',
                 'archivo' => '', 'sha256_original' => $d->sha256_original, 'paginas' => $d->paginas, 'formulario' => $d->formulario, 'created_at' => now(), 'updated_at' => now(),
+                // Los documentos creados desde una plantilla quedan en su historial de envíos.
+                'plantilla_id' => $d->es_plantilla ? $d->id : null,
             ]);
             $ruta = "documentos/{$nuevo}/original.pdf";
             self::disco()->put($ruta, self::disco()->get($d->archivo));
@@ -349,6 +352,139 @@ class Documentos
             return $nuevo;
         });
         return ['id' => $nuevo];
+    }
+
+    /**
+     * «Enviar a varios» desde una plantilla: por cada destinatario se crea un documento propio (con su nombre) en el que
+     * ese destinatario ocupa el lugar del firmante elegido, y se envía. Los demás firmantes conservan los datos de la
+     * plantilla. Cada documento consume un envío del plan; si el cupo se acaba (o la plantilla tiene un problema), se
+     * detiene y los que faltan se marcan como no enviados.
+     *
+     * @param  array<int, array{nombre?: string, telefono?: string, email?: string}>  $destinatarios
+     */
+    public static function enviarAVarios(User $u, int $plantillaId, int $ordenFirmante, array $destinatarios, array $origen): array
+    {
+        $p = self::documentoDe($u->cuenta_id, $plantillaId);
+        if (! $p->es_plantilla) {
+            throw new ErrorUso('Solo se puede enviar a varios desde una plantilla', 409);
+        }
+        $plantillaFirmantes = DB::table('firmantes')->where('documento_id', $plantillaId)->orderBy('orden')->get();
+        if (! $plantillaFirmantes->firstWhere('orden', $ordenFirmante)) {
+            throw new ErrorUso('Elige qué firmante cambia en cada envío');
+        }
+        if (! $destinatarios) {
+            throw new ErrorUso('Agrega al menos un destinatario');
+        }
+        if (count($destinatarios) > 50) {
+            throw new ErrorUso('Puedes enviar a 50 personas como máximo por vez');
+        }
+        $lista = [];
+        $errores = [];
+        foreach (array_values($destinatarios) as $i => $d) {
+            $nombre = trim(preg_replace('/\s+/u', ' ', (string) ($d['nombre'] ?? '')));
+            $telefono = trim((string) ($d['telefono'] ?? ''));
+            $email = trim((string) ($d['email'] ?? ''));
+            if (mb_strlen($nombre) < 2 || mb_strlen($nombre) > 120) {
+                $errores["destinatarios.{$i}.nombre"] = 'Escribe su nombre';
+            }
+            if ($telefono !== '' && (mb_strlen($telefono) > 30 || ! preg_match('/^[+\d][\d\s()-]{6,}$/', $telefono))) {
+                $errores["destinatarios.{$i}.telefono"] = 'WhatsApp inválido';
+            }
+            if ($email !== '' && (mb_strlen($email) > 160 || ! filter_var($email, FILTER_VALIDATE_EMAIL))) {
+                $errores["destinatarios.{$i}.email"] = 'Correo inválido';
+            }
+            if ($telefono === '' && $email === '') {
+                $errores["destinatarios.{$i}.telefono"] = 'Falta su WhatsApp o su correo';
+            }
+            $lista[] = ['nombre' => $nombre, 'telefono' => $telefono, 'email' => $email];
+        }
+        if ($errores) {
+            throw new ErrorUso('Revisa los datos de los destinatarios', 400, $errores);
+        }
+
+        $resultados = [];
+        $detenido = null;
+        foreach ($lista as $dest) {
+            if ($detenido) {
+                $resultados[] = $dest + ['documentoId' => null, 'token' => null, 'esperaTurno' => false, 'error' => "No se envió: {$detenido}"];
+                continue;
+            }
+            $nuevo = null;
+            try {
+                $nuevo = self::duplicar($u, $plantillaId, $origen)['id'];
+                DB::table('documentos')->where('id', $nuevo)->update(['nombre' => Str::limit("{$p->nombre} — {$dest['nombre']}", 157)]);
+                foreach ($plantillaFirmantes as $pf) {
+                    DB::table('firmantes')->where('documento_id', $nuevo)->where('orden', $pf->orden)->update((int) $pf->orden === $ordenFirmante
+                        ? $dest : ['telefono' => (string) $pf->telefono, 'email' => (string) $pf->email]);
+                }
+                self::enviar($u, $nuevo, $origen);
+                $resultados[] = $dest + [
+                    'documentoId' => $nuevo,
+                    'token' => DB::table('firmantes')->where('documento_id', $nuevo)->where('orden', $ordenFirmante)->value('token'),
+                    // En orden, si no es el primero, su enlace se activa cuando firmen los anteriores.
+                    'esperaTurno' => $p->orden === 'secuencial' && $ordenFirmante > 1,
+                    'error' => null,
+                ];
+            } catch (ErrorUso $e) {
+                if ($nuevo) {
+                    DB::table('documentos')->where('id', $nuevo)->delete();
+                    self::disco()->deleteDirectory("documentos/{$nuevo}");
+                }
+                $detenido = $e->getMessage();
+                $resultados[] = $dest + ['documentoId' => null, 'token' => null, 'esperaTurno' => false, 'error' => $detenido];
+            }
+        }
+        return $resultados;
+    }
+
+    /** Historial de una plantilla: los documentos creados desde ella, con sus firmantes y su estado. */
+    public static function enviosDePlantilla(int $cuentaId, int $plantillaId): array
+    {
+        self::documentoDe($cuentaId, $plantillaId);
+        $docs = DB::table('documentos')->where('cuenta_id', $cuentaId)->where('plantilla_id', $plantillaId)->orderByDesc('id')->limit(500)
+            ->get(['id', 'nombre', 'estado', 'created_at', 'enviado_en', 'completado_en', 'archivo_final']);
+        $firmantes = DB::table('firmantes')->whereIn('documento_id', $docs->pluck('id'))->orderBy('orden')
+            ->get(['documento_id', 'nombre', 'estado', 'firmado_en'])->groupBy('documento_id');
+        return $docs->map(fn ($d) => [
+            'id' => $d->id, 'nombre' => $d->nombre, 'estado' => $d->estado, 'creadoEn' => Fechas::iso($d->created_at),
+            'enviadoEn' => Fechas::iso($d->enviado_en), 'completadoEn' => Fechas::iso($d->completado_en),
+            // Completado sin PDF final todavía (se genera al abrir el documento).
+            'pdfListo' => (bool) $d->archivo_final,
+            'firmantes' => ($firmantes[$d->id] ?? collect())->map(fn ($f) => ['nombre' => $f->nombre, 'estado' => $f->estado, 'firmadoEn' => Fechas::iso($f->firmado_en)])->values()->all(),
+        ])->all();
+    }
+
+    /** ZIP con los PDF firmados (con su certificado) de todos los documentos completados de una plantilla. */
+    public static function zipFirmados(int $cuentaId, int $plantillaId): array
+    {
+        $p = self::documentoDe($cuentaId, $plantillaId);
+        $ids = DB::table('documentos')->where('cuenta_id', $cuentaId)->where('plantilla_id', $plantillaId)->where('estado', 'completado')->orderBy('id')->pluck('id');
+        if ($ids->isEmpty()) {
+            throw new ErrorUso('Todavía no hay documentos firmados por todos', 404);
+        }
+        $tmp = tempnam(sys_get_temp_dir(), 'af');
+        $zip = new \ZipArchive;
+        $zip->open($tmp, \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
+        $agregados = 0;
+        foreach ($ids as $id) {
+            $d = self::documentoDe($cuentaId, $id);
+            if (! $d->archivo_final) {
+                self::detalle($cuentaId, $id); // genera el PDF final si quedó pendiente
+                $d = self::documentoDe($cuentaId, $id);
+            }
+            if ($d->archivo_final) {
+                $nombre = substr(preg_replace('/[^\w.-]+/', '_', Str::ascii($d->nombre)), 0, 90) ?: 'documento';
+                $zip->addFromString("{$nombre}_{$d->id}_firmado.pdf", self::disco()->get($d->archivo_final));
+                $agregados++;
+            }
+        }
+        $zip->close();
+        $bytes = (string) file_get_contents($tmp);
+        @unlink($tmp);
+        if (! $agregados) {
+            throw new ErrorUso('Los PDF firmados todavía no se pudieron generar. Inténtalo de nuevo más tarde.', 503);
+        }
+        return [$bytes, "{$p->nombre}_firmados"];
     }
 
     /**
@@ -440,7 +576,7 @@ class Documentos
         $vistos = [];
         foreach (DB::table('contactos')->where('cuenta_id', $cuentaId)->orderBy('nombre')->get() as $g) {
             $vistos[mb_strtolower(Str::ascii($g->nombre))] = ['id' => $g->id, 'nombre' => $g->nombre, 'telefono' => $g->telefono, 'email' => $g->email,
-                'documentos' => 0, 'firmados' => 0, 'ultimo' => null];
+                'categoria' => $g->categoria, 'documentos' => 0, 'firmados' => 0, 'ultimo' => null];
         }
         $filas = DB::table('firmantes as f')->join('documentos as d', 'd.id', '=', 'f.documento_id')->where('d.cuenta_id', $cuentaId)
             ->orderByDesc('f.id')->limit(3000)->get(['f.nombre', 'f.telefono', 'f.email', 'f.firmado_en', 'd.created_at']);
@@ -450,7 +586,7 @@ class Documentos
                 continue;
             }
             $k = mb_strtolower(Str::ascii($nombre));
-            $c = $vistos[$k] ?? ['id' => null, 'nombre' => $nombre, 'telefono' => '', 'email' => '', 'documentos' => 0, 'firmados' => 0, 'ultimo' => null];
+            $c = $vistos[$k] ?? ['id' => null, 'nombre' => $nombre, 'telefono' => '', 'email' => '', 'categoria' => '', 'documentos' => 0, 'firmados' => 0, 'ultimo' => null];
             $c['ultimo'] ??= Fechas::iso($f->created_at);
             if ($c['id'] === null) {
                 $c['telefono'] = $c['telefono'] ?: (string) $f->telefono;
@@ -469,6 +605,7 @@ class Documentos
         $nombre = trim(preg_replace('/\s+/u', ' ', (string) ($d['nombre'] ?? '')));
         $telefono = trim((string) ($d['telefono'] ?? ''));
         $email = trim((string) ($d['email'] ?? ''));
+        $categoria = Str::limit(trim(preg_replace('/\s+/u', ' ', (string) ($d['categoria'] ?? ''))), 57, '');
         $errores = [];
         if (mb_strlen($nombre) < 2 || mb_strlen($nombre) > 120 || preg_match('/^Firmante \d+$/u', $nombre)) {
             $errores['nombre'] = 'Escribe el nombre del contacto (de 2 a 120 caracteres)';
@@ -496,13 +633,13 @@ class Documentos
         } elseif ($mismo) {
             $id = $mismo->id; // el nombre ya estaba guardado: se actualizan sus datos
         }
-        $datos = ['nombre' => $nombre, 'telefono' => $telefono, 'email' => $email, 'updated_at' => now()];
+        $datos = ['nombre' => $nombre, 'telefono' => $telefono, 'email' => $email, 'categoria' => $categoria, 'updated_at' => now()];
         if ($id === null) {
             $id = DB::table('contactos')->insertGetId($datos + ['cuenta_id' => $cuentaId, 'created_at' => now()]);
         } else {
             DB::table('contactos')->where('id', $id)->update($datos);
         }
-        return ['id' => $id, 'nombre' => $nombre, 'telefono' => $telefono, 'email' => $email];
+        return ['id' => $id, 'nombre' => $nombre, 'telefono' => $telefono, 'email' => $email, 'categoria' => $categoria];
     }
 
     /** Quita un contacto guardado a mano (las personas de documentos ya enviados siguen apareciendo). */
@@ -521,7 +658,7 @@ class Documentos
         $q = DB::table('firmantes as f')->join('documentos as d', 'd.id', '=', 'f.documento_id')->join('users as u', 'u.id', '=', 'd.user_id')
             ->join('cuentas as c', 'c.id', '=', 'd.cuenta_id')->where('f.token', $t)
             ->select('f.*', 'd.nombre as doc_nombre', 'd.estado as doc_estado', 'd.orden as doc_orden', 'd.mensaje as doc_mensaje',
-                'd.paginas as doc_paginas', 'd.bloquear_dibujo', 'd.bloquear_sello', 'd.flujo', 'd.certificado_evidencias', 'd.archivo', 'd.archivo_final', 'd.cuenta_id', 'u.name as remitente', 'c.nombre as empresa', 'c.logo as cuenta_logo');
+                'd.paginas as doc_paginas', 'd.bloquear_dibujo', 'd.bloquear_sello', 'd.flujo', 'd.certificado_evidencias', 'd.idioma as doc_idioma', 'd.archivo', 'd.archivo_final', 'd.cuenta_id', 'u.name as remitente', 'c.nombre as empresa', 'c.logo as cuenta_logo');
         return ($bloquear ? $q->lockForUpdate() : $q)->first() ?? throw new ErrorUso('Enlace no válido', 404);
     }
 
@@ -554,7 +691,7 @@ class Documentos
                 'nombre' => $f->doc_nombre, 'estado' => $f->doc_estado, 'mensaje' => $f->doc_mensaje, 'paginas' => json_decode($f->doc_paginas, true),
                 'remitente' => $f->remitente, 'empresa' => $f->empresa, 'logo' => (bool) $f->cuenta_logo && ! Planes::esGratis($f->cuenta_id),
                 'bloquearDibujo' => (bool) $f->bloquear_dibujo || (bool) $f->pedir_dni, 'bloquearSello' => (bool) $f->bloquear_sello,
-                'flujo' => (bool) $f->flujo, 'certificado' => (bool) $f->certificado_evidencias,
+                'flujo' => (bool) $f->flujo, 'certificado' => (bool) $f->certificado_evidencias, 'idioma' => $f->doc_idioma ?? 'es',
             ],
             'yo' => ['orden' => $f->orden, 'nombre' => $f->nombre, 'estado' => $f->estado, 'color' => $f->color, 'total' => $firmantes->count(), 'pedirDni' => (bool) $f->pedir_dni, 'modoTexto' => $f->modo_texto ?? 'asignados',
                 'copiaHasta' => Fechas::iso(self::copiaHasta($f))],
@@ -775,6 +912,11 @@ class Documentos
      */
     private static function armarPdf(int $id, ?Carbon $completadoEn): string
     {
+        // Las firmas son PNG con transparencia: TCPDF necesita GD o Imagick para incrustarlas.
+        if (! extension_loaded('gd') && ! extension_loaded('imagick')) {
+            report(new \RuntimeException('PHP sin GD ni Imagick: no se puede generar el PDF con firmas'));
+            throw new ErrorUso('No se pudo generar el PDF en este momento. Inténtalo de nuevo más tarde.', 503);
+        }
         $d = DB::table('documentos as d')->join('users as u', 'u.id', '=', 'd.user_id')->join('cuentas as c', 'c.id', '=', 'd.cuenta_id')
             ->where('d.id', $id)->first(['d.*', 'u.name as u_nombre', 'u.email as u_email', 'c.logo as cuenta_logo']);
         $firmantes = DB::table('firmantes')->where('documento_id', $id)->orderBy('orden')->get();

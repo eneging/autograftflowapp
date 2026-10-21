@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { usarIdioma } from "./idioma";
 
 /*
  * Documentos legales de AutograFlow: Términos y Condiciones (clientes), Términos para firmantes y Política de
@@ -24,6 +25,7 @@ export const TITULAR = {
 /** Versión vigente: se guarda junto a cada aceptación. */
 export const VERSION_LEGAL = "2026-10-21.2";
 const FECHA_VERSION = "21 de octubre de 2026";
+const FECHA_VERSION_EN = "October 21, 2026";
 /** Días que el firmante puede descargar su copia (COPIA_DIAS en el .env del servidor). */
 const DIAS_COPIA = 7;
 
@@ -85,6 +87,42 @@ const PRIVACIDAD: Seccion[] = [
   ["14. Cambios a esta política.", "La versión vigente y su fecha se muestran aquí. Si un cambio es importante, te avisaremos antes de que entre en vigor."],
 ];
 
+/*
+ * Traducción al inglés de los textos que ve el firmante (Términos para firmantes y Política de Privacidad). Si hay
+ * diferencias, prevalece la versión en español (lo dice la nota de cada ventana).
+ */
+const quienEn = `${T.marca}, a service operated by ${T.razonSocial}, Tax ID (RUC) ${T.ruc}, with registered address at ${T.domicilio}`;
+
+const FIRMANTES_EN: Seccion[] = [
+  ["1. Who these terms apply to.", `These Terms apply to anyone who opens a ${T.marca} signing link to sign, stamp, add a fingerprint, fill in information or decline a document (the "signer"), and are complemented by the Privacy Policy. You accept them by checking the acceptance box before sending your signature; you cannot sign without accepting them.`],
+  ["2. Who sent you the document.", `The document was prepared and sent to you by another person or organization (the "sender"), who is responsible for its content and for your data within it. ${T.marca} is only the technology tool the sender uses and acts as a data processor on the sender's behalf. If you have questions about the content, ask the sender before signing.`],
+  ["3. What signing here means.", "By sending your signature you declare that: you are the person named as signer or are authorized to sign; you have read the document; you sign freely and voluntarily; and you accept that your electronic signature, stamp, fingerprint and the information you enter express your will regarding that document. This is a simple electronic signature: its value depends on the applicable law and the type of act. If you don't agree with the document, don't sign it: you can decline it and give a reason, which the sender will see."],
+  ["4. What is recorded and who sees it.", "When you open and sign, the following is recorded: the image of your signature and, if requested, of your stamp and fingerprint; the text, dates and checkboxes you fill in; any additional text you add; photos of the front and back of your identity document, if requested; your name and the contact (WhatsApp or email) provided by the sender; the date and time you opened and signed; your IP address; your browser and device data; the time of each capture; and your approximate location only if you allow it in your browser. This information is included in the signed PDF and its signature certificate, which the sender, members of the sender's organization and the other signers of the same document can view and download."],
+  ["5. Sensitive data: fingerprint and identity document.", "Fingerprints and photos of your identity document are sensitive data. They are only requested if the sender configured it, and they are only used as an image within that document and its evidence page: no biometric template is created, they are not compared against databases and they are not used to identify you in other documents. By checking the acceptance box you give your express consent to their processing for that purpose. You may refuse: in that case, don't sign and let the sender know or decline the document."],
+  ["6. Your link is personal.", "The link you received is secret and identifies you within the document. Don't share it: anyone who has it can see your fields and what the others have already signed. If you think someone else used it, immediately notify the sender and " + T.correo + "."],
+  ["7. Your copy.", `After signing you can download a PDF copy for ${DIAS_COPIA} days: if everyone has signed, it is the final PDF with its certificate; otherwise, a copy with what has been signed so far. After that period, ask the sender for a copy.`],
+  ["8. How long your data is kept.", "Your data within the document is kept as long as the sender keeps the document in their account; when they delete it, it is permanently erased. If you want to access, correct or request deletion of your data, contact the sender first, who is responsible for the document; you can also write to us at " + T.correo + " and we will forward your request or handle it to the extent it concerns us. Note that deleting your signature from an already signed document may affect the rights of the other parties, and the sender may have a legal obligation or right to keep it."],
+  ["9. No warranties or advice.", "AutograFlow does not guarantee the validity of the document or the identity of the other parties, and nothing on the platform is legal advice. To the maximum extent permitted by law, AutograFlow is not liable for the content of the document or for the use the sender or other signers make of it, without excluding liability that the law does not allow to be excluded."],
+  ["10. Governing law.", `Peruvian law and the courts of ${T.ciudad} apply, without prejudice to the rights granted to you by the mandatory law of your country of residence.`],
+];
+
+const PRIVACIDAD_EN: Seccion[] = [
+  ["1. Controller and contact.", `${quienEn}. Email for privacy matters and to exercise your rights: ${T.correo}. Database registration: ${T.registroBancoDatos}.`],
+  ["2. Our role in processing your data.", "We are the controller of account data, payments, platform usage and security. For the content of documents and the data of signers, the controller is the customer who prepares and sends the document (the sender), and AutograFlow acts as a data processor on their behalf."],
+  ["3. What data we process.", "(a) Account: name, company, email, password (only encrypted, never in plain text), plan and date of acceptance of these texts; password recovery codes (valid for 60 minutes). (b) Access without an account: a guest identifier stored in your browser. (c) Documents: the PDF, its name, the field configuration and what you type in them. (d) Signers: name, WhatsApp and email provided by the sender; signature, stamp and fingerprint (images); text, dates and checkboxes; identity document photos if requested; date and time of opening and signing; IP; browser and device data; time of each capture; approximate location only if the signer allows it; reason for declining. (e) Directory: contacts you add manually (name, WhatsApp and email) and those of signers you have already sent documents to, so we can suggest them; you are responsible for having those people's authorization and can edit or delete them at any time. (f) Payments: plan purchased, amount, status and Mercado Pago reference (never your card details). (g) Reimbursement template: the payee's details, trips, expenses and amounts, and the signatures of the requester and approver. (h) Technical and security data: IP, date, browser and error and access logs."],
+  ["4. Sensitive data.", "Fingerprints and identity document photos are sensitive data. They are only collected if the sender requests them and with the signer's express consent, and are used solely as an image within the document and its evidence page. We do not create biometric templates, compare them against databases or use them to identify anyone outside that document."],
+  ["5. What we use it for and on what basis.", "To provide the service you contract: creating your account, preparing and sending documents, collecting signatures, generating the signed PDF with its certificate, allowing its verification, notifying each step by email and managing payments and complaints (performance of the contract). To process sensitive data and location (express consent, which you may withdraw for the future). To comply with legal and tax obligations and requests from authorities (legal obligation). To protect the platform, prevent fraud and abuse and defend ourselves against claims (legitimate interest). We do not sell or rent data, do not use it for third-party advertising, do not build commercial profiles and do not make automated decisions that legally affect you."],
+  ["6. Who can see the data.", "The sender and, on the Business plan, the members of their organization. Each signer sees their own fields and what the others have already signed; the final PDF and its certificate (with each signer's name, contact, IP, device and dates) are seen by the sender and the signers. Anyone who has a signed PDF can verify it on the platform and see the document name, the company, the signers' names and the dates. Authorized AutograFlow staff may access the data only when necessary for support, security or by legal order, and are bound by confidentiality."],
+  ["7. Providers (sub-processors).", `We use providers that process data on our behalf, under contract and with security measures: server and database hosting (${T.hosting}); Cloudinary, Inc. (United States), where images of signatures, stamps, fingerprints, identity photos and logos are stored as private files with no public address, when enabled; Mercado Pago, to charge for plans; and ${T.correoProveedor}, to send emails. Sharing a link or a PDF via WhatsApp or your email is done by your own device: the terms of those services apply there.`],
+  ["8. International transfers.", "Some providers may be located outside your country (for example, Cloudinary in the United States). In those cases we require adequate levels of protection under the applicable law and, by accepting this policy, you consent to those transfers in order to provide the service."],
+  ["9. How long we keep it.", `Account: while it is active; if you ask to close it, we delete its data and documents, except what the law requires us to keep. Documents, signatures and evidence: until the sender deletes the document (deletion is permanent). The copy the signer can download: ${DIAS_COPIA} days from signing. Access without an account: while it is used from that browser. Payments and receipts: the period required by tax and accounting law. Technical and security logs: a reasonable time for security and defense against claims. Backups, if any, are overwritten in their normal cycles.`],
+  ["10. Security.", "We use encrypted connections (HTTPS), encrypted passwords, secret and unguessable links for each signer, private images with signed temporary access, restricted access and logs of each step. No system is infallible: if an incident affecting your data occurs, we will notify you and the authority when the law requires it."],
+  ["11. Your rights.", `You can request access, rectification, cancellation (deletion) and objection, as well as information about the processing, portability where applicable, and withdraw your consent, by writing to ${T.correo} with a copy of your identity document (or that of your representative). We respond within the periods set by the applicable law. If your data is in a customer's document, we will coordinate with them, as they are the controller. If you are not satisfied with the response, in Peru you can file a complaint with the National Authority for Personal Data Protection; if you live in another country, with the competent data protection authority.`],
+  ["12. Minors.", "The platform is not directed at people under 18 and we do not knowingly collect their data. If a document requires a minor's signature, it must be signed by their legal representative in accordance with the law."],
+  ["13. Cookies and browser storage.", "We only use what is necessary for the platform to work: a session cookie, the \"remember me\" cookie if you log in, and a cookie that identifies the guest without an account in that browser (lasting up to one year). In your browser's storage we keep preferences such as light or dark theme, zoom, panel state, language and the guest's acceptance of the terms. We do not use third-party advertising or analytics cookies. If you block them, you may not be able to log in or use access without an account."],
+  ["14. Changes to this policy.", "The current version and its date are shown here. If a change is significant, we will notify you before it takes effect."],
+];
+
 export type TipoLegal = "terminos" | "firmantes" | "privacidad";
 
 /** Casilla de aceptación para quien firma (plantilla de reembolso): sin marcarla no puede enviar su firma. */
@@ -107,8 +145,12 @@ export function ConsentimientoFirma({ acepto, alCambiar }: { acepto: boolean; al
 const TITULOS: Record<TipoLegal, string> = { terminos: "Términos y Condiciones", firmantes: "Términos para firmantes", privacidad: "Política de Privacidad" };
 const TEXTOS: Record<TipoLegal, Seccion[]> = { terminos: TERMINOS, firmantes: FIRMANTES, privacidad: PRIVACIDAD };
 
-/** Ventana con los Términos, los Términos para firmantes o la Política de Privacidad. */
+const TITULOS_EN: Partial<Record<TipoLegal, string>> = { firmantes: "Signer Terms", privacidad: "Privacy Policy" };
+const TEXTOS_EN: Partial<Record<TipoLegal, Seccion[]>> = { firmantes: FIRMANTES_EN, privacidad: PRIVACIDAD_EN };
+
+/** Ventana con los Términos, los Términos para firmantes o la Política de Privacidad (en inglés en la página del firmante, si la eligió). */
 export function VentanaLegal({ tipo, alCerrar }: { tipo: TipoLegal; alCerrar: () => void }) {
+  const en = usarIdioma() === "en" && !!TEXTOS_EN[tipo];
   useEffect(() => {
     const esc = (e: KeyboardEvent) => e.key === "Escape" && alCerrar();
     document.addEventListener("keydown", esc);
@@ -116,14 +158,19 @@ export function VentanaLegal({ tipo, alCerrar }: { tipo: TipoLegal; alCerrar: ()
   }, [alCerrar]);
   return (
     <div className="modalAf" onClick={(e) => e.target === e.currentTarget && alCerrar()}>
-      <div className="modalCard" role="dialog" aria-modal="true" aria-label={TITULOS[tipo]}>
-        <h2>{TITULOS[tipo]}</h2>
-        <p className="small legalVersion">Versión vigente desde el {FECHA_VERSION}.</p>
-        <div className="legalAcceptNote">📌 <strong>Importante:</strong> al marcar la casilla de aceptación {tipo === "firmantes" ? "antes de firmar" : "o al usar la plataforma"}, <strong>declaras que has leído completamente, entiendes y aceptas</strong> este documento en su totalidad.</div>
+      <div className="modalCard" role="dialog" aria-modal="true" aria-label={en ? TITULOS_EN[tipo] : TITULOS[tipo]}>
+        <h2>{en ? TITULOS_EN[tipo] : TITULOS[tipo]}</h2>
+        {en ? <>
+          <p className="small legalVersion">Version in force since {FECHA_VERSION_EN}. This is a translation: in case of any discrepancy, the Spanish version prevails.</p>
+          <div className="legalAcceptNote">📌 <strong>Important:</strong> by checking the acceptance box before signing, <strong>you declare that you have fully read, understand and accept</strong> this document in its entirety.</div>
+        </> : <>
+          <p className="small legalVersion">Versión vigente desde el {FECHA_VERSION}.</p>
+          <div className="legalAcceptNote">📌 <strong>Importante:</strong> al marcar la casilla de aceptación {tipo === "firmantes" ? "antes de firmar" : "o al usar la plataforma"}, <strong>declaras que has leído completamente, entiendes y aceptas</strong> este documento en su totalidad.</div>
+        </>}
         <div className="legalTexto">
-          {TEXTOS[tipo].map(([t, p]) => <p key={t}><strong>{t}</strong> {p}</p>)}
+          {(en ? TEXTOS_EN[tipo]! : TEXTOS[tipo]).map(([t, p]) => <p key={t}><strong>{t}</strong> {p}</p>)}
         </div>
-        <div className="row pie"><button type="button" className="primary" onClick={alCerrar}>Cerrar</button></div>
+        <div className="row pie"><button type="button" className="primary" onClick={alCerrar}>{en ? "Close" : "Cerrar"}</button></div>
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import { useEffect, useState, type CSSProperties } from "react";
+import { usarT } from "../componentes/idioma";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ETIQUETA_TIPO, type DocumentoDetalle } from "../../../shared/plataforma";
 import { enlaceWhatsApp } from "../api";
@@ -66,19 +67,20 @@ export function BotonesPdfFirmado({ url, urlDescarga, nombre, texto, disponible 
 }) {
   const [aviso, setAviso] = useState("");
   const [compartiendo, setCompartiendo] = useState(false);
+  const t = usarT();
   return (
     <>
       <div className="readyBar botonesPdf">
         {disponible
-          ? <a className="boton primary" href={urlDescarga}>⬇️ Descargar PDF</a>
-          : <button type="button" className="primary" disabled title="El PDF final todavía no se pudo generar">⬇️ Descargar PDF</button>}
+          ? <a className="boton primary" href={urlDescarga}>{t("⬇️ Descargar PDF")}</a>
+          : <button type="button" className="primary" disabled title={t("El PDF final todavía no se pudo generar")}>{t("⬇️ Descargar PDF")}</button>}
         <button type="button" className="green" disabled={!disponible || compartiendo} onClick={async () => {
           setCompartiendo(true);
           setAviso("");
           const r = await compartirArchivo(url, nombre, texto);
           setCompartiendo(false);
-          if (r === "soloMensaje") setAviso("Se abrió WhatsApp con el mensaje. Desde la computadora no se puede adjuntar el archivo automáticamente: descarga el PDF con «Descargar PDF» y adjúntalo en el chat.");
-        }}>{compartiendo ? "Preparando…" : "💬 Compartir por WhatsApp"}</button>
+          if (r === "soloMensaje") setAviso(t("Se abrió WhatsApp con el mensaje. Desde la computadora no se puede adjuntar el archivo automáticamente: descarga el PDF con «Descargar PDF» y adjúntalo en el chat."));
+        }}>{t(compartiendo ? "Preparando…" : "💬 Compartir por WhatsApp")}</button>
       </div>
       {aviso && <p className="small afExtraHint">{aviso}</p>}
     </>

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import SignaturePad from "signature_pad";
 import type { Dedo, Mano } from "../../../shared/plataforma";
-import { ConsejosHuella, EncajarHuella, textoDedo } from "./Huella";
+import { ConsejosHuella, EncajarHuella } from "./Huella";
+import { textoDedoEn, usarIdioma, usarT } from "./idioma";
 
 export type TipoImagen = "firma" | "sello" | "huella";
 const TEXTOS: Record<TipoImagen, { nombre: string; marca: string; aviso: string }> = {
@@ -28,6 +29,7 @@ interface Props {
 
 /** Pantalla completa de firma: dibujar, subir una imagen o fotografiar la firma en papel. */
 export function PantallaFirma({ titulo, tipo = "firma", inicial, alTerminar, alCerrar, bloquearDibujo = false, bloquearSello = false, dedo = null }: Props) {
+  const t = usarT(), idioma = usarIdioma();
   const txt = TEXTOS[tipo];
   const sinDibujo = tipo === "firma" && bloquearDibujo;
   const conConfeccion = tipo === "sello" && !bloquearSello;
@@ -40,9 +42,9 @@ export function PantallaFirma({ titulo, tipo = "firma", inicial, alTerminar, alC
   const [imagen, setImagen] = useState<string | null>(null); // firma subida o fotografiada
   const [hayTrazo, setHayTrazo] = useState(false);
   const [aviso, setAviso] = useState(
-    sinDibujo ? "Este documento requiere tu firma real: fírmala en papel y tómale una foto, o sube una imagen de tu firma."
-      : tipo === "sello" && bloquearSello ? "Este documento requiere tu sello real: fotografíalo o sube una imagen."
-      : tipo === "huella" && dedo ? `${textoDedo(dedo)}: sube o fotografía la foto de tu dedo.` : txt.aviso);
+    sinDibujo ? t("Este documento requiere tu firma real: fírmala en papel y tómale una foto, o sube una imagen de tu firma.")
+      : tipo === "sello" && bloquearSello ? t("Este documento requiere tu sello real: fotografíalo o sube una imagen.")
+      : tipo === "huella" && dedo ? t("{dedo}: sube o fotografía la foto de tu dedo.", { dedo: textoDedoEn(idioma, dedo) }) : t(txt.aviso));
   const subir = useRef<HTMLInputElement>(null);
   const camara = useRef<HTMLInputElement>(null);
 
@@ -86,24 +88,24 @@ export function PantallaFirma({ titulo, tipo = "firma", inicial, alTerminar, alC
 
   async function alElegirArchivo(archivo?: File) {
     if (!archivo) return;
-    if (!/^image\//.test(archivo.type)) return setAviso("El archivo debe ser una imagen (PNG o JPG).");
+    if (!/^image\//.test(archivo.type)) return setAviso(t("El archivo debe ser una imagen (PNG o JPG)."));
     if (tipo === "huella") { setFotoHuella(archivo); return; }
-    setAviso("Procesando la imagen…");
+    setAviso(t("Procesando la imagen…"));
     try {
       setImagen(await limpiarImagenFirma(archivo));
       pad.current?.clear();
       setHayTrazo(false);
       setConfeccionando(false);
-      setAviso(`Listo: se recortó la imagen y se quitó el fondo. Si no se ve bien, prueba con otra foto${tipo === "firma" ? " o dibújala" : ""}.`);
+      setAviso(t(tipo === "firma" ? "Listo: se recortó la imagen y se quitó el fondo. Si no se ve bien, prueba con otra foto o dibújala." : "Listo: se recortó la imagen y se quitó el fondo. Si no se ve bien, prueba con otra foto."));
     } catch {
-      setAviso("No se pudo leer la imagen. Prueba con otra.");
+      setAviso(t("No se pudo leer la imagen. Prueba con otra."));
     }
   }
 
   const continuar = () => {
     if (imagen) return alTerminar(imagen);
     if (pad.current && !pad.current.isEmpty()) return alTerminar(recortar(lienzo.current!));
-    setAviso(tipo === "firma" ? "Primero dibuja, sube o fotografía tu firma." : `Primero ${tipo === "sello" ? "confecciona, " : ""}sube o fotografía tu ${txt.nombre}.`);
+    setAviso(t(tipo === "firma" ? "Primero dibuja, sube o fotografía tu firma." : tipo === "sello" ? "Primero confecciona, sube o fotografía tu sello." : "Primero sube o fotografía tu huella."));
   };
 
   const vista = imagen ?? inicial;
@@ -113,45 +115,45 @@ export function PantallaFirma({ titulo, tipo = "firma", inicial, alTerminar, alC
       <div className="top">
         <strong>{titulo}</strong>
         <div className="topRight">
-          {vista && !hayTrazo && <div className="spreview"><img src={vista} alt="Vista previa de firma" /></div>}
-          <button type="button" onClick={alCerrar}>Cerrar</button>
+          {vista && !hayTrazo && <div className="spreview"><img src={vista} alt={t("Vista previa de firma")} /></div>}
+          <button type="button" onClick={alCerrar}>{t("Cerrar")}</button>
         </div>
       </div>
       <div className="area">
-        <div className="water">{sinDibujo ? "FOTOGRAFÍA O SUBE TU FIRMA" : txt.marca}</div>
-        <canvas ref={lienzo} id="ink" aria-label="Recuadro para firmar" />
-        {imagen && <img className="areaImg" src={imagen} alt="Imagen subida" />}
+        <div className="water">{t(sinDibujo ? "FOTOGRAFÍA O SUBE TU FIRMA" : txt.marca)}</div>
+        <canvas ref={lienzo} id="ink" aria-label={t("Recuadro para firmar")} />
+        {imagen && <img className="areaImg" src={imagen} alt={t("Imagen subida")} />}
         {conConfeccion && confeccionando && (
           <div className="stampMaker">
-            <label className="smLabel" htmlFor="textoSello">Escribe el contenido de tu sello (cada renglón en una línea)</label>
+            <label className="smLabel" htmlFor="textoSello">{t("Escribe el contenido de tu sello (cada renglón en una línea)")}</label>
             <textarea id="textoSello" rows={3} maxLength={200} value={textoSello} onChange={(e) => setTextoSello(e.target.value)}
-              placeholder={"Ej.\nJUAN PÉREZ LÓPEZ\nGerente General\nDNI 12345678"} />
-            <div className="smLabel">Vista previa</div>
-            <div className="smPreviewWrap">{textoSello.trim() ? <img src={dibujarSello(textoSello)} alt="Vista previa del sello" /> : <span className="afExtraHint">Escribe para ver tu sello</span>}</div>
+              placeholder={t("Ej.\nJUAN PÉREZ LÓPEZ\nGerente General\nDNI 12345678")} />
+            <div className="smLabel">{t("Vista previa")}</div>
+            <div className="smPreviewWrap">{textoSello.trim() ? <img src={dibujarSello(textoSello)} alt={t("Vista previa del sello")} /> : <span className="afExtraHint">{t("Escribe para ver tu sello")}</span>}</div>
             <div className="row smActions">
-              <button type="button" className="success" disabled={!textoSello.trim()} onClick={() => { setImagen(dibujarSello(textoSello)); setConfeccionando(false); setAviso("Sello listo."); }}>✓ Usar este sello</button>
+              <button type="button" className="success" disabled={!textoSello.trim()} onClick={() => { setImagen(dibujarSello(textoSello)); setConfeccionando(false); setAviso(t("Sello listo.")); }}>{t("✓ Usar este sello")}</button>
             </div>
           </div>
         )}
       </div>
       <div className="methods">
-        {tipo === "firma" && !sinDibujo && <button type="button" className={!imagen ? "primary" : ""} onClick={() => setImagen(null)}>✍️ Dibujar</button>}
-        {conConfeccion && <button type="button" className={confeccionando ? "primary" : ""} onClick={() => setConfeccionando(true)}>✍️ Confeccionar sello</button>}
-        <button type="button" onClick={() => subir.current?.click()}>🖼️ Subir {tipo === "firma" ? "firma PNG" : txt.nombre}</button>
-        <button type="button" onClick={() => camara.current?.click()}>📷 Fotografiar {txt.nombre}</button>
-        {imagen && tipo !== "huella" && <button type="button" title="Si la foto salió de lado o de cabeza" onClick={async () => setImagen(await girarImagen(imagen))}>↻ Girar 90°</button>}
+        {tipo === "firma" && !sinDibujo && <button type="button" className={!imagen ? "primary" : ""} onClick={() => setImagen(null)}>{t("✍️ Dibujar")}</button>}
+        {conConfeccion && <button type="button" className={confeccionando ? "primary" : ""} onClick={() => setConfeccionando(true)}>{t("✍️ Confeccionar sello")}</button>}
+        <button type="button" onClick={() => subir.current?.click()}>{t(`🖼️ Subir ${tipo === "firma" ? "firma PNG" : txt.nombre}`)}</button>
+        <button type="button" onClick={() => camara.current?.click()}>{t(`📷 Fotografiar ${txt.nombre}`)}</button>
+        {imagen && tipo !== "huella" && <button type="button" title={t("Si la foto salió de lado o de cabeza")} onClick={async () => setImagen(await girarImagen(imagen))}>{t("↻ Girar 90°")}</button>}
         <input ref={subir} type="file" accept="image/png,image/jpeg" hidden onChange={(e) => { alElegirArchivo(e.target.files?.[0]); e.target.value = ""; }} />
         <input ref={camara} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { alElegirArchivo(e.target.files?.[0]); e.target.value = ""; }} />
       </div>
       <div className="hintBar">{aviso}</div>
       <div className="bottom">
-        <button type="button" onClick={borrar} disabled={!hayTrazo && !imagen}>Borrar {txt.nombre}</button>
-        <button type="button" className="primary" onClick={continuar}>✓ Continuar</button>
+        <button type="button" onClick={borrar} disabled={!hayTrazo && !imagen}>{t(`Borrar ${txt.nombre}`)}</button>
+        <button type="button" className="primary" onClick={continuar}>{t("✓ Continuar")}</button>
       </div>
       {consejos && <ConsejosHuella dedo={dedo} alEmpezar={() => setConsejos(false)} />}
       {fotoHuella && (
         <EncajarHuella archivo={fotoHuella} alCancelar={() => setFotoHuella(null)}
-          alUsar={(png) => { setImagen(png); setFotoHuella(null); setAviso("Huella lista. Si no se ve bien, prueba con otra foto."); }} />
+          alUsar={(png) => { setImagen(png); setFotoHuella(null); setAviso(t("Huella lista. Si no se ve bien, prueba con otra foto.")); }} />
       )}
     </div>
   );

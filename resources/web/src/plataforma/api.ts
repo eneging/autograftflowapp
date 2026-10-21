@@ -1,4 +1,4 @@
-import type { DatosGuardarDocumento, DocumentoDetalle, EstadoDocumento, Evidencias, VistaFirmante } from "../../../shared/plataforma";
+import type { DatosGuardarDocumento, DocumentoDetalle, EstadoDocumento, EstadoFirmante, Evidencias, VistaFirmante } from "../../../shared/plataforma";
 import type { EstadoCuenta, IdPlan, PagoFila, Plan } from "../../../shared/planes";
 import { prepararPdf } from "./prepararPdf";
 
@@ -26,7 +26,15 @@ const json = (metodo: string, datos?: unknown): RequestInit => ({ method: metodo
 
 /** invitado: entró «sin cuenta» (Gratis, 1 firmante); su email llega vacío. */
 export interface Usuario { id: number; cuentaId: number; nombre: string; email: string; cuenta: string; plan: IdPlan; titular: boolean; invitado: boolean }
-export interface Contacto { id: number | null; nombre: string; telefono: string; email: string; documentos: number; firmados: number; ultimo: string | null }
+/** Destinatario de «Enviar a varios» y su resultado (token: su enlace; error: por qué no se envió). */
+export interface Destinatario { nombre: string; telefono: string; email: string }
+export interface ResultadoEnvio extends Destinatario { documentoId: number | null; token: string | null; esperaTurno: boolean; error: string | null }
+/** Un documento creado desde una plantilla (historial de la plantilla). */
+export interface EnvioPlantilla {
+  id: number; nombre: string; estado: EstadoDocumento; creadoEn: string; enviadoEn: string | null; completadoEn: string | null; pdfListo: boolean;
+  firmantes: { nombre: string; estado: EstadoFirmante; firmadoEn: string | null }[];
+}
+export interface Contacto { id: number | null; nombre: string; telefono: string; email: string; categoria: string; documentos: number; firmados: number; ultimo: string | null }
 export interface Equipo {
   nombre: string; plazas: number; activo: boolean; soyTitular: boolean; codigo: string | null;
   miembros: { id: number; nombre: string; email: string; titular: boolean; yo: boolean; documentos: number }[];
@@ -47,13 +55,14 @@ export const plataforma = {
 
   documentos: () => pedir<FilaDocumento[]>("/api/documentos"),
   subir: async (archivo: File) => {
-    const { preparado, campos, formulario } = await prepararPdf(archivo);
+    const { preparado, campos, formulario, idioma } = await prepararPdf(archivo);
     const datos = new FormData();
     datos.append("original", archivo);
     datos.append("preparado", preparado, "preparado.pdf");
     datos.append("campos", JSON.stringify(campos));
     if (formulario) datos.append("formulario", JSON.stringify(formulario));
     datos.append("nombre", archivo.name);
+    datos.append("idioma", idioma);
     return pedir<{ id: number; camposDetectados: number }>("/api/documentos", { method: "POST", body: datos });
   },
   documento: (id: number) => pedir<DocumentoDetalle>(`/api/documentos/${id}`),
@@ -78,8 +87,11 @@ export const plataforma = {
   nuevoCodigoEquipo: () => pedir<{ codigo: string }>("/api/cuenta/equipo/codigo", json("POST", {})),
   quitarMiembro: (id: number) => pedir(`/api/cuenta/equipo/${id}`, { method: "DELETE" }),
   contactos: () => pedir<Contacto[]>("/api/contactos"),
-  guardarContacto: (c: { id: number | null; nombre: string; telefono: string; email: string }) =>
-    pedir<{ id: number }>(c.id ? `/api/contactos/${c.id}` : "/api/contactos", json(c.id ? "PUT" : "POST", { nombre: c.nombre, telefono: c.telefono, email: c.email })),
+  guardarContacto: (c: { id: number | null; nombre: string; telefono: string; email: string; categoria: string }) =>
+    pedir<{ id: number }>(c.id ? `/api/contactos/${c.id}` : "/api/contactos", json(c.id ? "PUT" : "POST", { nombre: c.nombre, telefono: c.telefono, email: c.email, categoria: c.categoria })),
+  enviarAVarios: (plantilla: number, firmante: number, destinatarios: Destinatario[]) =>
+    pedir<ResultadoEnvio[]>(`/api/documentos/${plantilla}/enviar-a-varios`, json("POST", { firmante, destinatarios })),
+  envios: (plantilla: number) => pedir<EnvioPlantilla[]>(`/api/documentos/${plantilla}/envios`),
   eliminarContacto: (id: number) => pedir<void>(`/api/contactos/${id}`, { method: "DELETE" }),
   cuenta: () => pedir<{ estado: EstadoCuenta; pagos: PagoFila[] }>("/api/cuenta"),
   comprar: (producto: string) => pedir<{ pagoId: number; url: string }>("/api/pagos", json("POST", { producto })),
@@ -109,6 +121,7 @@ export const urls = {
   logoFirmante: (t: string) => `/api/firmar/${encodeURIComponent(t)}/logo`,
   original: (id: number) => `/api/documentos/${id}/archivo`,
   final: (id: number, descargar = false) => `/api/documentos/${id}/final${descargar ? "?descargar=1" : ""}`,
+  zipFirmados: (plantilla: number) => `/api/documentos/${plantilla}/firmados.zip`,
   imagenDueno: (id: number, campo: number) => `/api/documentos/${id}/campos/${campo}/imagen`,
   originalFirmante: (t: string) => `/api/firmar/${encodeURIComponent(t)}/archivo`,
   finalFirmante: (t: string, descargar = false) => `/api/firmar/${encodeURIComponent(t)}/final${descargar ? "?descargar=1" : ""}`,

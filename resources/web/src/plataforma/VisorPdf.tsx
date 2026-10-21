@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode, type PointerEvent } from "react";
+import { usarT } from "../componentes/idioma";
 import * as pdfjs from "pdfjs-dist";
 import trabajador from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { Pagina } from "../../../shared/plataforma";
@@ -96,12 +97,13 @@ export function PaginaPdf({ doc, numero, pagina, children, alTocar, cursor, refC
 }
 
 export function NavPaginas({ actual, total, alCambiar }: { actual: number; total: number; alCambiar: (n: number) => void }) {
-  if (total <= 1) return <div className="signerPageNav"><span>Página <b>1</b> de <b>1</b></span></div>;
+  const t = usarT();
+  if (total <= 1) return <div className="signerPageNav"><span>{t("Página")} <b>1</b> {t("de")} <b>1</b></span></div>;
   return (
     <div className="signerPageNav">
-      <button type="button" disabled={actual <= 1} onClick={() => alCambiar(actual - 1)}>← Anterior</button>
-      <span>Página <b>{actual}</b> de <b>{total}</b></span>
-      <button type="button" disabled={actual >= total} onClick={() => alCambiar(actual + 1)}>Siguiente →</button>
+      <button type="button" disabled={actual <= 1} onClick={() => alCambiar(actual - 1)}>{t("← Anterior")}</button>
+      <span>{t("Página")} <b>{actual}</b> {t("de")} <b>{total}</b></span>
+      <button type="button" disabled={actual >= total} onClick={() => alCambiar(actual + 1)}>{t("Siguiente →")}</button>
     </div>
   );
 }

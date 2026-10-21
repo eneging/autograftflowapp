@@ -6,6 +6,10 @@ import "./esquema"; // mensajes de validación en español
 /** «calculo»: campo que calcula el propio PDF con sus scripts (nadie lo llena; solo se detecta al subir el PDF). */
 export const TIPOS_CAMPO = ["firma", "texto", "fecha", "casilla", "sello", "huella", "calculo"] as const;
 export type TipoCampo = (typeof TIPOS_CAMPO)[number];
+/** Idioma de la página del firmante. */
+export const IDIOMAS = ["es", "en"] as const;
+export type Idioma = (typeof IDIOMAS)[number];
+
 export const ETIQUETA_TIPO: Record<TipoCampo, string> = {
   firma: "Firma", texto: "Texto", fecha: "Fecha", casilla: "Casilla", sello: "Sello", huella: "Huella", calculo: "Cálculo",
 };
@@ -107,6 +111,8 @@ export const esquemaGuardarDocumento = z.object({
   flujo: z.boolean().default(false),
   /** Certificado de evidencias: cronología de cada firmante con sus imágenes y, si la autoriza, su ubicación. */
   certificado: z.boolean().default(false),
+  /** Idioma en el que se abre la página del firmante (él puede cambiarlo). */
+  idioma: z.enum(IDIOMAS).default("es"),
 });
 
 const imagenPng = z.string().regex(/^data:image\/png;base64,[A-Za-z0-9+/=]+$/, "Imagen inválida")
@@ -141,6 +147,7 @@ export interface DocumentoDetalle {
   bloquearSello: boolean;
   flujo: boolean;
   certificado: boolean;
+  idioma: Idioma;
   orden: "secuencial" | "paralelo";
   mensaje: string;
   paginas: Pagina[];
@@ -163,7 +170,7 @@ export interface DocumentoDetalle {
 export interface VistaFirmante {
   documento: {
     nombre: string; estado: EstadoDocumento; mensaje: string; paginas: Pagina[]; remitente: string; empresa: string; logo: boolean;
-    bloquearDibujo: boolean; bloquearSello: boolean; flujo: boolean; certificado: boolean;
+    bloquearDibujo: boolean; bloquearSello: boolean; flujo: boolean; certificado: boolean; idioma: Idioma;
   };
   yo: { orden: number; nombre: string; estado: EstadoFirmante; color: string; total: number; pedirDni: boolean; modoTexto: "solo" | "asignados" | "libre";
     /** Hasta cuándo puede descargar su copia (null si aún no firma). */

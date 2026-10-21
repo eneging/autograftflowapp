@@ -34,7 +34,7 @@ class DocumentosController extends Controlador
         $nombre = trim(preg_replace('/\.pdf$/i', '', (string) $r->input('nombre', ''))) ?: 'Documento';
         $formulario = $r->input('formulario');
         $res = Documentos::crear($r->user(), $nombre, $r->file('original')->get(), $r->file('preparado')->get(), is_array($campos) ? $campos : [], $this->origen($r),
-            is_string($formulario) && $formulario !== '' ? $formulario : null);
+            is_string($formulario) && $formulario !== '' ? $formulario : null, (string) $r->input('idioma', 'es'));
         return response()->json($res, 201);
     }
 
@@ -45,7 +45,7 @@ class DocumentosController extends Controlador
 
     public function guardarContacto(Request $r, ?int $id = null)
     {
-        $c = Documentos::guardarContacto($r->user()->cuenta_id, $id, $r->only(['nombre', 'telefono', 'email']));
+        $c = Documentos::guardarContacto($r->user()->cuenta_id, $id, $r->only(['nombre', 'telefono', 'email', 'categoria']));
         return response()->json($c, $id === null ? 201 : 200);
     }
 
@@ -86,11 +86,12 @@ class DocumentosController extends Controlador
             'campos.*.nombrePdf' => 'nullable|string|max:200',
             'campos.*.bloqueado' => 'boolean',
             'bloquearDibujo' => 'boolean', 'bloquearSello' => 'boolean', 'flujo' => 'boolean', 'certificado' => 'boolean',
+            'idioma' => 'nullable|in:es,en',
         ], ['firmantes.*.nombre.*' => 'Escribe el nombre del firmante', 'firmantes.*.telefono.*' => 'Teléfono inválido', 'firmantes.*.email.*' => 'Correo inválido']);
         Documentos::guardar($r->user()->cuenta_id, $id, [
             'nombre' => trim($d['nombre']), 'orden' => $d['orden'], 'mensaje' => trim($d['mensaje'] ?? ''),
             'bloquearDibujo' => (bool) ($d['bloquearDibujo'] ?? false), 'bloquearSello' => (bool) ($d['bloquearSello'] ?? false),
-            'flujo' => (bool) ($d['flujo'] ?? false), 'certificado' => (bool) ($d['certificado'] ?? false),
+            'flujo' => (bool) ($d['flujo'] ?? false), 'certificado' => (bool) ($d['certificado'] ?? false), 'idioma' => $d['idioma'] ?? null,
             'firmantes' => array_map(fn ($f) => ['clave' => $f['clave'], 'nombre' => trim($f['nombre']), 'telefono' => trim($f['telefono'] ?? ''), 'email' => trim($f['email'] ?? ''),
                 'pedirDni' => (bool) ($f['pedirDni'] ?? false), 'modoTexto' => $f['modoTexto'] ?? 'asignados'], $d['firmantes']),
             'campos' => array_map(fn ($c) => [...$c, 'etiqueta' => trim($c['etiqueta'] ?? ''), 'obligatorio' => (bool) ($c['obligatorio'] ?? true), 'bloqueado' => (bool) ($c['bloqueado'] ?? false)], $d['campos']),
@@ -125,6 +126,24 @@ class DocumentosController extends Controlador
     public function duplicar(Request $r, int $id)
     {
         return response()->json(Documentos::duplicar($r->user(), $id, $this->origen($r)), 201);
+    }
+
+    public function enviarAVarios(Request $r, int $id)
+    {
+        $destinatarios = $r->input('destinatarios');
+        return Documentos::enviarAVarios($r->user(), $id, (int) $r->input('firmante', 1), is_array($destinatarios) ? array_filter($destinatarios, 'is_array') : [], $this->origen($r));
+    }
+
+    public function envios(Request $r, int $id)
+    {
+        return Documentos::enviosDePlantilla($r->user()->cuenta_id, $id);
+    }
+
+    public function zipFirmados(Request $r, int $id)
+    {
+        [$bytes, $nombre] = Documentos::zipFirmados($r->user()->cuenta_id, $id);
+        $limpio = substr(preg_replace('/[^\w.-]+/', '_', \Illuminate\Support\Str::ascii($nombre)), 0, 100) ?: 'firmados';
+        return response($bytes, 200, ['Content-Type' => 'application/zip', 'Content-Disposition' => "attachment; filename=\"{$limpio}.zip\"", 'Cache-Control' => 'private, no-store']);
     }
 
     public function destroy(Request $r, int $id)
