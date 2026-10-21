@@ -48,6 +48,9 @@ class CuentaController extends Controlador
     public function comprar(Request $r)
     {
         $d = $this->validar($r->all(), ['producto' => 'required|string|max:40'], ['producto.*' => 'Elige un plan']);
+        if (AuthController::esInvitado($r->user())) {
+            throw new \App\Servicios\ErrorUso('Crea tu cuenta para comprar un plan: así tus pagos y documentos quedan a tu nombre.', 403);
+        }
         return response()->json(MercadoPago::crearPago($r->user(), $d['producto']), 201);
     }
 

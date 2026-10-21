@@ -20,6 +20,7 @@ Route::prefix('api')->middleware(CabeceraAutograFlow::class)->group(function () 
     // Cuentas
     Route::post('auth/registro', [AuthController::class, 'registro']);
     Route::post('auth/ingresar', [AuthController::class, 'ingresar']);
+    Route::post('auth/invitado', [AuthController::class, 'invitado']);
     Route::post('auth/salir', [AuthController::class, 'salir']);
     Route::get('auth/yo', [AuthController::class, 'yo']);
     Route::post('auth/olvide', [AuthController::class, 'olvide']);

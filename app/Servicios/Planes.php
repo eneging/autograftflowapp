@@ -84,8 +84,14 @@ class Planes
             ->where('creado_en', '>=', self::inicioPeriodo(self::plan($plan)['periodo']))->count();
         return [
             'plan' => $plan, 'contratado' => isset(self::catalogo()['planes'][$c->plan]) ? $c->plan : 'gratis',
-            'vence' => $vence, 'creditos' => (int) $c->creditos, 'usados' => $usados,
+            'vence' => $vence, 'creditos' => (int) $c->creditos, 'usados' => $usados, 'invitado' => (bool) ($c->invitado ?? false),
         ];
+    }
+
+    /** Firmantes por documento: sin cuenta, el plan Gratis admite menos (firmantesSinCuenta). */
+    private static function maxFirmantes(array $p, bool $invitado): int
+    {
+        return $invitado && isset($p['firmantesSinCuenta']) ? (int) $p['firmantesSinCuenta'] : (int) $p['firmantesPorDocumento'];
     }
 
     /** Estado que ve el cliente en «Mi plan». */
@@ -98,7 +104,7 @@ class Planes
             'plan' => $d['plan'], 'planContratado' => $d['contratado'],
             'vence' => self::plan($d['plan'])['dias'] ? $d['vence']?->toIso8601ZuluString() : null,
             'usados' => $d['usados'], 'limite' => $limite, 'periodo' => $p['periodo'], 'creditos' => $d['creditos'],
-            'firmantesPorDocumento' => $p['firmantesPorDocumento'], 'selloHuella' => $p['selloHuella'],
+            'firmantesPorDocumento' => self::maxFirmantes($p, $d['invitado']), 'invitado' => $d['invitado'], 'selloHuella' => $p['selloHuella'],
             'disponibles' => $limite === null ? null : max(0, $limite - $d['usados']) + $d['creditos'],
             'usuarios' => $p['usuarios'], 'moneda' => config('autograflow.moneda'), 'pagosActivos' => MercadoPago::activo(),
         ];
@@ -112,8 +118,11 @@ class Planes
     {
         $d = self::datos($cuentaId, true);
         $p = self::plan($d['plan']);
-        if ($firmantes > $p['firmantesPorDocumento']) {
-            throw new ErrorUso("Tu plan {$p['nombre']} permite hasta {$p['firmantesPorDocumento']} firmantes por documento. Elige un plan para agregar más.", 402);
+        $max = self::maxFirmantes($p, $d['invitado']);
+        if ($firmantes > $max) {
+            throw new ErrorUso($d['invitado']
+                ? "Sin cuenta puedes usar {$max} solo firmante por documento. Crea tu cuenta gratis para usar hasta {$p['firmantesPorDocumento']}, o elige un plan para más."
+                : "Tu plan {$p['nombre']} permite hasta {$max} firmantes por documento. Elige un plan para agregar más.", 402);
         }
         if (! $p['selloHuella'] && array_intersect(['sello', 'huella'], $tipos)) {
             throw new ErrorUso("El sello y la huella están disponibles en los planes de pago. El plan {$p['nombre']} permite solo firmas.", 402);

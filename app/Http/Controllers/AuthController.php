@@ -20,8 +20,17 @@ class AuthController extends Controlador
     public static function usuario(User $u): array
     {
         $c = DB::table('cuentas')->find($u->cuenta_id);
-        return ['id' => $u->id, 'cuentaId' => $u->cuenta_id, 'nombre' => $u->name, 'email' => $u->email, 'cuenta' => $c->nombre,
-            'plan' => Planes::vigenteDe($c->id), 'titular' => Equipo::titularId($c->id) === $u->id];
+        $invitado = (bool) ($c->invitado ?? false);
+        return ['id' => $u->id, 'cuentaId' => $u->cuenta_id, 'nombre' => $u->name, 'email' => $invitado ? '' : $u->email, 'cuenta' => $c->nombre,
+            'plan' => Planes::vigenteDe($c->id), 'titular' => Equipo::titularId($c->id) === $u->id, 'invitado' => $invitado];
+    }
+
+    /** Cookie (cifrada por Laravel) con el usuario invitado de este navegador: así su cupo diario no se reinicia al volver a entrar. */
+    private const COOKIE_INVITADO = 'af_invitado';
+
+    public static function esInvitado(?User $u): bool
+    {
+        return $u !== null && (bool) DB::table('cuentas')->where('id', $u->cuenta_id)->value('invitado');
     }
 
     private function limitar(string $clave): void
@@ -43,15 +52,59 @@ class AuthController extends Controlador
         if (User::where('email', $d['email'])->exists()) {
             throw new ErrorUso('Ya existe una cuenta con ese correo', 409, ['email' => 'Ya registrado']);
         }
+        // Quien entró sin cuenta y ahora la crea conserva sus documentos: su cuenta de invitado pasa a ser la suya.
+        $actual = $r->user();
+        if (self::esInvitado($actual) && trim($d['codigoEquipo'] ?? '') === '') {
+            DB::transaction(function () use ($actual, $d) {
+                DB::table('cuentas')->where('id', $actual->cuenta_id)->update(['nombre' => trim($d['empresa'] ?? '') ?: trim($d['nombre']), 'invitado' => false, 'updated_at' => now()]);
+                $actual->forceFill(['name' => trim($d['nombre']), 'email' => $d['email'], 'password' => $d['clave'], 'terminos_aceptados_en' => now(), 'remember_token' => Str::random(60)])->save();
+            });
+            Auth::login($actual, true);
+            $r->session()->regenerate();
+            return response()->json(['ok' => true], 201)->withoutCookie(self::COOKIE_INVITADO);
+        }
         $u = DB::transaction(function () use ($d) {
             // Con código de organización (plan Empresarial) se une a esa cuenta; si no, crea la suya.
             $cuenta = trim($d['codigoEquipo'] ?? '') !== '' ? Equipo::cuentaPorCodigo($d['codigoEquipo'])
                 : DB::table('cuentas')->insertGetId(['nombre' => trim($d['empresa'] ?? '') ?: $d['nombre'], 'created_at' => now(), 'updated_at' => now()]);
-            return User::create(['cuenta_id' => $cuenta, 'name' => trim($d['nombre']), 'email' => $d['email'], 'password' => $d['clave']]);
+            $u = User::create(['cuenta_id' => $cuenta, 'name' => trim($d['nombre']), 'email' => $d['email'], 'password' => $d['clave']]);
+            $u->forceFill(['terminos_aceptados_en' => now()])->save();
+            return $u;
         });
         Auth::login($u, true);
         $r->session()->regenerate();
         return response()->json(['ok' => true], 201);
+    }
+
+    /**
+     * «Entrar sin cuenta»: reglas de Gratis (2 documentos diarios) con 1 firmante por documento.
+     * Hay que aceptar Términos y Privacidad en cada entrada. Se reutiliza el invitado de este navegador (cookie cifrada)
+     * para que salir y volver a entrar no regale documentos. La sesión no se recuerda al cerrar el navegador.
+     */
+    public function invitado(Request $r)
+    {
+        $this->validar($r->all(), ['acepto' => 'accepted'],
+            ['acepto.*' => 'Debes confirmar que has leído y aceptas los Términos y Condiciones y la Política de Privacidad para continuar.']);
+        $this->limitar('invitado:'.$r->ip());
+        $u = $r->user();
+        if ($u && ! self::esInvitado($u)) {
+            throw new ErrorUso('Ya iniciaste sesión con tu cuenta.', 409);
+        }
+        if (! $u) {
+            $id = (int) $r->cookie(self::COOKIE_INVITADO);
+            $u = $id ? User::find($id) : null;
+            if (! self::esInvitado($u)) {
+                $u = DB::transaction(function () {
+                    $cuenta = DB::table('cuentas')->insertGetId(['nombre' => 'Invitado', 'invitado' => true, 'created_at' => now(), 'updated_at' => now()]);
+                    return User::create(['cuenta_id' => $cuenta, 'name' => 'Invitado (sin cuenta)',
+                        'email' => 'invitado-'.Str::uuid().'@sin-cuenta.autograflow', 'password' => Str::random(40)]);
+                });
+            }
+        }
+        $u->forceFill(['terminos_aceptados_en' => now()])->save();
+        Auth::login($u);
+        $r->session()->regenerate();
+        return response()->json(['ok' => true])->cookie(self::COOKIE_INVITADO, (string) $u->id, 60 * 24 * 365);
     }
 
     public function ingresar(Request $r)
