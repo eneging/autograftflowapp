@@ -9,7 +9,7 @@ import { AvisoPrivacidad } from "../componentes/Marco";
 import { PantallaFirma, type TipoImagen } from "../componentes/PantallaFirma";
 import { ErrorApi, plataforma, urls, type TextoLibre } from "./api";
 import { calcularPdf, type ValoresPdf } from "./calculos";
-import { compartirArchivo } from "./Documento";
+import { BotonesPdfFirmado } from "./Documento";
 import { NavPaginas, PaginaPdf, posicion, usarPdf } from "./VisorPdf";
 
 type Campo = VistaFirmante["campos"][number];
@@ -75,12 +75,8 @@ function Terminado({ v, token }: { v: VistaFirmante; token: string }) {
           : sig ? `Ahora le toca a ${sig.nombre} (Firmante ${v.yo.orden + 1}).` : "Tu firma quedó registrada. Cuando firmen los demás, el documento estará listo."}
       </div>
       {completo && (
-        <div className="readyBar">
-          <button type="button" className="success" onClick={() => compartirArchivo(urls.finalFirmante(token), `${v.documento.nombre}_firmado`.replace(/\s+/g, "_"), `Documento firmado: ${v.documento.nombre}`)}>
-            💬 Enviar PDF firmado por WhatsApp
-          </button>
-          <a className="boton" href={urls.finalFirmante(token, true)}>⬇️ Descargar PDF firmado</a>
-        </div>
+        <BotonesPdfFirmado url={urls.finalFirmante(token)} urlDescarga={urls.finalFirmante(token, true)}
+          nombre={`${v.documento.nombre}_firmado`.replace(/\s+/g, "_")} texto={`Documento firmado: ${v.documento.nombre}`} />
       )}
       {!completo && sig && (
         <div className="siguiente">

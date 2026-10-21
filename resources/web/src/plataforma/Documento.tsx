@@ -31,21 +31,58 @@ export function DocumentoPagina() {
     : <Seguimiento key={d.id} d={d} recargar={() => plataforma.documento(id).then(setD)} />;
 }
 
-/** Comparte un PDF como archivo (menú del celular → WhatsApp) o, si no se puede, lo descarga. */
-export async function compartirArchivo(url: string, nombre: string, texto: string) {
+/** El navegador puede compartir archivos (celulares y algunos navegadores de computadora). */
+function puedeCompartirArchivos() {
   try {
-    const r = await fetch(url, { credentials: "same-origin" });
-    const archivo = new File([await r.blob()], `${nombre}.pdf`, { type: "application/pdf" });
-    if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [archivo] }))) {
-      await navigator.share({ title: nombre, text: texto, files: [archivo] });
-      return;
-    }
-  } catch (e) {
-    if ((e as Error)?.name === "AbortError") return;
+    return !!navigator.share && (!navigator.canShare || navigator.canShare({ files: [new File([""], "x.pdf", { type: "application/pdf" })] }));
+  } catch {
+    return false;
   }
-  const a = document.createElement("a");
-  a.href = `${url}${url.includes("?") ? "&" : "?"}descargar=1`;
-  a.click();
+}
+
+/**
+ * Compartir por WhatsApp, separado de «Descargar» (no descarga nada): donde se puede, abre el menú de compartir con el PDF
+ * como archivo (se elige WhatsApp); si no (computadora), abre WhatsApp con el mensaje para adjuntar ahí el PDF.
+ */
+export async function compartirArchivo(url: string, nombre: string, texto: string): Promise<"compartido" | "cancelado" | "soloMensaje"> {
+  if (puedeCompartirArchivos()) {
+    try {
+      const r = await fetch(url, { credentials: "same-origin" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const archivo = new File([await r.blob()], `${nombre}.pdf`, { type: "application/pdf" });
+      await navigator.share({ title: nombre, text: texto, files: [archivo] });
+      return "compartido";
+    } catch (e) {
+      if ((e as Error)?.name === "AbortError") return "cancelado";
+    }
+  }
+  window.open(enlaceWhatsApp(texto), "_blank", "noopener,noreferrer");
+  return "soloMensaje";
+}
+
+/** Botones del PDF firmado: descargar y compartir por WhatsApp, cada uno por separado. */
+export function BotonesPdfFirmado({ url, urlDescarga, nombre, texto, disponible = true }: {
+  url: string; urlDescarga: string; nombre: string; texto: string; disponible?: boolean;
+}) {
+  const [aviso, setAviso] = useState("");
+  const [compartiendo, setCompartiendo] = useState(false);
+  return (
+    <>
+      <div className="readyBar botonesPdf">
+        {disponible
+          ? <a className="boton primary" href={urlDescarga}>⬇️ Descargar PDF</a>
+          : <button type="button" className="primary" disabled title="El PDF final todavía no se pudo generar">⬇️ Descargar PDF</button>}
+        <button type="button" className="green" disabled={!disponible || compartiendo} onClick={async () => {
+          setCompartiendo(true);
+          setAviso("");
+          const r = await compartirArchivo(url, nombre, texto);
+          setCompartiendo(false);
+          if (r === "soloMensaje") setAviso("Se abrió WhatsApp con el mensaje. Desde la computadora no se puede adjuntar el archivo automáticamente: descarga el PDF con «Descargar PDF» y adjúntalo en el chat.");
+        }}>{compartiendo ? "Preparando…" : "💬 Compartir por WhatsApp"}</button>
+      </div>
+      {aviso && <p className="small afExtraHint">{aviso}</p>}
+    </>
+  );
 }
 
 function Seguimiento({ d, recargar }: { d: DocumentoDetalle; recargar: () => void }) {
@@ -67,6 +104,8 @@ function Seguimiento({ d, recargar }: { d: DocumentoDetalle; recargar: () => voi
     }
   }
   const firmados = d.firmantes.filter((f) => f.estado === "firmado").length;
+  // Todos firmaron pero el servidor aún no pudo armar el PDF final.
+  const pdfPendiente = d.estado === "en_firma" && d.firmantes.length > 0 && firmados === d.firmantes.length;
   const totalPaginas = completo ? (doc?.numPages ?? d.paginas.length) : d.paginas.length;
   const tamano = d.paginas[pagina - 1] ?? { ancho: 612, alto: 792 }; // las páginas del certificado son tamaño carta
   const nombreArchivo = `${d.nombre}_firmado`.replace(/\s+/g, "_");
@@ -92,12 +131,16 @@ function Seguimiento({ d, recargar }: { d: DocumentoDetalle; recargar: () => voi
           {d.completadoEn && <> · completado {fechaHora(d.completadoEn)}</>}
           <div className="progreso"><span style={{ width: `${(firmados / Math.max(1, d.firmantes.length)) * 100}%` }} /></div>
         </div>
-
-        {completo && (
-          <div className="readyBar">
-            <button type="button" className="success" onClick={() => compartirArchivo(urls.final(d.id), nombreArchivo, `Documento firmado: ${d.nombre}`)}>💬 Enviar PDF firmado por WhatsApp</button>
-            <a className="boton" href={urls.final(d.id, true)}>⬇️ Descargar PDF firmado</a>
+        {/* Todos firmaron pero el servidor no pudo armar el PDF final: se reintenta cada vez que se abre esta página. */}
+        {pdfPendiente && (
+          <div className="afAlerta" role="alert">
+            Todos firmaron, pero aún no se pudo generar el PDF final. Se vuelve a intentar cada vez que abres esta página.
+            Si sigue igual, avisa al administrador del sistema (en el servidor falta la extensión GD o Imagick de PHP).
           </div>
+        )}
+
+        {(completo || pdfPendiente) && (
+          <BotonesPdfFirmado url={urls.final(d.id)} urlDescarga={urls.final(d.id, true)} nombre={nombreArchivo} texto={`Documento firmado: ${d.nombre}`} disponible={completo} />
         )}
 
         <h2>Firmantes {d.orden === "secuencial" ? "(en orden)" : "(todos a la vez)"}</h2>
