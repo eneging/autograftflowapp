@@ -4,7 +4,7 @@ import { ETIQUETA_ESTADO, LIMITES_PLATAFORMA, type EstadoDocumento } from "../..
 import type { EstadoCuenta } from "../../../shared/planes";
 import { plataforma, type FilaDocumento } from "./api";
 import { usarSesion } from "./sesion";
-import { CupoPanel } from "./Planes";
+import { AvisoInvitado, CupoPanel } from "./Planes";
 
 export const InsigniaDoc = ({ estado }: { estado: EstadoDocumento }) => <span className={`insignia doc-${estado}`}>{ETIQUETA_ESTADO[estado]}</span>;
 export const fechaHora = (iso: string | null) =>
@@ -46,8 +46,9 @@ export function Panel() {
     <>
       <div className="card">
         <h1>Preparar documento</h1>
-        <p>Hola, {usuario?.nombre}. Sube un PDF, marca dónde firma cada persona y envíalo por WhatsApp.</p>
+        <p>Hola{usuario && !usuario.invitado ? `, ${usuario.nombre}` : ""}. Sube un PDF, marca dónde firma cada persona y envíalo por WhatsApp.</p>
         <CupoPanel estado={estado} />
+        {usuario?.invitado && <AvisoInvitado />}
         <div className="step">
           <div className="stepTitle"><span className="stepNumber">1</span>Documento PDF</div>
           <div

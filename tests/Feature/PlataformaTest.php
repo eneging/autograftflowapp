@@ -83,7 +83,7 @@ class PlataformaTest extends TestCase
     private function preparar(int $id, int $firmantes = 2, string $orden = 'secuencial', string $tipoExtra = ''): void
     {
         $f = array_map(fn ($i) => ['clave' => "f{$i}", 'nombre' => 'Persona '.($i + 1), 'telefono' => '+51 900 000 00'.$i, 'email' => "p{$i}@ejemplo.com"], range(0, $firmantes - 1));
-        $campos = [['firmante' => 'f0', 'tipo' => 'texto', 'pagina' => 1, 'x' => 190, 'y' => 349, 'w' => 250, 'h' => 18, 'etiqueta' => 'Nombre', 'obligatorio' => true]];
+        $campos = [['firmante' => 'f0', 'tipo' => 'texto', 'pagina' => 1, 'x' => 190, 'y' => 349, 'w' => 250, 'h' => 18, 'etiqueta' => 'Nombre', 'obligatorio' => true, 'nombrePdf' => 'Nombre']];
         foreach ($f as $i => $x) {
             $campos[] = ['firmante' => $x['clave'], 'tipo' => 'firma', 'pagina' => 2, 'x' => 60 + 280 * $i, 'y' => 540, 'w' => 180, 'h' => 50, 'etiqueta' => '', 'obligatorio' => true];
         }
@@ -260,6 +260,69 @@ class PlataformaTest extends TestCase
         $this->assertCount(4, $this->getJson('/api/cuenta/equipo')->json('miembros'));
         // Registrarse sin aceptar los términos no se permite
         $this->postJson('/api/auth/registro', ['nombre' => 'Sin Términos', 'email' => 'sin@ejemplo.com', 'clave' => 'clave-segura-1'], self::H)->assertStatus(400);
+    }
+
+    public function test_entrar_sin_cuenta(): void
+    {
+        // Hay que aceptar los Términos en cada entrada
+        $this->postJson('/api/auth/invitado', [], self::H)->assertStatus(400);
+        $this->postJson('/api/auth/invitado', ['acepto' => true], self::H)->assertOk()->assertCookie('af_invitado');
+        $yo = $this->getJson('/api/auth/yo')->assertJson(['invitado' => true, 'email' => '', 'plan' => 'gratis'])->json();
+        $this->assertNotNull(DB::table('users')->where('id', $yo['id'])->value('terminos_aceptados_en'));
+        $this->getJson('/api/cuenta')->assertJson(['estado' => ['plan' => 'gratis', 'invitado' => true, 'firmantesPorDocumento' => 1, 'limite' => 2]]);
+
+        // Sin cuenta: 1 firmante por documento y no se pueden comprar planes
+        $id = $this->subir();
+        $this->preparar($id, 2);
+        $this->postJson("/api/documentos/{$id}/enviar", [], self::H)->assertStatus(402)->assertJsonPath('error', fn ($e) => str_contains($e, 'Sin cuenta'));
+        $this->preparar($id, 1);
+        $this->postJson("/api/documentos/{$id}/enviar", [], self::H)->assertOk();
+        $this->postJson('/api/pagos', ['producto' => 'profesional'], self::H)->assertStatus(403);
+
+        // Volver a entrar desde el mismo navegador reutiliza al invitado (su cupo del día no se reinicia)
+        $this->postJson('/api/auth/salir', [], self::H);
+        Auth::forgetGuards();
+        $this->withCredentials()->withCookie('af_invitado', (string) $yo['id'])->postJson('/api/auth/invitado', ['acepto' => true], self::H)->assertOk();
+        $this->getJson('/api/auth/yo')->assertJson(['id' => $yo['id'], 'invitado' => true]);
+
+        // Al crear la cuenta conserva sus documentos y deja de ser invitado
+        $this->postJson('/api/auth/registro', ['nombre' => 'Ana Torres', 'email' => 'ana@ejemplo.com', 'clave' => 'clave-segura-1', 'acepto' => true], self::H)->assertCreated();
+        $this->getJson('/api/auth/yo')->assertJson(['id' => $yo['id'], 'invitado' => false, 'email' => 'ana@ejemplo.com', 'nombre' => 'Ana Torres']);
+        $this->getJson('/api/documentos')->assertJsonPath('0.id', $id);
+        $this->getJson('/api/cuenta')->assertJson(['estado' => ['invitado' => false, 'firmantesPorDocumento' => 2]]);
+        // Con cuenta ya no se puede entrar como invitado sin salir antes
+        $this->postJson('/api/auth/invitado', ['acepto' => true], self::H)->assertStatus(409);
+    }
+
+    public function test_texto_del_firmante_y_campos_bloqueados(): void
+    {
+        $this->registrar()->assertCreated();
+        $id = $this->subir();
+        $f = [['clave' => 'f0', 'nombre' => 'Ana', 'modoTexto' => 'libre'], ['clave' => 'f1', 'nombre' => 'Luis', 'modoTexto' => 'solo']];
+        $firmas = array_map(fn ($i) => ['firmante' => "f{$i}", 'tipo' => 'firma', 'pagina' => 2, 'x' => 60 + 280 * $i, 'y' => 540, 'w' => 180, 'h' => 50, 'etiqueta' => '', 'obligatorio' => true], [0, 1]);
+        $pdf = ['tipo' => 'texto', 'pagina' => 1, 'x' => 190, 'y' => 349, 'w' => 250, 'h' => 18, 'etiqueta' => 'Nombre', 'obligatorio' => true, 'nombrePdf' => 'Nombre'];
+        $guardar = fn (array $campos) => $this->putJson("/api/documentos/{$id}", ['nombre' => 'Contrato', 'orden' => 'secuencial', 'mensaje' => '', 'firmantes' => $f, 'campos' => $campos], self::H);
+
+        // Quien «solo firma» no puede tener campos de texto
+        $guardar([...$firmas, [...$pdf, 'firmante' => 'f1']])->assertStatus(400);
+        // Un campo bloqueado queda vacío y sin firmante, aunque se mande con valor o asignado
+        $guardar([...$firmas, [...$pdf, 'firmante' => 'f0', 'bloqueado' => true, 'valor' => 'X']])->assertOk();
+        $det = $this->getJson("/api/documentos/{$id}")->assertJsonPath('firmantes.0.modoTexto', 'libre')->assertJsonPath('firmantes.1.modoTexto', 'solo')->json();
+        $bloqueado = collect($det['campos'])->firstWhere('nombrePdf', 'Nombre');
+        $this->assertEquals(['bloqueado' => true, 'firmante' => 'preparador', 'valor' => null], array_intersect_key($bloqueado, array_flip(['bloqueado', 'firmante', 'valor'])));
+
+        // Gratis: texto libre (o cuadros nuevos) requiere un plan de pago
+        $this->postJson("/api/documentos/{$id}/enviar", [], self::H)->assertStatus(402)->assertJsonPath('error', fn ($e) => str_contains($e, 'texto libre'));
+        MercadoPago::activarManual(DB::table('users')->where('email', 'ana@ejemplo.com')->value('cuenta_id'), 'profesional');
+        $t0 = collect($this->postJson("/api/documentos/{$id}/enviar", [], self::H)->assertOk()->json('firmantes'))->firstWhere('orden', 1)['token'];
+
+        // El firmante con texto libre agrega su texto al firmar; queda como campo suyo, ya lleno
+        $v = $this->getJson("/api/firmar/{$t0}")->assertJsonPath('yo.modoTexto', 'libre')->json();
+        $valores = collect($v['campos'])->where('mio', true)->mapWithKeys(fn ($c) => [(string) $c['id'] => $this->firmaDataUrl()])->all();
+        $this->postJson("/api/firmar/{$t0}", ['valores' => $valores, 'libres' => [['pagina' => 1, 'x' => 50, 'y' => 60, 'w' => 120, 'h' => 16, 'texto' => 'Recibí conforme']]], self::H)->assertOk();
+        $libre = collect($this->getJson("/api/documentos/{$id}")->json('campos'))->firstWhere('libre', true);
+        $this->assertSame('Recibí conforme', $libre['valor']);
+        $this->assertSame('texto', $libre['tipo']);
     }
 
     public function test_logo_plantillas_y_marca_del_plan_gratis(): void

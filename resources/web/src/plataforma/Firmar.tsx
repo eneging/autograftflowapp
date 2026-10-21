@@ -7,7 +7,7 @@ import { EncuadrarDni } from "../componentes/Dni";
 import { EncajarHuella } from "../componentes/Huella";
 import { AvisoPrivacidad } from "../componentes/Marco";
 import { PantallaFirma, type TipoImagen } from "../componentes/PantallaFirma";
-import { ErrorApi, plataforma, urls } from "./api";
+import { ErrorApi, plataforma, urls, type TextoLibre } from "./api";
 import { calcularPdf, type ValoresPdf } from "./calculos";
 import { compartirArchivo } from "./Documento";
 import { NavPaginas, PaginaPdf, posicion, usarPdf } from "./VisorPdf";
@@ -109,6 +109,10 @@ function Llenar({ v, token, alTerminar }: { v: VistaFirmante; token: string; alT
   const [editando, setEditando] = useState<Campo | null>(null);
   const [imagenDe, setImagenDe] = useState<Campo | null>(null);
   const [errores, setErrores] = useState<Record<number, string>>({});
+  // Texto libre: solo si quien preparó el documento lo permitió («Completar campos y agregar texto libre»).
+  const textoLibre = v.yo.modoTexto === "libre";
+  const [libres, setLibres] = useState<TextoLibre[]>([]);
+  const [colocandoLibre, setColocandoLibre] = useState(false);
   const [revisando, setRevisando] = useState(false);
   const [rechazando, setRechazando] = useState(false);
   const [motivo, setMotivo] = useState("");
@@ -125,8 +129,9 @@ function Llenar({ v, token, alTerminar }: { v: VistaFirmante; token: string; alT
   const fotoCamara = useRef<HTMLInputElement>(null);
   const fotoSubir = useRef<HTMLInputElement>(null);
   const datos = mios.filter((c) => TIPOS_DATO.includes(c.tipo));
-  // «Convertir en Flujo»: primero el formulario guiado con los datos; después, el documento para firmar.
-  const [etapa, setEtapa] = useState<"formulario" | "documento">(v.documento.flujo && datos.length ? "formulario" : "documento");
+  // «Convertir en Flujo» (como el prototipo): primero ve el documento, luego llena sus datos en un formulario guiado y al
+  // final firma. Mientras no termine el formulario no aparecen los botones de firma ni los pasos del DNI.
+  const [etapa, setEtapa] = useState<"inicio" | "formulario" | "documento">(v.documento.flujo && datos.length ? "inicio" : "documento");
 
   // Campos ƒx: los scripts del PDF se ejecutan con lo llenado por todos hasta ahora (lo mío, lo de los demás y lo del preparador).
   const calculados = useMemo(() => v.campos.filter((c) => c.tipo === "calculo" && c.nombrePdf), [v]);
@@ -193,7 +198,9 @@ function Llenar({ v, token, alTerminar }: { v: VistaFirmante; token: string; alT
     if (faltantes.length) {
       setErrores(Object.fromEntries(faltantes.map((c) => [c.id, "Falta"])));
       alert(`Completa: ${faltantes.slice(0, 5).map((c) => c.etiqueta || ETIQUETA_TIPO[c.tipo]).join(", ")}${faltantes.length > 5 ? "…" : ""}.`);
-      abrir(faltantes[0]);
+      // Con Flujo, los datos que faltan se completan en el formulario.
+      if (v.documento.flujo && TIPOS_DATO.includes(faltantes[0].tipo)) { setEtapa("formulario"); window.scrollTo({ top: 0 }); }
+      else abrir(faltantes[0]);
       return;
     }
     setErrores({});
@@ -209,7 +216,7 @@ function Llenar({ v, token, alTerminar }: { v: VistaFirmante; token: string; alT
       if (v.documento.certificado) evidencias.ubicacion = await pedirUbicacion();
       // Último cálculo con los datos definitivos (si el entorno del PDF no carga, se envía sin cálculos).
       const calculos = await calcular().catch(() => calculo);
-      await plataforma.firmar(token, Object.fromEntries(mios.map((c) => [String(c.id), valores[c.id] ?? (c.tipo === "casilla" ? false : "")])), evidencias, calculos);
+      await plataforma.firmar(token, Object.fromEntries(mios.map((c) => [String(c.id), valores[c.id] ?? (c.tipo === "casilla" ? false : "")])), evidencias, calculos, libres);
       alTerminar();
     } catch (e) {
       if (e instanceof ErrorApi && e.campos) setErrores(Object.fromEntries(Object.entries(e.campos).map(([k, m]) => [Number(k), m])));
@@ -238,13 +245,34 @@ function Llenar({ v, token, alTerminar }: { v: VistaFirmante; token: string; alT
     return t ? <span className="afTextShown">{t}</span> : null;
   };
 
+  /** Toca el documento donde va el texto libre y escríbelo. */
+  function ponerLibre(punto: { x: number; y: number }) {
+    setColocandoLibre(false);
+    const texto = prompt("Escribe el texto que quieres agregar en ese lugar:")?.trim();
+    if (!texto) return;
+    const h = 16, w = Math.min(p.ancho, Math.max(60, texto.length * 5.6 + 10));
+    setLibres((ls) => [...ls, { pagina, texto: texto.slice(0, 500), w, h, x: Math.min(Math.max(0, punto.x - 4), p.ancho - w), y: Math.min(Math.max(0, punto.y - h / 2), p.alto - h) }]);
+  }
+  function editarLibre(i: number) {
+    const t = prompt("Cambia tu texto (déjalo vacío para quitarlo):", libres[i].texto);
+    if (t === null) return;
+    setLibres((ls) => (t.trim() ? ls.map((l, j) => (j === i ? { ...l, texto: t.trim().slice(0, 500), w: Math.min(p.ancho - l.x, Math.max(60, t.trim().length * 5.6 + 10)) } : l)) : ls.filter((_, j) => j !== i)));
+  }
+
   const vistaPagina = (interactivo: boolean) => (
-    <PaginaPdf doc={doc} numero={pagina} pagina={p}>
+    <PaginaPdf doc={doc} numero={pagina} pagina={p} alTocar={interactivo && colocandoLibre ? ponerLibre : undefined} cursor={interactivo && colocandoLibre ? "crosshair" : undefined}>
+      {libres.map((l, i) => l.pagina !== pagina ? null : interactivo ? (
+        <button type="button" key={`l${i}`} className="campoFirma tipo-texto mio filled afLibre" style={{ ...posicion(l, p), "--c": v.yo.color } as CSSProperties}
+          title="Tu texto adicional: tócalo para cambiarlo o quitarlo" onClick={() => editarLibre(i)}><span className="afTextShown">{l.texto}</span></button>
+      ) : (
+        <div key={`l${i}`} className="campoFirma tipo-texto mio filled afLibre" style={{ ...posicion(l, p), "--c": v.yo.color } as CSSProperties}><span className="afTextShown">{l.texto}</span></div>
+      ))}
       {v.campos.filter((c) => c.pagina === pagina).map((c) => {
         const contenido = contenidoCampo(c);
         const clase = `campoFirma tipo-${c.tipo} ${c.mio ? "mio" : "otro"} ${contenido ? "filled" : ""} ${errores[c.id] ? "invalido" : ""}`;
         const estilo = { ...posicion(c, p), "--c": v.yo.color } as CSSProperties;
-        return c.mio && interactivo ? (
+        // Con Flujo, los datos ya se llenaron en el formulario: en el documento quedan solo para ver.
+        return c.mio && interactivo && !(v.documento.flujo && TIPOS_DATO.includes(c.tipo)) ? (
           <button type="button" key={c.id} data-campo={c.id} className={clase} style={estilo} onClick={() => abrir(c)} title={c.etiqueta || ETIQUETA_TIPO[c.tipo]}
             aria-label={c.etiqueta || ETIQUETA_TIPO[c.tipo]}
             data-vacio={TIPOS_IMAGEN.includes(c.tipo) ? (c.tipo === "firma" ? "FIRMA AQUÍ" : c.tipo === "sello" ? "SELLO" : "HUELLA") : undefined}>
@@ -346,7 +374,16 @@ function Llenar({ v, token, alTerminar }: { v: VistaFirmante; token: string; alT
         <h3>{v.documento.nombre}</h3>
         <AvisoPrivacidad />
 
-        {pedirDni && (
+        {etapa === "inicio" && (
+          <>
+            <div className="notice">Revisa el documento. Después completarás tus datos en un formulario guiado y, al terminar, {pedirDni ? "capturarás tu DNI y firmarás" : "firmarás"}.</div>
+            <div className="readyBar">
+              <button type="button" className="primary" onClick={() => { setEtapa("formulario"); window.scrollTo({ top: 0 }); }}>✍️ Empezar a llenar el documento</button>
+            </div>
+          </>
+        )}
+
+        {etapa === "documento" && pedirDni && (
           <section className="dniCaptureSteps">
             <div className="notice dniAviso"><strong>🪪 Firma manuscrita y evidencia del DNI</strong><br />
               Captura el frente de tu DNI, fotografía o sube tu firma hecha en papel, captura el reverso y ajusta la huella. Las fotos no validan tu identidad ante RENIEC ni son una firma digital certificada.</div>
@@ -373,7 +410,7 @@ function Llenar({ v, token, alTerminar }: { v: VistaFirmante; token: string; alT
           </section>
         )}
 
-        <div className="readyBar">
+        {etapa === "documento" && <><div className="readyBar">
           {v.documento.flujo && datos.length > 0
             ? <button type="button" onClick={() => { setEtapa("formulario"); window.scrollTo({ top: 0 }); }}>✏️ Volver al formulario de datos</button>
             : textos.length > 0 && <button type="button" className="primary" onClick={() => abrir(textos.find((c) => !lleno(c)) ?? textos[0])}>✍️ Empezar a llenar mis datos</button>}
@@ -386,11 +423,18 @@ function Llenar({ v, token, alTerminar }: { v: VistaFirmante; token: string; alT
         <div className="readyBar">
           <button type="button" className="success" onClick={revisar}>✓ Revisar y continuar</button>
           {faltantes.length > 0 && <small className="afExtraHint">Faltan {faltantes.length} campo(s) obligatorio(s).</small>}
-        </div>
+        </div></>}
 
         <NavPaginas actual={pagina} total={v.documento.paginas.length} alCambiar={setPagina} />
         {errorPdf && <div className="afAlerta">{errorPdf}</div>}
-        <div className="preview">{vistaPagina(true)}</div>
+        {colocandoLibre && <div className="avisoColocar">👆 Toca el documento donde quieres agregar tu texto. <button type="button" className="enlace" onClick={() => setColocandoLibre(false)}>Cancelar</button></div>}
+        <div className="preview">{vistaPagina(etapa === "documento")}</div>
+        {textoLibre && etapa === "documento" && (
+          <div className="afExtraTextRow">
+            <button type="button" className={colocandoLibre ? "primary" : ""} onClick={() => setColocandoLibre(!colocandoLibre)}>➕ Agregar texto adicional</button>
+            <p className="afExtraHint">Úsalo solo para agregar algo extra que no tenga un campo en el documento.{libres.length ? ` Agregaste ${libres.length}: tócalos para cambiarlos o quitarlos.` : ""}</p>
+          </div>
+        )}
         <div className="afExtraTextRow">
           <button type="button" className="danger" onClick={() => setRechazando(true)}>✕ No estoy de acuerdo, rechazar</button>
         </div>

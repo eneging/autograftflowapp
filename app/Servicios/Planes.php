@@ -114,7 +114,7 @@ class Planes
      * Al enviar un documento (dentro de la transacción): comprueba los límites del plan (firmantes, sello y huella)
      * y descuenta un documento, primero del cupo del periodo y después de los créditos.
      */
-    public static function consumirEnvio(int $cuentaId, int $documentoId, int $firmantes, array $tipos = []): void
+    public static function consumirEnvio(int $cuentaId, int $documentoId, int $firmantes, array $tipos = [], bool $textoPropio = false): void
     {
         $d = self::datos($cuentaId, true);
         $p = self::plan($d['plan']);
@@ -126,6 +126,9 @@ class Planes
         }
         if (! $p['selloHuella'] && array_intersect(['sello', 'huella'], $tipos)) {
             throw new ErrorUso("El sello y la huella están disponibles en los planes de pago. El plan {$p['nombre']} permite solo firmas.", 402);
+        }
+        if (! $p['selloHuella'] && $textoPropio) {
+            throw new ErrorUso("En el plan {$p['nombre']} puedes llenar los campos que ya trae el PDF. Para agregar cuadros de texto nuevos o permitir texto libre, elige un plan de pago.", 402);
         }
         $origen = self::origen($d['usados'], $p['documentos'], $d['creditos']);
         if (! $origen) {

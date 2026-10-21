@@ -14,8 +14,9 @@ export function usarCompra() {
   const [comprando, setComprando] = useState<string | null>(null);
   const [error, setError] = useState("");
   async function comprar(plan: IdPlan) {
-    if (!usuario) return navegar(`/registro?plan=${plan}`);
-    if (plan === "gratis") return navegar("/app");
+    if (usuario && plan === "gratis") return navegar("/app");
+    // Sin cuenta (o como invitado) se crea la cuenta primero; el invitado conserva sus documentos al crearla.
+    if (!usuario || usuario.invitado) return navegar(`/registro?plan=${plan}`);
     setComprando(plan);
     setError("");
     try {
@@ -72,7 +73,9 @@ export function ElegirPlan({ c, actual, inicial }: { c: Catalogo; actual?: IdPla
   const { usuario } = usarSesion();
   const [elegido, setElegido] = useState<IdPlan | null>(inicial ?? null);
   const { comprar, comprando, error } = usarCompra();
+  const navegar = useNavigate();
   const plan = elegido ? c.planes.find((p) => p.id === elegido) : null;
+  const conCuenta = !!usuario && !usuario.invitado;
   return (
     <>
       <GrillaPlanes c={c} elegido={elegido} alElegir={setElegido} actual={actual} />
@@ -80,8 +83,12 @@ export function ElegirPlan({ c, actual, inicial }: { c: Catalogo; actual?: IdPla
       <div className="planAction">
         <button type="button" className={plan?.id === "gratis" && usuario ? "success" : "primary"} disabled={!plan || comprando !== null}
           onClick={() => plan && comprar(plan.id)}>
-          {comprando ? "Abriendo Mercado Pago…" : plan ? textoAccion(plan, !!usuario, actual, c.moneda) : "Elige un plan"}
+          {comprando ? "Abriendo Mercado Pago…" : plan ? textoAccion(plan, conCuenta || (!!usuario && plan.id === "gratis"), actual, c.moneda) : "Elige un plan"}
         </button>
+        {/* Gratis sin cuenta: se entra aceptando los Términos (en cada entrada). */}
+        {plan?.id === "gratis" && !usuario && (
+          <button type="button" className="success" onClick={() => navegar("/sin-cuenta")}>🚀 Entrar sin cuenta</button>
+        )}
       </div>
       {error && <div className="afAlerta centro" role="alert">{error}</div>}
       <div className="demoNote">
@@ -110,6 +117,7 @@ export function MiPlan() {
       <div className="card">
         <div className="sidePanelHead"><div><h1>📋 Mi Plan</h1><p className="small">Estado de tu plan y de tus documentos.</p></div></div>
         {vencido && <div className="afAlerta">Tu plan {PLANES[e.planContratado].nombre} venció. Renuévalo abajo para recuperar sus beneficios.</div>}
+        {e.invitado && <AvisoInvitado />}
         <div className="kpiGrid">
           <div className="kpiCard"><div className="kpiVal">{plan.icono} {plan.nombre}</div><div className="kpiLbl">Tipo de plan</div></div>
           <div className="kpiCard"><div className="kpiVal">{e.vence ? fechaHora(e.vence).slice(0, 10) : plan.dias === null && e.plan !== "gratis" ? "No vence" : "—"}</div><div className="kpiLbl">Vencimiento</div></div>
@@ -197,6 +205,16 @@ export function ResultadoPago() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/** Aviso para quien entró sin cuenta: límites y cómo crear la cuenta sin perder lo hecho. */
+export function AvisoInvitado() {
+  return (
+    <div className="guestAltRow">
+      Entraste <strong>sin cuenta</strong>: 2 documentos diarios y 1 firmante por documento. Crea tu cuenta gratis para usar hasta {PLANES.gratis.firmantesPorDocumento} firmantes
+      o comprar un plan; conservarás los documentos que preparaste. <Link to="/registro">Crear mi cuenta →</Link>
     </div>
   );
 }

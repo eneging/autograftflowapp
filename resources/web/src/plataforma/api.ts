@@ -24,7 +24,8 @@ async function pedir<T>(url: string, opciones: RequestInit = {}): Promise<T> {
 }
 const json = (metodo: string, datos?: unknown): RequestInit => ({ method: metodo, body: datos === undefined ? undefined : JSON.stringify(datos) });
 
-export interface Usuario { id: number; cuentaId: number; nombre: string; email: string; cuenta: string; plan: IdPlan; titular: boolean }
+/** invitado: entró «sin cuenta» (Gratis, 1 firmante); su email llega vacío. */
+export interface Usuario { id: number; cuentaId: number; nombre: string; email: string; cuenta: string; plan: IdPlan; titular: boolean; invitado: boolean }
 export interface Contacto { nombre: string; telefono: string; email: string; documentos: number; firmados: number; ultimo: string | null }
 export interface Equipo {
   nombre: string; plazas: number; activo: boolean; soyTitular: boolean; codigo: string | null;
@@ -38,6 +39,7 @@ export const plataforma = {
   yo: () => pedir<Usuario>("/api/auth/yo"),
   registrar: (d: { nombre: string; empresa: string; email: string; clave: string; acepto: boolean; codigoEquipo: string }) => pedir("/api/auth/registro", json("POST", d)),
   ingresar: (d: { email: string; clave: string }) => pedir("/api/auth/ingresar", json("POST", d)),
+  invitado: (acepto: boolean) => pedir("/api/auth/invitado", json("POST", { acepto })),
   salir: () => pedir("/api/auth/salir", json("POST", {})),
   olvide: (email: string) => pedir("/api/auth/olvide", json("POST", { email })),
   restablecer: (d: { email: string; token: string; clave: string }) => pedir("/api/auth/restablecer", json("POST", d)),
@@ -75,10 +77,13 @@ export const plataforma = {
   verificarPago: (id: number) => pedir<PagoFila>(`/api/pagos/${id}/verificar`, json("POST", {})),
 
   vista: (token: string) => pedir<VistaFirmante>(`/api/firmar/${encodeURIComponent(token)}`),
-  firmar: (token: string, valores: Record<string, string | boolean>, evidencias: Evidencias = {}, calculos: Record<string, string> = {}) =>
-    pedir<{ completo: boolean }>(`/api/firmar/${encodeURIComponent(token)}`, json("POST", { valores, evidencias, calculos })),
+  firmar: (token: string, valores: Record<string, string | boolean>, evidencias: Evidencias = {}, calculos: Record<string, string> = {}, libres: TextoLibre[] = []) =>
+    pedir<{ completo: boolean }>(`/api/firmar/${encodeURIComponent(token)}`, json("POST", { valores, evidencias, calculos, libres })),
   rechazar: (token: string, motivo: string) => pedir(`/api/firmar/${encodeURIComponent(token)}/rechazar`, json("POST", { motivo })),
 };
+
+/** Texto libre que agrega el firmante (en puntos PDF, como los campos). */
+export interface TextoLibre { pagina: number; x: number; y: number; w: number; h: number; texto: string }
 
 export interface Catalogo { planes: Plan[]; notaIlimitado: string; moneda: string; pagosActivos: boolean }
 

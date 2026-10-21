@@ -146,7 +146,7 @@ class Documentos
             'creadoEn' => Fechas::iso($d->created_at), 'enviadoEn' => Fechas::iso($d->enviado_en), 'completadoEn' => Fechas::iso($d->completado_en),
             'firmantes' => DB::table('firmantes')->where('documento_id', $id)->orderBy('orden')->get()->map(fn ($f) => [
                 'id' => $f->id, 'clave' => $clave($f->id), 'orden' => $f->orden, 'nombre' => $f->nombre, 'telefono' => $f->telefono, 'email' => $f->email,
-                'pedirDni' => (bool) $f->pedir_dni, 'color' => $f->color, 'token' => $f->token, 'estado' => $f->estado, 'abiertoEn' => Fechas::iso($f->abierto_en),
+                'pedirDni' => (bool) $f->pedir_dni, 'modoTexto' => $f->modo_texto ?? 'asignados', 'color' => $f->color, 'token' => $f->token, 'estado' => $f->estado, 'abiertoEn' => Fechas::iso($f->abierto_en),
                 'firmadoEn' => Fechas::iso($f->firmado_en), 'motivoRechazo' => $f->motivo_rechazo,
             ])->all(),
             'campos' => DB::table('campos')->where('documento_id', $id)->orderBy('id')->get()->map(fn ($c) => [
@@ -154,6 +154,7 @@ class Documentos
                 'x' => (float) $c->x, 'y' => (float) $c->y, 'w' => (float) $c->w, 'h' => (float) $c->h,
                 'etiqueta' => $c->etiqueta, 'obligatorio' => (bool) $c->obligatorio, 'lleno' => (bool) ($c->imagen || ($c->valor !== null && $c->valor !== '' && $c->valor !== '0')),
                 'valor' => $c->tipo === 'casilla' ? ($c->valor === null ? null : $c->valor === '1') : $c->valor, 'nombrePdf' => $c->nombre_pdf ?? '',
+                'bloqueado' => (bool) ($c->bloqueado ?? false), 'libre' => (bool) ($c->libre ?? false),
             ])->all(),
             'formulario' => $d->formulario ? json_decode($d->formulario, true) : null,
             'eventos' => DB::table('eventos as e')->leftJoin('firmantes as f', 'f.id', '=', 'e.firmante_id')->where('e.documento_id', $id)->orderBy('e.id')
@@ -174,7 +175,13 @@ class Documentos
         if (count(array_unique($claves)) !== count($claves)) {
             throw new ErrorUso('Hay firmantes repetidos');
         }
+        $modos = array_column($datos['firmantes'], 'modoTexto', 'clave');
         foreach ($datos['campos'] as &$c) {
+            // Bloqueado: queda vacío y nadie lo llena (solo campos de texto, fecha o casilla).
+            $c['bloqueado'] = ($c['bloqueado'] ?? false) && in_array($c['tipo'], self::TIPOS_DATO, true);
+            if ($c['bloqueado']) {
+                $c['firmante'] = self::PREPARADOR;
+            }
             if ($c['tipo'] === 'calculo') {
                 $c['firmante'] = self::PREPARADOR; // lo calcula el PDF, nadie lo llena
             } elseif ($c['firmante'] === self::PREPARADOR) {
@@ -183,10 +190,12 @@ class Documentos
                 }
             } elseif (! in_array($c['firmante'], $claves, true)) {
                 throw new ErrorUso('Hay un campo asignado a un firmante que no existe');
+            } elseif (in_array($c['tipo'], self::TIPOS_DATO, true) && ($modos[$c['firmante']] ?? 'asignados') === 'solo') {
+                throw new ErrorUso('Hay campos de texto asignados a un firmante que solo firma, sella o pone su huella');
             }
             $p = $paginas[$c['pagina'] - 1] ?? throw new ErrorUso('Hay un campo en una página que no existe');
             $c = self::recortar($c, $p);
-            $c['valor'] = $c['firmante'] === self::PREPARADOR && $c['tipo'] !== 'calculo' ? self::valorDelPreparador($c) : null;
+            $c['valor'] = $c['firmante'] === self::PREPARADOR && $c['tipo'] !== 'calculo' && ! $c['bloqueado'] ? self::valorDelPreparador($c) : null;
         }
         unset($c);
         DB::transaction(function () use ($id, $datos) {
@@ -199,7 +208,7 @@ class Documentos
             foreach ($datos['firmantes'] as $i => $f) {
                 $ids[$f['clave']] = DB::table('firmantes')->insertGetId([
                     'documento_id' => $id, 'orden' => $i + 1, 'nombre' => $f['nombre'], 'telefono' => $f['telefono'], 'email' => $f['email'],
-                    'color' => self::COLORES[$i % count(self::COLORES)], 'pedir_dni' => $f['pedirDni'] ?? false,
+                    'color' => self::COLORES[$i % count(self::COLORES)], 'pedir_dni' => $f['pedirDni'] ?? false, 'modo_texto' => $f['modoTexto'] ?? 'asignados',
                 ]);
             }
             foreach ($datos['campos'] as $c) {
@@ -207,7 +216,7 @@ class Documentos
                 DB::table('campos')->insert([
                     'documento_id' => $id, 'firmante_id' => $preparador ? null : $ids[$c['firmante']], 'tipo' => $c['tipo'], 'pagina' => $c['pagina'],
                     'x' => $c['x'], 'y' => $c['y'], 'w' => $c['w'], 'h' => $c['h'], 'etiqueta' => $c['etiqueta'], 'obligatorio' => ! $preparador && $c['obligatorio'],
-                    'valor' => $c['valor'], 'nombre_pdf' => ($c['nombrePdf'] ?? '') ?: null,
+                    'valor' => $c['valor'], 'nombre_pdf' => ($c['nombrePdf'] ?? '') ?: null, 'bloqueado' => $c['bloqueado'],
                 ]);
             }
         });
@@ -255,7 +264,10 @@ class Documentos
             }
         }
         DB::transaction(function () use ($u, $id, $det, $origen) {
-            Planes::consumirEnvio($u->cuenta_id, $id, count($det['firmantes']), array_column($det['campos'], 'tipo'));
+            // Cuadros de texto nuevos (no los que ya traía el PDF) o texto libre del firmante: solo con un plan de pago.
+            $textoPropio = (bool) array_filter($det['firmantes'], fn ($f) => $f['modoTexto'] === 'libre')
+                || (bool) array_filter($det['campos'], fn ($c) => in_array($c['tipo'], self::TIPOS_DATO, true) && ! $c['bloqueado'] && $c['nombrePdf'] === '');
+            Planes::consumirEnvio($u->cuenta_id, $id, count($det['firmantes']), array_column($det['campos'], 'tipo'), $textoPropio);
             foreach ($det['firmantes'] as $f) {
                 DB::table('firmantes')->where('id', $f['id'])->update(['token' => Str::random(32)]);
             }
@@ -318,18 +330,18 @@ class Documentos
             $ids = [];
             foreach ($det['firmantes'] as $f) {
                 $ids[$f['clave']] = DB::table('firmantes')->insertGetId([
-                    'documento_id' => $nuevo, 'orden' => $f['orden'], 'nombre' => $f['nombre'], 'color' => $f['color'], 'pedir_dni' => $f['pedirDni'],
+                    'documento_id' => $nuevo, 'orden' => $f['orden'], 'nombre' => $f['nombre'], 'color' => $f['color'], 'pedir_dni' => $f['pedirDni'], 'modo_texto' => $f['modoTexto'],
                     'telefono' => $det['esPlantilla'] ? '' : $f['telefono'], 'email' => $det['esPlantilla'] ? '' : $f['email'],
                 ]);
             }
-            foreach ($det['campos'] as $c) {
+            foreach (array_filter($det['campos'], fn ($c) => ! $c['libre']) as $c) {
                 // Se copia lo que escribió quien preparó el documento (no lo que llenaron los firmantes ni los cálculos).
                 $preparador = $c['firmante'] === self::PREPARADOR;
                 $valor = $preparador && $c['tipo'] !== 'calculo' ? ($c['tipo'] === 'casilla' ? ($c['valor'] ? '1' : null) : $c['valor']) : null;
                 DB::table('campos')->insert([
                     'documento_id' => $nuevo, 'firmante_id' => $preparador ? null : $ids[$c['firmante']], 'tipo' => $c['tipo'], 'pagina' => $c['pagina'],
                     'x' => $c['x'], 'y' => $c['y'], 'w' => $c['w'], 'h' => $c['h'], 'etiqueta' => $c['etiqueta'], 'obligatorio' => $c['obligatorio'],
-                    'valor' => $valor, 'nombre_pdf' => $c['nombrePdf'] ?: null,
+                    'valor' => $valor, 'nombre_pdf' => $c['nombrePdf'] ?: null, 'bloqueado' => $c['bloqueado'],
                 ]);
             }
             self::evento($nuevo, 'creado', "Creado por {$u->name} a partir de «{$d->nombre}»".($det['esPlantilla'] ? ' (plantilla)' : ''), $origen);
@@ -477,7 +489,7 @@ class Documentos
                 'bloquearDibujo' => (bool) $f->bloquear_dibujo || (bool) $f->pedir_dni, 'bloquearSello' => (bool) $f->bloquear_sello,
                 'flujo' => (bool) $f->flujo, 'certificado' => (bool) $f->certificado_evidencias,
             ],
-            'yo' => ['orden' => $f->orden, 'nombre' => $f->nombre, 'estado' => $f->estado, 'color' => $f->color, 'total' => $firmantes->count(), 'pedirDni' => (bool) $f->pedir_dni],
+            'yo' => ['orden' => $f->orden, 'nombre' => $f->nombre, 'estado' => $f->estado, 'color' => $f->color, 'total' => $firmantes->count(), 'pedirDni' => (bool) $f->pedir_dni, 'modoTexto' => $f->modo_texto ?? 'asignados'],
             'turno' => $turno, 'esperando' => $esperando,
             // Sus campos, los ya llenados por otros (o por quien preparó el documento) y los que calcula el PDF.
             'campos' => DB::table('campos')->where('documento_id', $f->documento_id)
@@ -527,11 +539,11 @@ class Documentos
      * @param  array  $calculos  id del campo calculado → texto: lo que dieron los scripts del PDF en el navegador del firmante,
      *                           con todo lo llenado hasta ese momento (quien firma al último los calcula con todos los datos)
      */
-    public static function firmar(string $t, array $valores, array $origen, array $evidencias = [], array $calculos = []): array
+    public static function firmar(string $t, array $valores, array $origen, array $evidencias = [], array $calculos = [], array $libres = []): array
     {
         $subidas = [];
         try {
-            $resultado = DB::transaction(function () use ($t, $valores, $origen, $evidencias, $calculos, &$subidas) {
+            $resultado = DB::transaction(function () use ($t, $valores, $origen, $evidencias, $calculos, $libres, &$subidas) {
                 $f = self::firmantePorToken($t, true);
                 if ($f->doc_estado !== 'en_firma') {
                     throw new ErrorUso('Este documento ya no se puede firmar', 409);
@@ -591,6 +603,7 @@ class Documentos
                 if ($faltan) {
                     throw new ErrorUso('Completa los campos obligatorios', 400, $faltan);
                 }
+                self::guardarTextoLibre($f, $libres);
                 foreach (DB::table('campos')->where('documento_id', $f->documento_id)->where('tipo', 'calculo')->pluck('id') as $campoId) {
                     $v = $calculos[(string) $campoId] ?? null;
                     if (is_string($v)) {
@@ -620,6 +633,31 @@ class Documentos
             self::despues(fn () => Avisos::turno($resultado['documentoId'], 'siguiente'));
         }
         return $resultado;
+    }
+
+    /** Texto libre que agregó el firmante: queda como campos de texto suyos, ya llenos. Solo con «Completar campos y agregar texto libre». */
+    private static function guardarTextoLibre(object $f, array $libres): void
+    {
+        $libres = array_values(array_filter($libres, fn ($l) => is_array($l) && is_string($l['texto'] ?? null) && trim($l['texto']) !== ''));
+        if (! $libres) {
+            return;
+        }
+        if (($f->modo_texto ?? 'asignados') !== 'libre') {
+            throw new ErrorUso('Este documento no permite agregar texto libre');
+        }
+        if (count($libres) > 30) {
+            throw new ErrorUso('Agregaste demasiados textos libres');
+        }
+        $paginas = json_decode($f->doc_paginas, true);
+        foreach ($libres as $l) {
+            $pagina = (int) ($l['pagina'] ?? 0);
+            $p = $paginas[$pagina - 1] ?? throw new ErrorUso('Hay un texto en una página que no existe');
+            $c = self::recortar(['x' => (float) ($l['x'] ?? 0), 'y' => (float) ($l['y'] ?? 0), 'w' => (float) ($l['w'] ?? 120), 'h' => (float) ($l['h'] ?? 20)], $p);
+            DB::table('campos')->insert($c + [
+                'documento_id' => $f->documento_id, 'firmante_id' => $f->id, 'tipo' => 'texto', 'pagina' => $pagina, 'etiqueta' => 'Texto adicional',
+                'obligatorio' => false, 'libre' => true, 'valor' => Str::limit(trim($l['texto']), config('autograflow.limites.texto'), ''),
+            ]);
+        }
     }
 
     public static function rechazar(string $t, string $motivo, array $origen): void

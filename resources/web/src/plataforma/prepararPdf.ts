@@ -7,7 +7,8 @@ export interface CampoDetectado { tipo: TipoCampo; pagina: number; x: number; y:
 /**
  * Prepara en el navegador un PDF antes de subirlo (en hosting compartido no hay Node en el servidor):
  *  - endereza las páginas giradas o recortadas, para que lo que se ve coincida con las coordenadas de los campos;
- *  - detecta sus campos rellenables (texto, casillas, firmas) para sugerirlos en el editor;
+ *  - detecta sus campos rellenables (texto, fechas y casillas) para sugerirlos en el editor. Las firmas no se sugieren:
+ *    quien prepara el documento decide dónde firma cada persona;
  *  - lo guarda sin «object streams»: así lo puede leer FPDI, la librería PHP que genera el PDF final.
  */
 export async function prepararPdf(archivo: File) {
@@ -85,11 +86,12 @@ function detectarCampos(doc: PDFDocument, calculados: Set<string>): CampoDetecta
   const salida: CampoDetectado[] = [];
   for (const campo of campos) {
     const nombre = campo.getName();
-    let tipo: TipoCampo | null =
-      campo instanceof PDFSignature ? "firma" : campo instanceof PDFCheckBox ? "casilla" : campo instanceof PDFTextField ? "texto" : null;
+    // Los campos de firma del PDF (y los de texto pensados para firmar) se omiten: no se crean recuadros de firma automáticos.
+    if (campo instanceof PDFSignature) continue;
+    let tipo: TipoCampo | null = campo instanceof PDFCheckBox ? "casilla" : campo instanceof PDFTextField ? "texto" : null;
     if (!tipo) continue;
     if (tipo === "texto" && calculados.has(nombre)) tipo = "calculo";
-    else if (tipo === "texto" && /firma|signature|sign\b/i.test(nombre)) tipo = "firma";
+    else if (tipo === "texto" && /firma|signature|sign\b/i.test(nombre)) continue;
     else if (tipo === "texto" && /fecha|date/i.test(nombre)) tipo = "fecha";
     for (const widget of campo.acroField.getWidgets()) {
       const ref = widget.P();
@@ -98,8 +100,7 @@ function detectarCampos(doc: PDFDocument, calculados: Set<string>): CampoDetecta
       if (i === undefined || i < 0) continue;
       const r = widget.getRectangle(), alto = paginas[i].getHeight();
       if (r.width < 4 || r.height < 4) continue;
-      // Las firmas en una línea delgada se agrandan hacia arriba para que quepa el trazo.
-      const h = tipo === "firma" ? Math.max(r.height, 36) : r.height;
+      const h = r.height;
       salida.push({ tipo, pagina: i + 1, x: r.x, y: alto - r.y - h, w: r.width, h, etiqueta: nombre.replace(/[_.]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120), nombrePdf: nombre.slice(0, 200) });
     }
   }

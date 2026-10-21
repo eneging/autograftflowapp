@@ -30,10 +30,12 @@ class FirmaController extends Controlador
         // Opcional: fotos del DNI, momentos de cada captura y ubicación (Documentos::firmar las revisa una por una).
         $evidencias = $r->input('evidencias', []);
         $calculos = $r->input('calculos', []);
-        if (! is_array($evidencias) || ! is_array($calculos)) {
+        // Texto libre que agregó el firmante (solo si el documento se lo permite): [{pagina, x, y, w, h, texto}].
+        $libres = $r->input('libres', []);
+        if (! is_array($evidencias) || ! is_array($calculos) || ! is_array($libres)) {
             throw new ErrorUso('Revisa los datos');
         }
-        return Documentos::firmar($token, $valores, $this->origen($r), $evidencias, $calculos);
+        return Documentos::firmar($token, $valores, $this->origen($r), $evidencias, $calculos, $libres);
     }
 
     public function rechazar(Request $r, string $token)

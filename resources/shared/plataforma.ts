@@ -71,6 +71,8 @@ export const esquemaFirmante = z.object({
   email: z.union([z.string().trim().email("Correo inválido"), z.literal("")]).default(""),
   /** Firma y huella con fotos del DNI: frente, firma en papel y reverso (la huella sale del reverso). */
   pedirDni: z.boolean().default(false),
+  /** Texto del firmante: «solo» firma/sella/huella, «asignados» llena los campos que se le asignan, «libre» además agrega texto libre. */
+  modoTexto: z.enum(["solo", "asignados", "libre"]).default("asignados"),
 });
 
 export const esquemaCampo = z.object({
@@ -87,6 +89,8 @@ export const esquemaCampo = z.object({
   valor: z.union([z.string(), z.boolean()]).nullable().optional(),
   /** Nombre del campo en el formulario del PDF (para sus cálculos). */
   nombrePdf: z.string().max(200).default(""),
+  /** Campo del PDF bloqueado: queda vacío y nadie lo puede llenar. */
+  bloqueado: z.boolean().default(false),
 });
 
 export const esquemaGuardarDocumento = z.object({
@@ -149,7 +153,8 @@ export interface DocumentoDetalle {
     id: number; orden: number; color: string; token: string | null; estado: EstadoFirmante;
     abiertoEn: string | null; firmadoEn: string | null; motivoRechazo: string | null;
   })[];
-  campos: (CampoEditor & { id: number; lleno: boolean; valor: string | boolean | null })[];
+  /** libre: texto que agregó el propio firmante al firmar. */
+  campos: (CampoEditor & { id: number; lleno: boolean; valor: string | boolean | null; libre: boolean })[];
   eventos: { tipo: string; detalle: string; firmante: string | null; creadoEn: string }[];
   formulario: FormularioPdf | null;
 }
@@ -160,7 +165,7 @@ export interface VistaFirmante {
     nombre: string; estado: EstadoDocumento; mensaje: string; paginas: Pagina[]; remitente: string; empresa: string; logo: boolean;
     bloquearDibujo: boolean; bloquearSello: boolean; flujo: boolean; certificado: boolean;
   };
-  yo: { orden: number; nombre: string; estado: EstadoFirmante; color: string; total: number; pedirDni: boolean };
+  yo: { orden: number; nombre: string; estado: EstadoFirmante; color: string; total: number; pedirDni: boolean; modoTexto: "solo" | "asignados" | "libre" };
   /** Falso si en orden secuencial todavía no le toca. */
   turno: boolean;
   esperando: string | null;

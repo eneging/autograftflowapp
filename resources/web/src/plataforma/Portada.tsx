@@ -5,7 +5,7 @@ import { BotonTema, Logo } from "../componentes/Marco";
 import { VentanaLegal, type TipoLegal } from "../componentes/Legal";
 import { ErrorApi, plataforma, type Catalogo } from "./api";
 import { ElegirPlan } from "./Planes";
-import { usarSesion } from "./sesion";
+import { marcarEntradaInvitado, usarSesion } from "./sesion";
 
 /** Fondo de color a pantalla completa con el logo grande y una tarjeta de vidrio (portada, planes y acceso). */
 export function PortadaMarco({ children, despues }: { children: ReactNode; despues?: ReactNode }) {
@@ -36,6 +36,7 @@ export function Inicio({ soloPlanes = false }: { soloPlanes?: boolean }) {
         <div className="accountBar">
           <div className="accountInfo">👤 <strong>{usuario.nombre}</strong> · 🟢 {PLANES[usuario.plan]?.nombre ?? "Gratis"}</div>
           <Link className="boton success" to="/app">Ir a AutograFlow →</Link>
+          {usuario.invitado && <Link className="boton primary" to="/registro">👤 Crear mi cuenta</Link>}
         </div>
       ) : (
         <div className="landingLoginBar">
@@ -90,7 +91,8 @@ export function Acceso({ modo }: { modo: "ingresar" | "registro" }) {
   const [aviso, setAviso] = useState("");
   const [enviando, setEnviando] = useState(false);
 
-  if (usuario && !enviando) return <Navigate to={volver} replace />;
+  // El invitado sí puede abrir estas páginas: para crear su cuenta (conserva sus documentos) o entrar con otra.
+  if (usuario && !usuario.invitado && !enviando) return <Navigate to={volver} replace />;
   const campo = (k: keyof typeof datos) => ({ value: datos[k], onChange: (e: { target: { value: string } }) => setDatos({ ...datos, [k]: e.target.value }) });
   const registro = modo === "registro";
 
@@ -127,8 +129,14 @@ export function Acceso({ modo }: { modo: "ingresar" | "registro" }) {
   return (
     <PortadaMarco>
       <div className="flowBackRow">
-        <Link to="/">← Ver planes</Link>
+        <Link to={usuario ? "/planes" : "/"}>← Ver planes</Link>
         {planElegido && <span className="chosenPlanChip">Plan elegido: {PLANES[planElegido].nombre}</span>}
+        {planElegido === "gratis" && !usuario && (
+          <div className="guestAltRow">¿Prefieres no crear cuenta? <Link to="/sin-cuenta">Entrar sin cuenta →</Link></div>
+        )}
+        {usuario?.invitado && registro && (
+          <div className="guestAltRow">Al crear tu cuenta conservarás los documentos que preparaste sin cuenta.</div>
+        )}
       </div>
       <div className="authTabs" role="tablist">
         {registro ? <Link role="tab" aria-selected={false} to={otro} replace>Iniciar sesión</Link> : <span role="tab" aria-selected className="active">Iniciar sesión</span>}
@@ -174,6 +182,61 @@ export function Acceso({ modo }: { modo: "ingresar" | "registro" }) {
         {aviso && <div className="afAlerta" role="alert">{aviso}</div>}
         <button className="primary ancho" disabled={enviando}>{enviando ? "Un momento…" : registro ? "👤 Crear cuenta" : "🔐 Ingresar"}</button>
         {!registro && <p className="small centro"><Link to="/olvide">¿Olvidaste tu contraseña?</Link></p>}
+      </form>
+      {legal && <VentanaLegal tipo={legal} alCerrar={() => setLegal(null)} />}
+    </PortadaMarco>
+  );
+}
+
+/**
+ * «Entrar sin cuenta» (plan Gratis): 2 documentos diarios y 1 firmante por documento.
+ * La casilla de Términos y Privacidad empieza siempre desmarcada: hay que aceptarlos en cada entrada.
+ */
+export function SinCuenta() {
+  const { usuario, recargar } = usarSesion();
+  const navegar = useNavigate();
+  const [acepto, setAcepto] = useState(false);
+  const [legal, setLegal] = useState<TipoLegal | null>(null);
+  const [aviso, setAviso] = useState("");
+  const [enviando, setEnviando] = useState(false);
+
+  if (usuario && !enviando) return <Navigate to="/app" replace />;
+
+  async function entrar(e: FormEvent) {
+    e.preventDefault();
+    setAviso("");
+    if (!acepto) return setAviso("Debes confirmar que has leído y aceptas los Términos y Condiciones y la Política de Privacidad para continuar.");
+    setEnviando(true);
+    try {
+      await plataforma.invitado(true);
+      marcarEntradaInvitado();
+      await recargar();
+      navegar("/app", { replace: true });
+    } catch (err) {
+      setAviso(err instanceof ErrorApi ? err.message : "No se pudo continuar. Inténtalo de nuevo.");
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <PortadaMarco>
+      <div className="flowBackRow"><Link to="/">← Ver planes</Link></div>
+      <form className="authForm" onSubmit={entrar} noValidate>
+        <h1>Entrar sin cuenta</h1>
+        <span className="small centro bloque">
+          Prueba Gratis: {PLANES.gratis.documentos} documentos diarios y {PLANES.gratis.firmantesSinCuenta ?? 1} firmante por documento. Para continuar debes aceptar las condiciones cada vez que entras.
+        </span>
+        <label className="checkrow termsCheck">
+          <input type="checkbox" checked={acepto} onChange={(e) => setAcepto(e.target.checked)} />
+          <div>
+            <strong>He leído y acepto los Términos y Condiciones y estoy de acuerdo con la Política de Privacidad</strong>
+            <p className="termsDeclare">Al marcar esta casilla declaras que <b>has leído completamente, entiendes y aceptas</b> los Términos y Condiciones y la Política de Privacidad. Debes confirmarlo cada vez que entras sin cuenta.</p>
+            <div className="small">Léelos aquí: <a href="#" onClick={(e) => { e.preventDefault(); setLegal("terminos"); }}>Términos y Condiciones</a> · <a href="#" onClick={(e) => { e.preventDefault(); setLegal("privacidad"); }}>Política de Privacidad</a></div>
+          </div>
+        </label>
+        {aviso && <div className="afAlerta" role="alert">{aviso}</div>}
+        <button className="success ancho" disabled={enviando}>{enviando ? "Un momento…" : "🚀 Entrar sin cuenta"}</button>
+        <p className="small centro">¿Prefieres guardar tus documentos a tu nombre? <Link to="/registro?plan=gratis">Crea tu cuenta gratis</Link></p>
       </form>
       {legal && <VentanaLegal tipo={legal} alCerrar={() => setLegal(null)} />}
     </PortadaMarco>

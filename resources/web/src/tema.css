@@ -250,7 +250,11 @@ input[type=radio] { width: 20px; height: 20px; accent-color: #7c3aed; flex: 0 0 
 .planFeatures li.afPerk20 { font-weight: 800; }
 .planFeatures li.afPerk20::before { content: none; }
 .planAction { margin-top: 14px; text-align: center; }
+.planAction { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
 .planAction button { min-width: 260px; min-height: 48px; font-size: 15px; }
+/* «¿Prefieres no crear cuenta?» y avisos para quien entró sin cuenta */
+.guestAltRow { flex-basis: 100%; margin: 6px 0; padding: 9px 12px; border-radius: 12px; background: var(--okBg); border: 1px solid rgba(14,159,110,.3); color: var(--okInk); font-size: 13px; font-weight: 700; line-height: 1.45; }
+.guestAltRow a { color: inherit; font-weight: 900; text-decoration: underline; }
 .demoNote { margin-top: 14px; padding: 10px 12px; border-radius: 14px; font-size: 12.5px; line-height: 1.5; background: var(--sheen), var(--avisoBg); border: 1px solid var(--avisoBorde); color: var(--avisoInk); }
 .demoNote strong { color: inherit; }
 .flowBackRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 0 0 14px; font-size: 13px; }
@@ -382,6 +386,79 @@ input[type=radio] { width: 20px; height: 20px; accent-color: #7c3aed; flex: 0 0 
 .zoomCaja .pdfPagina { width: 100%; }
 .page { border-radius: 6px; }
 .campoEditor.otroFirmante { opacity: .75; }
+/* Campos de firma, sello y huella como en el prototipo: recuadro punteado del color, fondo apenas teñido y rótulo
+   centrado en dos líneas («APODO / Firma aquí» o «FIRMANTE 1»). Mover y cambiar de tamaño no cambia. */
+.campoEditor:is(.tipo-firma, .tipo-sello, .tipo-huella) {
+  border: 2px dashed var(--c); border-radius: 7px; background: color-mix(in srgb, var(--c) 9%, transparent);
+  backdrop-filter: blur(1px); -webkit-backdrop-filter: blur(1px); container-type: size;
+}
+.campoEditor:is(.tipo-firma, .tipo-sello, .tipo-huella):hover { background: color-mix(in srgb, var(--c) 14%, transparent); }
+.campoEditor:is(.tipo-firma, .tipo-sello, .tipo-huella).sel { border-style: solid; box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 30%, transparent); }
+.campoRotulo {
+  display: grid; place-items: center; width: 100%; height: 100%; padding: 1px 3px; overflow: hidden; pointer-events: none;
+  white-space: pre-line; text-align: center; line-height: 1.05; font-weight: 800; letter-spacing: 0;
+  font-size: clamp(7px, min(13cqw, 26cqh), 14px); color: color-mix(in srgb, var(--c) 82%, transparent);
+}
+.campoEditor.tipo-huella .campoRotulo { font-size: clamp(6px, min(16cqw, 15cqh), 12px); }
+
+/* Panel del preparador (prototipo) */
+.docCargado { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 10px 12px; border-radius: 14px; font-size: 13px; background: var(--sheen), var(--vidrioInterior); border: 1px solid var(--borde); }
+.renameFieldBtn { padding: 6px 9px !important; min-height: 0 !important; font-size: 12px !important; }
+.participantToolActions .crece { flex: 1 1 auto; }
+.afHerramientaAyuda { margin: 0 0 2px; font-size: 11.5px; }
+.afDniNota { margin-top: 6px; color: var(--accent); font-weight: 700; }
+.afPrepTextPanel { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--borde); }
+.afPrepTextPanel .participantFieldsHeading:first-child { margin-top: 0; }
+.afPrepTextPanel p.small { margin: 5px 0 8px; line-height: 1.4; }
+.afPdfFieldList { display: flex; flex-direction: column; gap: 6px; max-height: 300px; overflow: auto; padding-right: 2px; }
+.afPdfFieldRow { display: flex; flex-direction: column; gap: 5px; padding: 7px 8px; border-radius: 14px; background: var(--sheen), var(--vidrioInterior); border: 1px solid var(--borde); }
+.afPdfFieldRow.sel { border-color: var(--accent2); box-shadow: 0 0 0 2px rgba(124,58,237,.18); }
+.afPdfFieldRow select, .afPdfFieldRow input { width: 100%; padding: 7px 9px; font-size: 13px; }
+.afPdfFieldName { font-size: 12.5px; font-weight: 800; color: var(--ink); text-align: left; padding: 0; background: none !important; border: 0 !important; box-shadow: none !important; min-height: 0; cursor: pointer; }
+.afPdfFieldName span { font-weight: 600; color: var(--muted); }
+.afCalcLine { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; }
+.afCalcVal { font-weight: 800; color: var(--ok); }
+/* Campo de texto, fecha o casilla seleccionado: dentro de «Texto del firmante» */
+.afCampoSel { display: grid; gap: 6px; margin-top: 9px; padding: 9px; border-radius: 13px; border: 1.5px solid var(--accent2); background: var(--sheen), var(--vidrioInterior); }
+.afCampoSelHead { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 13px; font-weight: 900; color: var(--ink); }
+.afCampoSelHead small { font-weight: 600; color: var(--muted); }
+.afCampoSelHead .botonChico { min-height: 0; padding: 4px 9px; }
+.afCampoSelFila { display: grid; grid-template-columns: 1fr 1.4fr; gap: 6px; }
+.afCampoSel select, .afCampoSel input:not([type=checkbox]) { width: 100%; min-width: 0; padding: 7px 9px; font-size: 13px; }
+.afCampoSelCheck { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 800; color: var(--ink); cursor: pointer; }
+.afCampoSelCheck input[type=checkbox] { width: 20px; height: 20px; flex: 0 0 auto; }
+/* Texto del firmante, del preparador y bloqueo de campos del PDF (prototipo) */
+.afTextModeSelect { width: 100%; padding: 8px 10px; font-size: 13px; }
+.anchoCompleto { width: 100%; min-height: 40px; margin-top: 2px; }
+.afLockBar { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.afLockBar button { font-size: 12.5px; padding: 7px 11px; min-height: 0; }
+.afLockHint { padding: 6px 9px; border-radius: 10px; background: rgba(124,58,237,.10); border: 1px solid rgba(124,58,237,.25); }
+.afPdfFieldTop { display: flex; align-items: center; gap: 6px; }
+.afPdfFieldTop .afPdfFieldName { flex: 1; min-width: 0; }
+.afRowLock { padding: 2px 8px !important; min-height: 0 !important; font-size: 13px !important; }
+.afPdfFieldRow.locked { opacity: .85; background: repeating-linear-gradient(45deg, rgba(100,116,139,.10) 0 6px, transparent 6px 12px), var(--vidrioInterior); }
+.afLockedNote { color: var(--muted); }
+.campoEditor.bloqueado { border: 1.5px solid rgba(71,85,105,.75) !important; background: repeating-linear-gradient(45deg, rgba(100,116,139,.32) 0 5px, rgba(148,163,184,.14) 5px 10px) !important; cursor: default; }
+.campoEditor.bloqueable { border: 1.5px dashed rgba(124,58,237,.8) !important; background: rgba(124,58,237,.12) !important; cursor: pointer; }
+.campoEditor.bloqueable:hover { background: rgba(124,58,237,.24) !important; }
+.campoBloqueado { font: 700 clamp(7px, 1.1cqw, 11px) system-ui, sans-serif; color: #334155; white-space: nowrap; overflow: hidden; pointer-events: none; }
+/* Título de una opción con su insignia de plan: la insignia baja de línea si no cabe (no se monta sobre el texto) */
+.afTituloOpcion { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.afTituloOpcion .afPaidBadge { margin-left: 0; }
+.afMiFirma { display: grid; justify-items: center; gap: 2px; margin: 4px 0 12px; }
+.afMiFirma .afReceiveSignBtn { margin: 0; }
+.campoEditor:is(.tipo-firma, .tipo-sello, .tipo-huella) img { pointer-events: none; }
+.afReceiveSignBtn { width: 100%; min-height: 46px; margin: 4px 0 12px; font-size: 14.5px; }
+
+/* Funciones avanzadas (vista previa): se minimizan y maximizan */
+.afAvanzadas { margin: 0 0 10px; border-radius: 18px; border: 1px solid var(--borde); background: var(--sheen), var(--vidrioInterior); }
+.afAvanzadas.abierto { padding-bottom: 10px; }
+.afAvanzadasBoton { width: 100%; display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 17px; font-size: 14px; font-weight: 900; text-align: left; }
+.afAvanzadasBoton > span:first-child { flex: 1; }
+.afAvanzadasCuenta { padding: 2px 9px; border-radius: 999px; font-size: 11.5px; background: var(--accent2); color: #fff; }
+.afAvanzadasFlecha { font-size: 12px; font-weight: 800; color: var(--muted); }
+.afAvanzadas .afSecurityRow { margin: 10px 10px 0; }
+.afSecurityRow .checkrow.afInactiva { opacity: .7; }
 .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 10px; }
 .legend span { display: flex; align-items: center; gap: 5px; }
 .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }

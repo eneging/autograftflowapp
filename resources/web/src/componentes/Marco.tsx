@@ -47,7 +47,7 @@ const enAplicacion = () =>
   /WhatsApp|FBAN|FBAV|FB_IAB|Instagram|Line\/|MicroMessenger|Telegram|; wv\)/i.test(navigator.userAgent || "");
 const esIos = () => /iPhone|iPad|iPod/i.test(navigator.userAgent || "");
 /** Portada, planes y acceso: fondo de color a pantalla completa, sin encabezado (como el prototipo). */
-const RUTAS_PORTADA = /^\/(planes|ingresar|registro|olvide|restablecer)?$/;
+const RUTAS_PORTADA = /^\/(planes|ingresar|registro|sin-cuenta|olvide|restablecer)?$/;
 /** Páginas que abren los firmantes con su enlace: sin menú de cuenta. */
 const RUTAS_FIRMANTE = /^\/(f|s|a)\/|^\/reembolso$/;
 
@@ -133,9 +133,10 @@ function MenuPrincipal() {
               {opcion("🔍", "#0891b2", "Verificar un PDF", "/verificar")}
               {opcion("🧾", "#b45309", "Plantilla de reembolso", "/reembolso")}
               <div className="menuDivider" />
-              <div className="accountInfo">👤 <strong>{usuario.nombre}</strong><br /><span>{usuario.email}</span><br />🟢 Plan {PLANES[usuario.plan]?.nombre ?? "Gratis"}{usuario.cuenta !== usuario.nombre ? ` · ${usuario.cuenta}` : ""}</div>
+              {usuario.invitado && opcion("👤", "#ff6200", "Crear mi cuenta", "/registro")}
+              <div className="accountInfo">👤 <strong>{usuario.nombre}</strong><br />{usuario.invitado ? <span>Sin cuenta · 1 firmante por documento</span> : <span>{usuario.email}</span>}<br />🟢 Plan {PLANES[usuario.plan]?.nombre ?? "Gratis"}{!usuario.invitado && usuario.cuenta !== usuario.nombre ? ` · ${usuario.cuenta}` : ""}</div>
               <button type="button" className="menuLogoutBtn" role="menuitem" onClick={async () => { await salir(); navegar("/"); }}>
-                <span className="menuIcon" style={{ background: "#e0294f" }}>🚪</span>Cerrar sesión
+                <span className="menuIcon" style={{ background: "#e0294f" }}>🚪</span>{usuario.invitado ? "Salir" : "Cerrar sesión"}
               </button>
             </>
           ) : (
