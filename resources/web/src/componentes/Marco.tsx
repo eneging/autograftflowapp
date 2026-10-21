@@ -50,10 +50,12 @@ const esIos = () => /iPhone|iPad|iPod/i.test(navigator.userAgent || "");
 const RUTAS_PORTADA = /^\/(planes|ingresar|registro|olvide|restablecer)?$/;
 /** Páginas que abren los firmantes con su enlace: sin menú de cuenta. */
 const RUTAS_FIRMANTE = /^\/(f|s|a)\/|^\/reembolso$/;
+/** Dentro de la ventana de «Agregar mi firma» del editor: sin encabezado ni avisos (los pone el editor). */
+const incrustado = (() => { try { return window.self !== window.top; } catch { return true; } })();
 
 /** Encabezado de AutograFlow y aviso cuando el enlace se abre dentro de WhatsApp u otra aplicación. */
 export function Marco({ children }: { children: ReactNode }) {
-  const [verAviso, setVerAviso] = useState(enAplicacion);
+  const [verAviso, setVerAviso] = useState(() => !incrustado && enAplicacion());
   const { pathname } = useLocation();
   const portada = RUTAS_PORTADA.test(pathname);
   useEffect(() => {
@@ -72,7 +74,7 @@ export function Marco({ children }: { children: ReactNode }) {
           <button type="button" aria-label="Cerrar" onClick={() => setVerAviso(false)}>×</button>
         </div>
       )}
-      {!portada && (
+      {!portada && !incrustado && (
         <header className="afHeader">
           <div className="headIzq">
             {!RUTAS_FIRMANTE.test(pathname) && <MenuPrincipal />}

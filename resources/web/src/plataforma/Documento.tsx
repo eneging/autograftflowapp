@@ -74,7 +74,7 @@ function Seguimiento({ d, recargar }: { d: DocumentoDetalle; recargar: () => voi
   const turnoDe = (orden: number) =>
     d.orden === "paralelo" || d.firmantes.filter((f) => f.orden < orden).every((f) => f.estado === "firmado");
   const textoInvitacion = (nombre: string, token: string) =>
-    `Hola ${nombre}, ${usuario?.nombre ?? "te"} te envió «${d.nombre}» para firmar en AutograFlow.${d.mensaje ? ` ${d.mensaje}` : ""} Ábrelo aquí: ${urls.enlaceFirmante(token)}`;
+    `Hola ${nombre}, ${usuario && !usuario.invitado ? usuario.nombre : "un usuario de AutograFlow"} te envió «${d.nombre}» para firmar en AutograFlow.${d.mensaje ? ` ${d.mensaje}` : ""} Ábrelo aquí: ${urls.enlaceFirmante(token)}`;
 
   async function anular() {
     if (!confirm("¿Anular este documento? Los firmantes ya no podrán firmarlo.")) return;

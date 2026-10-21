@@ -210,6 +210,8 @@ function Llenar({ v, token, alTerminar }: { v: VistaFirmante; token: string; alT
       // Último cálculo con los datos definitivos (si el entorno del PDF no carga, se envía sin cálculos).
       const calculos = await calcular().catch(() => calculo);
       await plataforma.firmar(token, Object.fromEntries(mios.map((c) => [String(c.id), valores[c.id] ?? (c.tipo === "casilla" ? false : "")])), evidencias, calculos);
+      // Dentro de «Agregar mi firma» del editor: avisa que la firma quedó registrada.
+      if (window.parent !== window) window.parent.postMessage({ autograflow: "firmado" }, location.origin);
       alTerminar();
     } catch (e) {
       if (e instanceof ErrorApi && e.campos) setErrores(Object.fromEntries(Object.entries(e.campos).map(([k, m]) => [Number(k), m])));

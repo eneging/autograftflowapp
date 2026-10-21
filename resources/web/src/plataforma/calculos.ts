@@ -35,7 +35,7 @@ async function ejecutar(formulario: FormularioPdf, valores: ValoresPdf, calculad
       } else if (o.type === "text") o.value = typeof v === "string" ? fechaPdf(v) : "";
     }
 
-  const { QuickJSSandbox } = await import("pdfjs-dist/build/pdf.sandbox.mjs");
+  const { QuickJSSandbox } = await import("pdfjs-dist/legacy/build/pdf.sandbox.mjs");
   const cambios: Record<string, { value?: unknown; formattedValue?: unknown }> = {};
   const alCambiar = (e: Event) => { const d = (e as CustomEvent).detail; if (d?.id && idNombre[d.id]) cambios[idNombre[d.id]] = d; };
   window.addEventListener("updatefromsandbox", alCambiar);

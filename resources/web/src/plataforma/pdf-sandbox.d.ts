@@ -1,5 +1,5 @@
 /** Entorno aislado de pdf.js (QuickJS en WebAssembly) que ejecuta los scripts de los formularios PDF. */
-declare module "pdfjs-dist/build/pdf.sandbox.mjs" {
+declare module "pdfjs-dist/legacy/build/pdf.sandbox.mjs" {
   export interface SandboxPdf {
     create(datos: unknown): void;
     dispatchEvent(evento: unknown): void;

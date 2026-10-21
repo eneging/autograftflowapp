@@ -104,6 +104,17 @@ header { display: flex; align-items: center; justify-content: space-between; gap
 .campoEditor.tipo-calculo, .campoFirma.tipo-calculo { border: 1.5px dotted #0e9f6e !important; background: rgba(14, 159, 110, 0.08) !important; justify-content: flex-start; cursor: default; }
 .campoCalculo { color: #0b6b4c; font-weight: 800; font-size: clamp(8px, 1.15cqw, 13px); padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
 .campoEditorTexto.valorLleno { color: #111827; font-weight: 500; }
+/* Firma, sello y huella como en el prototipo v43: recuadro punteado redondeado, fondo tenue y rótulo centrado
+   («FIRMANTE 1», «SELLO 1», «HUELLA 1» o «Apodo / Firma aquí»). Mover y cambiar el tamaño funciona igual. */
+.campoEditor:is(.tipo-firma, .tipo-sello, .tipo-huella) {
+  border: 2px dashed var(--c); border-radius: 7px; background: color-mix(in srgb, var(--c) 9%, transparent); backdrop-filter: blur(1px);
+}
+.campoEditor:is(.tipo-firma, .tipo-sello, .tipo-huella).sel { border-style: solid; background: color-mix(in srgb, var(--c) 13%, transparent); }
+.campoRotulo {
+  color: color-mix(in srgb, var(--c) 85%, transparent); font-weight: 800; font-size: clamp(7px, 1.25cqw, 13px); line-height: 1.12;
+  text-align: center; white-space: pre-line; overflow: hidden; padding: 1px 3px; pointer-events: none; max-height: 100%;
+}
+.campoEditor.tipo-huella .campoRotulo { font-size: clamp(6px, 0.95cqw, 11px); }
 .asaTamano { position: absolute; right: -1px; bottom: -1px; width: 16px; height: 16px; background: var(--c); border-radius: 4px 0 3px 0; cursor: nwse-resize; touch-action: none; }
 .tarjetaFirmante { border: 1px solid var(--line); border-left: 4px solid var(--c); border-radius: 10px; padding: 10px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 6px; }
 .tarjetaFirmante input { font: inherit; font-size: 14px; padding: 8px 10px; border: 1.5px solid #d9d2ea; border-radius: 8px; }

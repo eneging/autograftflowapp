@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode, type PointerEvent } from "react";
-import * as pdfjs from "pdfjs-dist";
-import trabajador from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+// Versión «legacy» de pdf.js: trae los polyfills para navegadores que no son los más recientes (p. ej. el navegador
+// interno de WhatsApp o celulares sin actualizar). La normal usa Map.getOrInsertComputed y en ellos no dibuja el PDF.
+import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
+import trabajador from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import type { Pagina } from "../../../shared/plataforma";
 
 pdfjs.GlobalWorkerOptions.workerSrc = trabajador;

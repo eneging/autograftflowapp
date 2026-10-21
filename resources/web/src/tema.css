@@ -138,11 +138,20 @@ button, .boton, .filebtn {
   background: linear-gradient(180deg, rgba(255,255,255,.26), rgba(255,255,255,.04) 48%, transparent), linear-gradient(135deg, #ff7188, #c91f4b 58%, #951438) !important;
   color: #fff !important; border-color: rgba(255,255,255,.5) !important; text-shadow: 0 1px 2px rgba(80,10,30,.38); box-shadow: 0 8px 18px rgba(190,24,60,.28), inset 0 1px 0 rgba(255,255,255,.58) !important;
 }
-.placeCian, .participantToolActions button.activa:not(.placeFirma) {
+.placeCian, .participantToolActions button.activa:not(.placeFirma, .placeSello, .placeHuella) {
   background: linear-gradient(180deg, rgba(255,255,255,.26), rgba(255,255,255,.04) 48%, transparent), linear-gradient(135deg, #31c8d5, #087eaa 58%, #075985) !important;
   color: #fff !important; border: 1px solid rgba(255,255,255,.6) !important; text-shadow: 0 1px 2px rgba(4,40,65,.45); box-shadow: 0 9px 22px rgba(8,126,170,.32), inset 0 1px 0 rgba(255,255,255,.65) !important;
 }
 .participantToolActions button.activa { outline: 3px solid #fbbf24; outline-offset: 2px; }
+/* Marcar sello (dorado) y huella (roja): mismos colores que sus campos en el documento (prototipo v43). */
+.placeSello {
+  background: linear-gradient(180deg, rgba(255,255,255,.26), rgba(255,255,255,.04) 48%, transparent), linear-gradient(135deg, #f2c94c, #c99400 58%, #8a6400) !important;
+  color: #fff !important; border: 1px solid rgba(255,255,255,.6) !important; text-shadow: 0 1px 2px rgba(70,45,0,.5); box-shadow: 0 9px 22px rgba(201,148,0,.3), inset 0 1px 0 rgba(255,255,255,.65) !important;
+}
+.placeHuella {
+  background: linear-gradient(180deg, rgba(255,255,255,.26), rgba(255,255,255,.04) 48%, transparent), linear-gradient(135deg, #f0625a, #b3261e 58%, #7f1610) !important;
+  color: #fff !important; border: 1px solid rgba(255,255,255,.6) !important; text-shadow: 0 1px 2px rgba(70,10,5,.5); box-shadow: 0 9px 22px rgba(179,38,30,.3), inset 0 1px 0 rgba(255,255,255,.65) !important;
+}
 :is(button, .boton, .filebtn):disabled {
   background: linear-gradient(180deg, rgba(255,255,255,.35), rgba(255,255,255,.12)), rgba(255,255,255,.18) !important; color: rgba(29,20,48,.45) !important;
   border: 1px solid rgba(91,33,182,.18) !important; text-shadow: none; box-shadow: inset 0 1px 0 rgba(255,255,255,.6) !important; filter: none; opacity: 1; transform: none;
@@ -376,6 +385,32 @@ input[type=radio] { width: 20px; height: 20px; accent-color: #7c3aed; flex: 0 0 
 .zoomVal { min-width: 50px; text-align: center; font-weight: 800; font-size: 13px; }
 .afSecurityRow { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 10px; }
 .afSecurityRow .checkrow { flex: 1 1 260px; margin: 0; }
+.afSecurityRow .mensajeAvanzado { flex-basis: 100%; }
+.afSecurityRow .mensajeAvanzado > div { flex: 1; }
+/* «Funciones avanzadas»: bloqueos, DNI, certificado, flujo, orden y mensaje en un bloque que se minimiza y maximiza. */
+.botonAvanzadas { width: 100%; display: flex; align-items: center; gap: 10px; margin: 0 0 10px; padding: 10px 14px; font-size: 14px; font-weight: 900; text-align: left; border-radius: 16px; }
+.botonAvanzadas .flechaAvanzadas { margin-left: auto; font-size: 12px; font-weight: 800; color: var(--muted); }
+.insigniaAvanzadas { padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 800; color: #fff; background: linear-gradient(135deg, #925cff, #5b21b6); }
+/* Panel del preparador (prototipo v43) */
+.pdfCargado { padding: 10px 12px; border-radius: 14px; font-size: 13.5px; font-weight: 800; background: var(--sheen), var(--vidrioInterior); border: 1px solid var(--borde); }
+.renameFieldBtn { padding: 6px 10px; font-size: 12px; min-height: 0; }
+.afPrepTextPanel { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--borde); }
+.afPrepTextPanel .participantFieldsHeading { margin-top: 0; }
+.afPrepTextPanel > button.ancho { min-height: 40px; }
+.sinMargen { margin: 0; }
+/* «Agregar mi firma»: el documento para firmar se abre en una ventana sobre el editor. */
+.afReceiveSignBtn { width: 100%; min-height: 48px; margin: 12px 0 0; font-size: 15px; }
+.afReceiveSignModal { z-index: 130; padding: 10px; }
+.afReceiveSignModal .afReceiveSignCard { width: min(1200px, 100%); height: min(94vh, 980px); max-width: none; display: flex; flex-direction: column; padding: 12px; }
+.afReceiveSignHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 9px; }
+.afReceiveSignHead h2 { margin: 0; font-size: 18px; }
+.afReceiveSignHead p { margin: 3px 0 0; }
+.afReceiveSignFrame { width: 100%; flex: 1; min-height: 0; border: 1px solid var(--borde); border-radius: 12px; background: #fff; }
+@media (max-width: 600px) {
+  .afReceiveSignModal { padding: 0; }
+  .afReceiveSignModal .afReceiveSignCard { height: 100vh; border-radius: 0; padding: 8px; }
+  .afReceiveSignHead h2 { font-size: 16px; }
+}
 .pdfPageNav { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 9px; margin: 0 0 12px; padding: 8px; border-radius: 16px; background: var(--sheen), var(--vidrioInterior); border: 1px solid var(--borde); font-size: 13.5px; font-weight: 700; }
 .pdfPageNav input { width: 70px; text-align: center; padding: 7px; }
 .pdfPageNav button { min-width: 38px; padding: 7px 11px; }
