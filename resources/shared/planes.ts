@@ -40,6 +40,8 @@ export const NOTA_ILIMITADO = CATALOGO.notaIlimitado;
 
 /** Estado de la cuenta que ve el cliente. */
 export interface EstadoCuenta {
+  /** Bonos promocionales con vencimiento, separados de los documentos comprados. */
+  creditosReferidos: number;
   plan: IdPlan;
   /** Plan contratado aunque ya haya vencido (para ofrecer renovarlo). */
   planContratado: IdPlan;

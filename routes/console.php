@@ -6,6 +6,18 @@ use App\Servicios\MercadoPago;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schedule;
+
+Artisan::command('autograflow:reclamaciones-correos', function () {
+    \App\Servicios\Reclamaciones::enviarPendientes();
+    $this->info('Procesados hasta 50 correos pendientes. Consulta los estados en la administración del libro.');
+});
+Schedule::command('autograflow:reclamaciones-correos')->everyFiveMinutes()->withoutOverlapping();
+Artisan::command('autograflow:referidos-acreditar', function () {
+    \App\Servicios\Referidos::acreditar();
+    $this->info('Procesadas hasta 200 recompensas de referidos elegibles.');
+});
+Schedule::command('autograflow:referidos-acreditar')->hourly()->withoutOverlapping();
 
 /*
  * php artisan autograflow:probar

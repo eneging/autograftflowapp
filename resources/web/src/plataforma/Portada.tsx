@@ -6,18 +6,22 @@ import { VentanaLegal, type TipoLegal } from "../componentes/Legal";
 import { ErrorApi, plataforma, type Catalogo } from "./api";
 import { ElegirPlan } from "./Planes";
 import { marcarEntradaInvitado, usarSesion } from "./sesion";
+import { Bienvenida } from "./Bienvenida";
+import { RegistroDinamico } from "./Registro";
 
 /**
  * Portada, planes y acceso (estilo Notion): barra superior con el logo y los accesos, un titular opcional y el
  * contenido sobre el lienzo blanco. «angosta» centra una columna estrecha (iniciar sesión, crear cuenta…).
  */
-export function PortadaMarco({ children, despues, titular, angosta = false }: { children: ReactNode; despues?: ReactNode; titular?: ReactNode; angosta?: boolean }) {
+export function PortadaMarco({ children, despues, titular, angosta = false, inicio = false }: { children: ReactNode; despues?: ReactNode; titular?: ReactNode; angosta?: boolean; inicio?: boolean }) {
   const { usuario } = usarSesion();
   return (
-    <div className="landing">
-      <nav className="landingNav">
+    <div className={`landing ${inicio ? "landingInicio" : ""}`}>
+      <a className="saltarContenido" href="#contenidoPortada">Saltar al contenido</a>
+      <nav className="landingNav" aria-label="Navegación principal">
         <Logo />
         <div className="landingNavDer">
+          {inicio && <Link className="navLink soloEscritorio" to="/como-funciona">Cómo funciona</Link>}
           <Link className="navLink soloEscritorio" to="/planes">Planes</Link>
           <Link className="navLink soloEscritorio" to="/verificar">Verificar PDF</Link>
           <BotonTema />
@@ -29,7 +33,7 @@ export function PortadaMarco({ children, despues, titular, angosta = false }: { 
               </>}
         </div>
       </nav>
-      <div className={`authWrap ${angosta ? "angosta" : ""}`}>
+      <div id="contenidoPortada" className={`authWrap ${angosta ? "angosta" : ""}`}>
         {titular && <header className="authHeader">{titular}</header>}
         <div className="authCard">{children}</div>
         {despues}
@@ -51,8 +55,17 @@ const TITULAR = (
 export function Inicio({ soloPlanes = false }: { soloPlanes?: boolean }) {
   const { usuario } = usarSesion();
   const [c, setC] = useState<Catalogo | null>(null);
-  useEffect(() => { plataforma.planes().then(setC).catch(() => {}); }, []);
+  const [errorPlanes, setErrorPlanes] = useState(false);
+  const [intento, setIntento] = useState(0);
+  useEffect(() => {
+    if (!soloPlanes) return;
+    let activo = true;
+    setErrorPlanes(false);
+    plataforma.planes().then((catalogo) => { if (activo) setC(catalogo); }).catch(() => { if (activo) setErrorPlanes(true); });
+    return () => { activo = false; };
+  }, [soloPlanes, intento]);
   if (usuario && !soloPlanes) return <Navigate to="/app" replace />;
+  if (!soloPlanes) return <PortadaMarco inicio despues={<Presentacion compacto />}><Bienvenida /></PortadaMarco>;
   return (
     <PortadaMarco titular={usuario ? undefined : TITULAR} despues={<Presentacion />}>
       {usuario && (
@@ -63,17 +76,15 @@ export function Inicio({ soloPlanes = false }: { soloPlanes?: boolean }) {
       )}
       <h2 className="plansTitle">Elige tu plan</h2>
       <p className="plansSub">Empieza gratis. Paga solo si necesitas más documentos, más firmantes, sellos o huellas.</p>
-      {c ? <ElegirPlan c={c} actual={usuario?.plan} /> : <p id="loading">Cargando planes…</p>}
+      {c ? <ElegirPlan c={c} actual={usuario?.plan} /> : errorPlanes ? <div className="afAlerta" role="alert">No pudimos cargar los planes. <button type="button" onClick={() => setIntento((n) => n + 1)}>Volver a intentar</button></div> : <p id="loading" role="status">Cargando planes…</p>}
     </PortadaMarco>
   );
 }
 
-function Presentacion() {
-  const [legal, setLegal] = useState<TipoLegal | null>(null);
-  const abrir = (t: TipoLegal) => (e: { preventDefault: () => void }) => { e.preventDefault(); setLegal(t); };
+function Presentacion({ compacto = false }: { compacto?: boolean }) {
   return (
     <>
-      <section className="pasosAf">
+      {!compacto && <section className="pasosAf">
         {[
           ["📄", "Sube tu PDF", "Contratos, solicitudes, actas, recibos… Si el PDF ya trae campos rellenables, se detectan solos."],
           ["✍️", "Marca los campos", "Firma, sello, huella, texto, fecha y casillas para cada firmante."],
@@ -86,129 +97,59 @@ function Presentacion() {
             <p>{texto}</p>
           </div>
         ))}
-      </section>
-      <p className="pieAuth">
-        <Link to="/verificar">🔍 Verificar un PDF firmado</Link> · <Link to="/reembolso">🧾 Plantilla de reembolso</Link>
-      </p>
-      <p className="pieAuth pieLegal">
-        <a href="#" onClick={abrir("terminos")}>Términos y Condiciones</a> · <a href="#" onClick={abrir("firmantes")}>Términos para firmantes</a> · <a href="#" onClick={abrir("privacidad")}>Política de Privacidad</a>
-      </p>
-      {legal && <VentanaLegal tipo={legal} alCerrar={() => setLegal(null)} />}
+      </section>}
     </>
   );
 }
 
 /** Iniciar sesión o crear una cuenta (con el plan elegido en la portada, si lo hay). */
 export function Acceso({ modo }: { modo: "ingresar" | "registro" }) {
+  return modo === "registro" ? <RegistroDinamico /> : <Ingreso />;
+}
+
+function Ingreso() {
   const { usuario, recargar } = usarSesion();
   const navegar = useNavigate();
   const { search } = useLocation();
   const [params] = useSearchParams();
-  const volver = params.get("volver")?.startsWith("/") ? params.get("volver")! : "/app";
-  const planElegido = (params.get("plan") ?? "") in PLANES ? (params.get("plan") as IdPlan) : null;
-  const [datos, setDatos] = useState({ nombre: "", empresa: "", email: "", clave: "", clave2: "", codigoEquipo: "" });
-  const [unirme, setUnirme] = useState(false);
-  const [acepto, setAcepto] = useState(false);
-  const [legal, setLegal] = useState<TipoLegal | null>(null);
+  const destino = params.get("volver") ?? "";
+  const volver = destino.startsWith("/") && !destino.startsWith("//") ? destino : "/app";
+  const idPlan = params.get("plan") ?? "";
+  const planElegido = Object.hasOwn(PLANES, idPlan) ? idPlan as IdPlan : null;
+  const [email, setEmail] = useState("");
+  const [clave, setClave] = useState("");
   const [errores, setErrores] = useState<Record<string, string>>({});
   const [aviso, setAviso] = useState("");
   const [enviando, setEnviando] = useState(false);
-
-  // El invitado sí puede abrir estas páginas: para crear su cuenta (conserva sus documentos) o entrar con otra.
   if (usuario && !usuario.invitado && !enviando) return <Navigate to={volver} replace />;
-  const campo = (k: keyof typeof datos) => ({ value: datos[k], onChange: (e: { target: { value: string } }) => setDatos({ ...datos, [k]: e.target.value }) });
-  const registro = modo === "registro";
-
   async function enviar(e: FormEvent) {
-    e.preventDefault();
-    setErrores({});
-    setAviso("");
-    if (registro) {
-      if (datos.clave.length < 8) return setErrores({ clave: "Mínimo 8 caracteres" });
-      if (datos.clave !== datos.clave2) return setErrores({ clave2: "Las contraseñas no coinciden" });
-      if (unirme && !datos.codigoEquipo.trim()) return setErrores({ codigoEquipo: "Escribe el código de tu organización" });
-      if (!acepto) return setAviso("Debes confirmar que has leído y aceptas los Términos y Condiciones y la Política de Privacidad para crear una cuenta.");
-    }
-    setEnviando(true);
+    e.preventDefault(); if (enviando) return;
+    setErrores({}); setAviso(""); setEnviando(true);
     try {
-      if (registro) await plataforma.registrar({ nombre: datos.nombre, empresa: datos.empresa, email: datos.email, clave: datos.clave, acepto, codigoEquipo: unirme ? datos.codigoEquipo : "" });
-      else await plataforma.ingresar({ email: datos.email, clave: datos.clave });
-      // Con un plan de pago elegido en la portada, se va directo a pagarlo.
-      if (planElegido && PLANES[planElegido].precio > 0 && !unirme) {
+      await plataforma.ingresar({ email: email.trim(), clave });
+      if (planElegido && PLANES[planElegido].precio > 0) {
         try { location.href = (await plataforma.comprar(planElegido)).url; return; }
-        catch (err) { await recargar(); navegar(`/app/cuenta`, { replace: true }); alert(err instanceof ErrorApi ? err.message : "No se pudo iniciar el pago."); return; }
+        catch (err) { await recargar(); navegar("/app/cuenta", { replace: true }); alert(err instanceof ErrorApi ? err.message : "No se pudo iniciar el pago."); return; }
       }
-      await recargar();
-      navegar(volver, { replace: true });
+      await recargar(); navegar(volver, { replace: true });
     } catch (err) {
       if (err instanceof ErrorApi) { setErrores(err.campos ?? {}); setAviso(err.message); }
       else setAviso("No se pudo continuar. Inténtalo de nuevo.");
       setEnviando(false);
     }
   }
-
-  const otro = `${registro ? "/ingresar" : "/registro"}${search}`;
-  const error = (k: string) => errores[k] && <span className="error">{errores[k]}</span>;
-  return (
-    <PortadaMarco angosta>
-      <div className="flowBackRow">
-        <Link to={usuario ? "/planes" : "/"}>← Ver planes</Link>
-        {planElegido && <span className="chosenPlanChip">Plan elegido: {PLANES[planElegido].nombre}</span>}
-        {planElegido === "gratis" && !usuario && (
-          <div className="guestAltRow">¿Prefieres no crear cuenta? <Link to="/sin-cuenta">Entrar sin cuenta →</Link></div>
-        )}
-        {usuario?.invitado && registro && (
-          <div className="guestAltRow">Al crear tu cuenta conservarás los documentos que preparaste sin cuenta.</div>
-        )}
-      </div>
-      <div className="authTabs" role="tablist">
-        {registro ? <Link role="tab" aria-selected={false} to={otro} replace>Iniciar sesión</Link> : <span role="tab" aria-selected className="active">Iniciar sesión</span>}
-        {registro ? <span role="tab" aria-selected className="active">Crear cuenta</span> : <Link role="tab" aria-selected={false} to={otro} replace>Crear cuenta</Link>}
-      </div>
-      <form className="authForm" onSubmit={enviar} noValidate>
-        <h1>{registro ? "Crear cuenta" : "Bienvenido"}</h1>
-        <span className="small centro bloque">{registro ? "Crea tu cuenta para asociar tus documentos, pagos y acceso." : "Ingresa con tu correo y contraseña."}</span>
-        {registro && (
-          <>
-            <div className={`field ${errores.nombre ? "con-error" : ""}`}><label htmlFor="regNombre">Tu nombre</label>
-              <input id="regNombre" {...campo("nombre")} autoComplete="name" placeholder="Ej. Juan Pérez" required />{error("nombre")}</div>
-            <div className="field"><label htmlFor="regEmpresa">Empresa u organización (opcional)</label>
-              <input id="regEmpresa" {...campo("empresa")} autoComplete="organization" placeholder="Ej. Mi Empresa S.A.C." /></div>
-          </>
-        )}
-        <div className={`field ${errores.email ? "con-error" : ""}`}><label htmlFor="email">Correo electrónico</label>
-          <input id="email" {...campo("email")} type="email" autoComplete="email" placeholder="Ej. juan@correo.com" required />{error("email")}</div>
-        <div className={`field ${errores.clave ? "con-error" : ""}`}><label htmlFor="clave">Contraseña</label>
-          <input id="clave" {...campo("clave")} type="password" autoComplete={registro ? "new-password" : "current-password"} placeholder={registro ? "Mínimo 8 caracteres" : "Tu contraseña"} required />{error("clave")}</div>
-        {registro && (
-          <>
-            <div className={`field ${errores.clave2 ? "con-error" : ""}`}><label htmlFor="clave2">Confirmar contraseña</label>
-              <input id="clave2" {...campo("clave2")} type="password" autoComplete="new-password" placeholder="Repite tu contraseña" required />{error("clave2")}</div>
-            <label className="checkrow">
-              <input type="checkbox" checked={unirme} onChange={(e) => setUnirme(e.target.checked)} />
-              <div><strong>Unirme a una organización</strong><div className="small">Ingresa el código que te compartió el administrador de tu empresa (plan Empresarial).</div></div>
-            </label>
-            {unirme && (
-              <div className={`orgJoinField field ${errores.codigoEquipo ? "con-error" : ""}`}><label htmlFor="codigoEquipo">Código de organización</label>
-                <input id="codigoEquipo" {...campo("codigoEquipo")} placeholder="Ej. AF-ORG-5K8PQ" autoComplete="off" />{error("codigoEquipo")}</div>
-            )}
-            <label className={`checkrow termsCheck ${errores.acepto ? "con-error" : ""}`}>
-              <input type="checkbox" checked={acepto} onChange={(e) => setAcepto(e.target.checked)} />
-              <div>
-                <strong>He leído y acepto los Términos y Condiciones y la Política de Privacidad</strong>
-                <p className="termsDeclare">Al marcar esta casilla declaras que <b>has leído completamente, entiendes y aceptas</b> los Términos y Condiciones y la Política de Privacidad.</p>
-                <div className="small">Léelos aquí: <a href="#" onClick={(e) => { e.preventDefault(); setLegal("terminos"); }}>Términos y Condiciones</a> · <a href="#" onClick={(e) => { e.preventDefault(); setLegal("privacidad"); }}>Política de Privacidad</a></div>
-              </div>
-            </label>
-          </>
-        )}
-        {aviso && <div className="afAlerta" role="alert">{aviso}</div>}
-        <button className="primary ancho" disabled={enviando}>{enviando ? "Un momento…" : registro ? "👤 Crear cuenta" : "🔐 Ingresar"}</button>
-        {!registro && <p className="small centro"><Link to="/olvide">¿Olvidaste tu contraseña?</Link></p>}
-      </form>
-      {legal && <VentanaLegal tipo={legal} alCerrar={() => setLegal(null)} />}
-    </PortadaMarco>
-  );
+  return <PortadaMarco angosta>
+    <div className="flowBackRow"><Link to="/">← Volver al inicio</Link>{planElegido && <span className="chosenPlanChip">Plan elegido: {PLANES[planElegido].nombre}</span>}</div>
+    <div className="authTabs"><span className="active">Iniciar sesión</span><Link to={"/registro" + search} replace>Crear cuenta</Link></div>
+    <form className="authForm" onSubmit={enviar}>
+      <h1>Bienvenido</h1><span className="small centro bloque">Ingresa para continuar con tus documentos.</span>
+      <div className="field"><label htmlFor="email">Correo electrónico</label><input id="email" name="email" type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" placeholder="nombre@correo.com" required />{errores.email && <span className="error">{errores.email}</span>}</div>
+      <div className="field"><label htmlFor="clave">Contraseña</label><input id="clave" name="clave" type="password" value={clave} onChange={e => setClave(e.target.value)} autoComplete="current-password" placeholder="Tu contraseña" required />{errores.clave && <span className="error">{errores.clave}</span>}</div>
+      {aviso && <div className="afAlerta" role="alert">{aviso}</div>}
+      <button className="primary ancho" disabled={enviando}>{enviando ? "Un momento…" : "Ingresar →"}</button>
+      <p className="small centro"><Link to="/olvide">¿Olvidaste tu contraseña?</Link></p>
+    </form>
+  </PortadaMarco>;
 }
 
 /**
@@ -243,7 +184,7 @@ export function SinCuenta() {
 
   return (
     <PortadaMarco angosta>
-      <div className="flowBackRow"><Link to="/">← Ver planes</Link></div>
+      <div className="flowBackRow"><Link to="/">← Volver al inicio</Link></div>
       <form className="authForm" onSubmit={entrar} noValidate>
         <h1>Entrar sin cuenta</h1>
         <span className="small centro bloque">

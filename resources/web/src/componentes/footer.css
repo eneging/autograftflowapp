@@ -1,0 +1,19 @@
+.footerAf { border-top: 1px solid var(--lineFuerte); background: var(--lateral); color: var(--ink); padding: 48px 24px 22px; }
+.footerInterior { max-width: 1144px; margin: 0 auto; display: grid; grid-template-columns: 1.25fr 1fr 1.1fr 1.2fr; gap: 32px; }
+.footerMarca > a { display: flex; align-items: center; gap: 18px; color: var(--ink); font-size: 22px; font-weight: 700; letter-spacing: -.035em; text-decoration: none; }
+.footerMarca > a > span { color: var(--accent); }
+.footerMarca p { color: var(--ink2); font-size: 15px; line-height: 1.6; margin: 14px 0; }
+.footerMarca > span { color: var(--ink2); font-size: 11px; }
+.footerAf h2 { font-size: 12px; margin: 6px 0 18px; }
+.footerAf nav, .footerLegal { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.footerAf nav > a, .footerLegal > a, .footerLegal > button { padding: 0; min-height: 24px; background: transparent; border: 0; border-radius: 0; box-shadow: none; color: var(--ink2); font-size: 12px; font-weight: 400; text-decoration: none; text-align: left; }
+.footerAf :is(a,button):hover { color: var(--accent); text-decoration: underline; text-underline-offset: 4px; }
+.footerAf :is(a,button):focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+.avisoLibro { display: grid; grid-template-columns: 40px 1fr; align-items: center; gap: 8px 12px; border: 1.5px solid var(--ink); border-radius: 8px; padding: 16px; color: var(--ink); text-decoration: none; }
+.avisoLibro strong { font-size: 12px; line-height: 1.5; letter-spacing: .04em; }
+.avisoLibro > span { grid-column: 1 / -1; font-size: 11px; }
+.footerLibro > p { font-size: 10px; color: var(--ink2); line-height: 1.7; margin-bottom: 0; }
+.footerBase { grid-column: 1 / -1; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; border-top: 1px solid var(--lineFuerte); margin-top: 12px; padding-top: 22px; font-size: 10px; color: var(--ink2); }
+.footerBase a { color: inherit; text-decoration: none; }
+@media(max-width:900px) { .footerInterior { grid-template-columns: 1fr 1fr; gap: 32px 24px; } }
+@media(max-width:480px) { .footerAf { padding: 32px 16px 22px; } .footerInterior { grid-template-columns: 1fr 1fr; gap: 28px 16px; } .footerMarca, .footerLibro { grid-column: 1 / -1; } .footerLibro { max-width: 340px; } .footerBase { flex-direction: column; gap: 10px; } }

@@ -97,15 +97,18 @@ class Planes
     /** Estado que ve el cliente en «Mi plan». */
     public static function estado(int $cuentaId): array
     {
+        Referidos::acreditar($cuentaId);
         $d = self::datos($cuentaId);
+        $bonos = Referidos::saldo($cuentaId);
         $p = self::plan($d['plan']);
         $limite = $p['documentos'];
         return [
             'plan' => $d['plan'], 'planContratado' => $d['contratado'],
             'vence' => self::plan($d['plan'])['dias'] ? $d['vence']?->toIso8601ZuluString() : null,
+            'creditosReferidos' => $bonos,
             'usados' => $d['usados'], 'limite' => $limite, 'periodo' => $p['periodo'], 'creditos' => $d['creditos'],
             'firmantesPorDocumento' => self::maxFirmantes($p, $d['invitado']), 'invitado' => $d['invitado'], 'selloHuella' => $p['selloHuella'],
-            'disponibles' => $limite === null ? null : max(0, $limite - $d['usados']) + $d['creditos'],
+            'disponibles' => $limite === null ? null : max(0, $limite - $d['usados']) + $d['creditos'] + $bonos,
             'usuarios' => $p['usuarios'], 'moneda' => config('autograflow.moneda'), 'pagosActivos' => MercadoPago::activo(),
         ];
     }
@@ -116,6 +119,7 @@ class Planes
      */
     public static function consumirEnvio(int $cuentaId, int $documentoId, int $firmantes, array $tipos = [], bool $textoPropio = false): void
     {
+        Referidos::acreditar($cuentaId);
         $d = self::datos($cuentaId, true);
         $p = self::plan($d['plan']);
         $max = self::maxFirmantes($p, $d['invitado']);
@@ -131,6 +135,11 @@ class Planes
             throw new ErrorUso("En el plan {$p['nombre']} puedes llenar los campos que ya trae el PDF. Para agregar cuadros de texto nuevos o permitir texto libre, elige un plan de pago.", 402);
         }
         $origen = self::origen($d['usados'], $p['documentos'], $d['creditos']);
+        $bonoId = null;
+        // Los bonos vencen: se usan después del cupo del plan y antes de créditos comprados que no vencen.
+        if ($origen !== 'plan' && ($bonoId = Referidos::consumir($cuentaId)) !== null) {
+            $origen = 'referido';
+        }
         if (! $origen) {
             $cuando = $p['periodo'] === 'dia' ? 'hoy' : 'este mes';
             throw new ErrorUso("Ya usaste los {$p['documentos']} documentos de {$cuando} de tu plan {$p['nombre']}. ".
@@ -139,7 +148,7 @@ class Planes
         if ($origen === 'credito') {
             DB::table('cuentas')->where('id', $cuentaId)->where('creditos', '>', 0)->decrement('creditos');
         }
-        DB::table('consumos')->insert(['documento_id' => $documentoId, 'cuenta_id' => $cuentaId, 'origen' => $origen, 'creado_en' => now()]);
+        DB::table('consumos')->insert(['documento_id' => $documentoId, 'cuenta_id' => $cuentaId, 'origen' => $origen, 'referido_bono_id' => $bonoId, 'creado_en' => now()]);
     }
 
     /** Entrega lo comprado (dentro de la transacción del pago). */

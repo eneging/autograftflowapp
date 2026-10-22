@@ -5,6 +5,8 @@ use App\Http\Controllers\CuentaController;
 use App\Http\Controllers\DocumentosController;
 use App\Http\Controllers\FirmaController;
 use App\Http\Controllers\ReembolsoController;
+use App\Http\Controllers\ReclamacionesController;
+use App\Http\Controllers\ReferidosController;
 use App\Http\Middleware\CabeceraAutograFlow;
 use App\Http\Middleware\ClaveAdmin;
 use App\Http\Middleware\ConSesion;
@@ -16,6 +18,10 @@ use Illuminate\Support\Facades\Route;
  */
 Route::prefix('api')->middleware(CabeceraAutograFlow::class)->group(function () {
     Route::get('salud', fn () => ['ok' => true]);
+    Route::get('referidos/reglas', [ReferidosController::class, 'reglas']);
+    Route::get('reclamaciones/configuracion', [ReclamacionesController::class, 'configuracion']);
+    Route::post('reclamaciones', [ReclamacionesController::class, 'crear'])->middleware('throttle:20,1');
+    Route::get('reclamaciones/{token}/constancia', [ReclamacionesController::class, 'constancia'])->middleware('throttle:30,1');
 
     // Cuentas
     Route::post('auth/registro', [AuthController::class, 'registro']);
@@ -64,6 +70,8 @@ Route::prefix('api')->middleware(CabeceraAutograFlow::class)->group(function () 
     Route::post('pagos/webhook', [CuentaController::class, 'webhook']);
     Route::middleware(ConSesion::class)->group(function () {
         Route::get('cuenta', [CuentaController::class, 'cuenta']);
+        Route::put('cuenta/guia', [CuentaController::class, 'guia']);
+        Route::get('cuenta/referidos', [ReferidosController::class, 'estado']);
         Route::get('cuenta/equipo', [CuentaController::class, 'equipo']);
         Route::post('cuenta/equipo/codigo', [CuentaController::class, 'nuevoCodigoEquipo']);
         Route::delete('cuenta/equipo/{usuario}', [CuentaController::class, 'quitarMiembro'])->whereNumber('usuario');
@@ -88,6 +96,10 @@ Route::prefix('api')->middleware(CabeceraAutograFlow::class)->group(function () 
 
     // Administración (contraseña ADMIN_PASSWORD)
     Route::middleware(ClaveAdmin::class)->prefix('admin')->group(function () {
+        Route::get('reclamaciones', [ReclamacionesController::class, 'listar']);
+        Route::post('reclamaciones/{id}/respuesta', [ReclamacionesController::class, 'responder'])->whereNumber('id');
+        Route::post('reclamaciones/{id}/reintentar', [ReclamacionesController::class, 'reintentar'])->whereNumber('id');
+        Route::get('reclamaciones/{id}/pdf', [ReclamacionesController::class, 'pdfAdmin'])->whereNumber('id');
         Route::get('solicitudes', [ReembolsoController::class, 'admin']);
         Route::get('cuentas', [CuentaController::class, 'adminCuentas']);
         Route::post('cuentas/{id}/activar', [CuentaController::class, 'adminActivar'])->whereNumber('id');

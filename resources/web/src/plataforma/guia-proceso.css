@@ -1,0 +1,21 @@
+.guiaProceso { margin: 0 0 24px; padding: 20px 24px; border: 1px solid var(--accent); border-radius: 10px; background: var(--azulBg); color: var(--ink); }
+.guiaProcesoCabecera { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.guiaProcesoCabecera > span { font-size: 10px; font-weight: 650; letter-spacing: .08em; color: var(--azulInk); }
+.guiaProcesoCabecera button { padding: 6px 0 6px 10px; background: transparent; border: 0; box-shadow: none; color: var(--ink2); font-size: 12px; }
+.guiaProcesoProgreso { height: 3px; background: var(--lineFuerte); border-radius: 3px; overflow: hidden; margin: 12px 0 18px; }
+.guiaProcesoProgreso span { display: block; height: 100%; background: var(--accent); }
+.guiaProceso h2 { font-size: 22px; letter-spacing: -.025em; margin-bottom: 8px; }
+.guiaProceso > p { max-width: 880px; font-size: 13px; line-height: 1.8; color: var(--ink2); margin: 8px 0 16px; }
+.guiaProcesoAcciones { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.guiaProcesoAcciones :is(button,.boton) { min-height: 40px; font-size: 12px; }
+.guiaProcesoAcciones > a:not(.boton) { font-size: 12px; }
+.guiaProceso > small { display: block; margin-top: 14px; font-size: 10px; color: var(--ink2); }
+.guiaProceso .guiaProcesoPista { font-size: 11px; margin: 12px 0 0; }
+.guiaResaltado { outline: 3px solid var(--accent) !important; outline-offset: 5px; scroll-margin-block: 90px; }
+.guiaAcceso { display: inline-flex; align-items: center; gap: 8px; }
+.guiaAcceso button { white-space: nowrap; font-size: 11px; min-height: 30px; }
+.guiaError { font-size: 11px; color: var(--ink2); }
+.guiaAcceso .guiaError { max-width: 260px; }
+.guiaProceso :is(a,button):focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.guiaEditorInicio { margin-bottom: 18px; }
+@media(max-width:640px) { .guiaProceso { padding: 16px; } .guiaProceso h2 { font-size: 20px; } .guiaProcesoAcciones { gap: 8px; } .guiaProcesoAcciones :is(button,.boton) { flex: 1 1 140px; } .guiaAcceso .guiaError { display: none; } .afTopbar .chipPlan { display: none; } }

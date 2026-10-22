@@ -1,0 +1,72 @@
+.asistentePagina { max-width: 1060px; margin: 0 auto; }
+.asistenteSuperior { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+.asistenteSuperior > a { color: var(--ink2); font-size: 12px; text-underline-offset: 4px; }
+.asistenteIntro { margin: 32px 0; max-width: 680px; }
+.asistenteIntro h1 { font-size: clamp(30px, 4vw, 44px); letter-spacing: -.04em; }
+.asistenteIntro p { color: var(--ink2); line-height: 1.8; font-size: 15px; }
+.asistentePasos ol { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); list-style: none; padding: 0; margin: 0; gap: 8px; }
+.asistentePasos button { width: 100%; display: flex; justify-content: flex-start; gap: 10px; padding: 13px 10px; border: 1px solid var(--lineFuerte); border-radius: 7px; box-shadow: none; background: var(--fondo); color: var(--ink2); font-size: 12px; }
+.asistentePasos button > span { color: var(--accent); font-size: 11px; }
+.asistentePasos button.actual { background: var(--accentSuave); border-color: var(--accent); }
+.asistenteProgreso { height: 3px; background: var(--line); margin-top: 16px; border-radius: 4px; overflow: hidden; }
+.asistenteProgreso > span { display: block; height: 100%; background: var(--accent); }
+.asistenteCuerpo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; margin: 32px 0; align-items: stretch; }
+.asistenteExplicacion { padding: 16px 0; }
+.asistenteNumero { font-size: 11px; letter-spacing: .08em; color: var(--accent); font-weight: 650; }
+.asistenteExplicacion h2 { font-size: clamp(25px, 3vw, 33px); line-height: 1.18; letter-spacing: -.035em; margin: 15px 0 18px; scroll-margin-top: 80px; }
+.asistenteExplicacion > p { font-size: 15px; line-height: 1.8; color: var(--ink2); }
+.asistenteConsejo { display: flex; align-items: flex-start; gap: 12px; margin: 24px 0; padding: 17px; background: var(--lateral); border: 1px solid var(--line); border-radius: 8px; }
+.asistenteConsejo .icono { flex-shrink: 0; color: var(--accent); }
+.asistenteConsejo p { margin: 0; font-size: 12px; line-height: 1.8; color: var(--ink2); }
+.asistenteExplicacion > button { min-height: 44px; font-size: 13px; }
+.asistenteControles { display: grid; gap: 16px; }
+.asistenteControles label { display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
+.asistenteControles :is(input, select) { width: 100%; min-height: 44px; padding: 10px 12px; background: var(--campo); border: 1px solid var(--lineFuerte); border-radius: 6px; color: var(--ink); font: inherit; }
+.asistenteCampos { display: flex; flex-wrap: wrap; gap: 10px; }
+.asistenteCampos button { min-height: 44px; font-size: 13px; }
+.asistenteCampos [aria-pressed=true] { background: var(--accentSuave); border-color: var(--accent); color: var(--accent); }
+.asistenteExplicacion .asistenteAviso { font-size: 12px; color: var(--verdeInk); min-height: 36px; margin: 18px 0 0; }
+.asistenteDemo { background: var(--lateral); border: 1px solid var(--lineFuerte); border-radius: 12px; padding: 20px; min-height: 430px; }
+.asistenteDemoBarra { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; font-size: 9px; color: var(--ink2); letter-spacing: .06em; }
+.asistenteDemoBarra > span:first-child { display: flex; align-items: center; gap: 6px; }
+.asistenteDemoBarra i { width: 6px; height: 6px; background: var(--ok); border-radius: 50%; }
+.asistenteDemoBarra > span:last-child { font-size: 8px; border: 1px solid var(--lineFuerte); padding: 3px 6px; border-radius: 4px; }
+.asistenteHoja { border: 1px solid var(--lineFuerte); border-radius: 5px; background: var(--fondo); padding: 24px; margin-top: 20px; }
+.asistenteHojaMarca { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--ink2); font-size: 8px; letter-spacing: .025em; }
+.asistenteHoja h3 { font-family: Georgia, serif; font-size: 25px; margin: 25px 0 8px; letter-spacing: -.035em; }
+.asistenteHoja > p { color: var(--ink2); font-size: 10px; }
+.asistenteLineas { display: grid; gap: 8px; margin: 22px 0; }
+.asistenteLineas i { height: 4px; background: var(--line); border-radius: 2px; }
+.asistenteLineas i:last-child { width: 64%; }
+.asistenteArchivo { min-height: 135px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; padding: 16px; border: 1px dashed var(--lineFuerte); border-radius: 6px; color: var(--accent); text-align: center; }
+.asistenteArchivo strong { font-size: 13px; }
+.asistenteArchivo span { font-size: 10px; color: var(--ink2); }
+.asistenteArchivo.listo { background: var(--verdeBg); border-color: var(--ok); color: var(--verdeInk); }
+.asistentePersona { display: flex; align-items: center; gap: 12px; min-height: 135px; padding: 14px; border: 1px solid var(--lineFuerte); border-radius: 6px; }
+.asistentePersona > span { display: grid; place-items: center; width: 32px; height: 32px; background: var(--accentSuave); color: var(--accent); border-radius: 50%; flex-shrink: 0; }
+.asistentePersona strong { display: block; font-size: 13px; overflow-wrap: anywhere; }
+.asistentePersona small { display: block; font-size: 10px; color: var(--ink2); margin-top: 6px; }
+.asistenteZonaCampos { display: flex; flex-direction: column; gap: 12px; min-height: 135px; justify-content: center; }
+.asistenteZonaCampos > span { font-size: 12px; color: var(--ink2); text-align: center; padding: 20px; border: 1px dashed var(--lineFuerte); border-radius: 6px; }
+.asistenteCampoFirma { border: 1px dashed var(--accent); border-radius: 5px; padding: 14px; background: var(--accentSuave); overflow-wrap: anywhere; }
+.asistenteCampoFirma small { color: var(--accent); font-size: 9px; }
+.asistenteCampoFirma strong { display: block; margin-top: 10px; font-size: 17px; color: var(--accent); }
+.asistenteCampoFecha { font-size: 11px; border: 1px dashed var(--accent); padding: 10px; border-radius: 5px; color: var(--accent); }
+.asistenteMensaje { min-height: 135px; padding: 16px; border-radius: 6px; background: var(--verdeBg); overflow-wrap: anywhere; }
+.asistenteMensaje strong { font-size: 12px; }
+.asistenteMensaje p { font-size: 11px; color: var(--ink2); line-height: 1.7; }
+.asistenteMensaje > span, .asistenteMensaje small { color: var(--verdeInk); display: block; font-size: 10px; margin-top: 8px; }
+.asistenteFirmado { display: flex; flex-direction: column; justify-content: center; gap: 12px; min-height: 135px; padding: 14px; border: 1px solid var(--ok); border-radius: 6px; background: var(--verdeBg); }
+.asistenteFirmado small, .asistenteFirmado > span { color: var(--verdeInk); font-size: 10px; }
+.asistenteFirmado strong { font-family: "Segoe Script", "Brush Script MT", cursive; font-size: 26px; font-style: italic; overflow-wrap: anywhere; }
+.asistenteHojaPie { display: flex; align-items: center; gap: 7px; font-size: 9px; color: var(--ink2); padding-top: 20px; overflow-wrap: anywhere; }
+.asistenteDemoNota { text-align: center; font-size: 10px; color: var(--ink2); line-height: 1.7; margin: 15px 0 0; }
+.asistenteFinal { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; }
+.asistenteFinal p { font-size: 13px; margin: 0; }
+.asistenteFinal > a:not(.boton) { font-size: 12px; text-underline-offset: 4px; }
+.asistenteNavegacion { border-top: 1px solid var(--lineFuerte); display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 22px; }
+.asistenteNavegacion button { min-height: 44px; font-size: 13px; }
+.asistenteNavegacion > span { color: var(--ink2); font-size: 12px; }
+.asistentePagina :is(button, a, input, select):focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+.panelAyuda { margin: 12px 0; font-size: 13px; }
+@media(max-width:700px) { .asistentePasos ol { gap: 5px; } .asistentePasos button { padding: 10px 4px; justify-content: center; } .asistentePasos strong { display: none; } .asistentePasos button.actual { border-width: 2px; padding-block: 9px; } .asistenteCuerpo { grid-template-columns: minmax(0,1fr); gap: 18px; margin-block: 22px; } .asistenteExplicacion { padding-top: 4px; } .asistenteDemo { padding: 16px; min-height: 0; } .asistenteHoja { padding: 20px; } .asistenteIntro { margin-block: 24px; } .asistenteSuperior .entradaEyebrow { font-size: 9px; } .asistenteNavegacion { gap: 8px; } .asistenteNavegacion button { font-size: 12px; padding-inline: 10px; } }

@@ -13,6 +13,7 @@ import { ErrorApi, plataforma, urls, type Contacto } from "./api";
 import { calcularPdf } from "./calculos";
 import { usarSesion } from "./sesion";
 import { PaginaPdf, posicion, usarPdf } from "./VisorPdf";
+import { GuiaProceso, usarGuia } from "./GuiaProceso";
 
 type CampoLocal = CampoEditor & { k: string };
 type ImagenPropia = "firma" | "sello" | "huella";
@@ -36,6 +37,7 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
   inicial: DocumentoDetalle; alEnviar: (d: DocumentoDetalle) => void; alCambiarPdf: (d: DocumentoDetalle, aviso: string) => void; avisoInicial?: string;
 }) {
   const navegar = useNavigate();
+  const { seguirDocumento } = usarGuia();
   const { usuario } = usarSesion();
   const detectados = (useLocation().state as { detectados?: number } | null)?.detectados ?? 0;
   const { doc, error: errorPdf } = usarPdf(urls.original(inicial.id));
@@ -386,6 +388,7 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
       }
       await plataforma.guardar(inicial.id, { ...datos, firmantes: lista });
       const det = await plataforma.enviar(inicial.id);
+      seguirDocumento(inicial.id, 5);
       // Al guardar, el servidor da claves nuevas a los firmantes: el tuyo se reconoce por su posición.
       const iYo = lista.findIndex((f) => f.clave === miClave);
       const yo = iYo >= 0 ? det.firmantes.find((f) => f.orden === iYo + 1) : undefined;
@@ -558,6 +561,10 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
   const hayDatosFirmantes = campos.some((c) => c.firmante !== PREPARADOR && TIPOS_DATO.includes(c.tipo));
 
   return (
+    <>
+    <GuiaProceso etapa="editor" documentoId={inicial.id} plantilla={esPlantilla}
+      firmantesListos={firmantes.length > 0 && firmantes.every(f => f.nombre.trim().length >= 2 && !/^Firmante \d+$/.test(f.nombre.trim()))}
+      camposListos={firmantes.length > 0 && firmantes.every(f => campos.some(c => c.firmante === f.clave))} />
     <div className="grid editorGrid">
       <section className="card prepPanel">
         <h1>{esPlantilla ? "Editar plantilla" : "Preparar documento"}</h1>
@@ -596,7 +603,7 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
 
         <div className="step">
           <div className="stepTitle"><span className="stepNumber">3</span>Cantidad de firmantes</div>
-          <div className="participantSetup">
+          <div className="participantSetup" data-guia="firmantes">
             <div className="participantCountRow">
               <label htmlFor="cantidadFirmantes">Personas que deben firmar</label>
               <input id="cantidadFirmantes" type="number" min={1} max={maxFirmantes} value={firmantes.length} inputMode="numeric" onChange={(e) => cantidad(Number(e.target.value))} />
@@ -631,7 +638,7 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
                 </div>
 
                 <div className="participantFieldsHeading">Delimite los campos:</div>
-                <div className="participantTools">
+                <div className="participantTools" data-guia="campos">
                   <div className="participantTool">
                     <div className="participantToolHead"><strong>Firma</strong><button type="button" className="renameFieldBtn" title="Cambiar el nombre del campo de firma" onClick={() => renombrar("firma")}>✏️ Nombre</button></div>
                     <div className="participantToolActions">
@@ -834,7 +841,7 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
             {esPlantilla ? (
               <button type="button" className="success" onClick={async () => { await plataforma.guardar(inicial.id, datos); navegar(`/app/d/${(await plataforma.duplicar(inicial.id)).id}`); }}>📋 Usar esta plantilla</button>
             ) : (
-              <button type="button" className={conWhatsApp ? "green" : "primary"} disabled={enviando} onClick={enviar}>
+              <button type="button" data-guia="enviar" className={conWhatsApp ? "green" : "primary"} disabled={enviando} onClick={enviar}>
                 {conWhatsApp && WA_SVG}{enviando ? "Enviando…" : conWhatsApp ? "Guardar y enviar" : "💾 Guardar y enviar"}
               </button>
             )}
@@ -992,6 +999,7 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
         />
       )}
     </div>
+    </>
   );
 }
 

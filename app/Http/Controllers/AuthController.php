@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Servicios\ErrorUso;
 use App\Servicios\Equipo;
 use App\Servicios\Planes;
+use App\Servicios\Referidos;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -22,7 +23,9 @@ class AuthController extends Controlador
         $c = DB::table('cuentas')->find($u->cuenta_id);
         $invitado = (bool) ($c->invitado ?? false);
         return ['id' => $u->id, 'cuentaId' => $u->cuenta_id, 'nombre' => $u->name, 'email' => $invitado ? '' : $u->email, 'cuenta' => $c->nombre,
-            'plan' => Planes::vigenteDe($c->id), 'titular' => Equipo::titularId($c->id) === $u->id, 'invitado' => $invitado];
+            'plan' => Planes::vigenteDe($c->id), 'titular' => Equipo::titularId($c->id) === $u->id, 'invitado' => $invitado,
+            'guia' => ['estado' => $u->guia_estado ?? 'pendiente', 'paso' => (int) ($u->guia_paso ?? 1),
+                'documentoId' => $u->guia_documento_id ? (int) $u->guia_documento_id : null]];
     }
 
     /** Cookie (cifrada por Laravel) con el usuario invitado de este navegador: así su cupo diario no se reinicia al volver a entrar. */
@@ -46,9 +49,13 @@ class AuthController extends Controlador
         $d = $this->validar([...$r->all(), 'email' => strtolower(trim((string) $r->input('email')))], [
             'nombre' => 'required|string|min:2|max:120', 'empresa' => 'nullable|string|max:120',
             'email' => 'required|email|max:160', 'clave' => 'required|string|min:8|max:200',
-            'acepto' => 'accepted', 'codigoEquipo' => 'nullable|string|max:20',
+            'acepto' => 'accepted', 'codigoEquipo' => 'nullable|string|max:20', 'codigoReferido' => 'nullable|string|max:20',
         ], ['acepto.*' => 'Debes aceptar los Términos y Condiciones y la Política de Privacidad', 'nombre.*' => 'Escribe tu nombre', 'email.*' => 'Correo inválido', 'clave.min' => 'La contraseña debe tener al menos 8 caracteres']);
         $this->limitar('registro:'.$r->ip());
+        if (! empty($d['codigoEquipo']) && ! empty($d['codigoReferido'])) {
+            throw new ErrorUso('El referido es para una cuenta nueva, no para unirse a una organización existente.', 400,
+                ['codigoReferido' => 'Quita este código para unirte a tu organización.']);
+        }
         if (User::where('email', $d['email'])->exists()) {
             throw new ErrorUso('Ya existe una cuenta con ese correo', 409, ['email' => 'Ya registrado']);
         }
@@ -58,6 +65,7 @@ class AuthController extends Controlador
             DB::transaction(function () use ($actual, $d) {
                 DB::table('cuentas')->where('id', $actual->cuenta_id)->update(['nombre' => trim($d['empresa'] ?? '') ?: trim($d['nombre']), 'invitado' => false, 'updated_at' => now()]);
                 $actual->forceFill(['name' => trim($d['nombre']), 'email' => $d['email'], 'password' => $d['clave'], 'terminos_aceptados_en' => now(), 'remember_token' => Str::random(60)])->save();
+                Referidos::asociar((int) $actual->cuenta_id, $d['codigoReferido'] ?? '', $d['email']);
             });
             Auth::login($actual, true);
             $r->session()->regenerate();
@@ -69,6 +77,7 @@ class AuthController extends Controlador
                 : DB::table('cuentas')->insertGetId(['nombre' => trim($d['empresa'] ?? '') ?: $d['nombre'], 'created_at' => now(), 'updated_at' => now()]);
             $u = User::create(['cuenta_id' => $cuenta, 'name' => trim($d['nombre']), 'email' => $d['email'], 'password' => $d['clave']]);
             $u->forceFill(['terminos_aceptados_en' => now()])->save();
+            Referidos::asociar((int) $cuenta, $d['codigoReferido'] ?? '', $d['email']);
             return $u;
         });
         Auth::login($u, true);

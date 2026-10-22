@@ -14,6 +14,19 @@ use Illuminate\Support\Facades\DB;
 /** Planes, pagos con Mercado Pago, logo propio, verificación pública y administración de cuentas. */
 class CuentaController extends Controlador
 {
+    public function guia(Request $r)
+    {
+        $d = $this->validar($r->all(), ['estado' => 'required|in:pendiente,activa,omitida,completa',
+            'paso' => 'required|integer|min:1|max:6', 'documentoId' => 'nullable|integer|min:1']);
+        if (! empty($d['documentoId']) && ! DB::table('documentos')->where('id', $d['documentoId'])
+            ->where('cuenta_id', $r->user()->cuenta_id)->exists()) {
+            throw new ErrorUso('Este documento no está disponible en tu cuenta.', 404);
+        }
+        DB::table('users')->where('id', $r->user()->id)->update(['guia_estado' => $d['estado'], 'guia_paso' => $d['paso'],
+            'guia_documento_id' => $d['documentoId'] ?? null]);
+        return response()->json($d)->header('Cache-Control', 'private, no-store');
+    }
+
     public function planes()
     {
         $c = Planes::catalogo();

@@ -5,6 +5,7 @@ import type { EstadoCuenta } from "../../../shared/planes";
 import { plataforma, type FilaDocumento } from "./api";
 import { usarSesion } from "./sesion";
 import { AvisoInvitado, CupoPanel } from "./Planes";
+import { GuiaProceso, usarGuia } from "./GuiaProceso";
 
 export const InsigniaDoc = ({ estado }: { estado: EstadoDocumento }) => <span className={`insignia doc-${estado}`}>{ETIQUETA_ESTADO[estado]}</span>;
 export const fechaHora = (iso: string | null) =>
@@ -12,6 +13,7 @@ export const fechaHora = (iso: string | null) =>
 
 /** «Mis documentos»: subir un PDF nuevo y ver el estado de los enviados. */
 export function Panel() {
+  const { guia, seguirDocumento } = usarGuia();
   const { usuario } = usarSesion();
   const navegar = useNavigate();
   const [filas, setFilas] = useState<FilaDocumento[] | null>(null);
@@ -51,6 +53,7 @@ export function Panel() {
     setError("");
     try {
       const r = await plataforma.subir(archivo);
+      seguirDocumento(r.id, 2, true);
       navegar(`/app/d/${r.id}`, { state: { detectados: r.camposDetectados } });
     } catch (e) {
       // Los errores de prepararPdf (PDF protegido, dañado…) ya traen un mensaje para la persona.
@@ -61,15 +64,21 @@ export function Panel() {
 
   return (
     <>
+      <GuiaProceso etapa="panel" cargando={!filas} documentoDisponible={!!filas?.some(d => d.id === guia.documentoId)} />
       <div className="card">
         <h1>Preparar documento</h1>
         <p>Hola{usuario && !usuario.invitado ? `, ${usuario.nombre}` : ""}. Sube un PDF, marca dónde firma cada persona y envíalo por WhatsApp.</p>
         <CupoPanel estado={estado} />
         {usuario?.invitado && <AvisoInvitado />}
+        {filas && filas.length === 0 && <section className="primerDocumento" aria-labelledby="primerDocumentoTitulo">
+          <h2 id="primerDocumentoTitulo">Tu primer documento, paso a paso</h2>
+          <ol><li><strong>Sube tu PDF</strong> desde el botón de abajo.</li><li>Añade firmantes y coloca sus campos.</li><li>Revisa y comparte el enlace por WhatsApp.</li></ol>
+        </section>}
         <div className="step">
           <div className="stepTitle"><span className="stepNumber">1</span>Documento PDF</div>
           <div
             role="button" tabIndex={0} aria-label="Seleccionar PDF"
+            data-guia="subir"
             className={`filebtn primary dropZone ${arrastrando ? "dragover" : ""}`}
             onClick={() => !subiendo && entrada.current?.click()}
             onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), entrada.current?.click())}
@@ -115,7 +124,7 @@ export function Panel() {
       <div className="card">
         <h2>Documentos</h2>
         {!filas ? <p id="loading">Cargando…</p> : filas.filter((d) => !d.esPlantilla).length === 0 ? (
-          <p>Todavía no tienes documentos. Sube el primero arriba.</p>
+          <p>Aquí verás tus documentos y el avance de sus firmas. Empieza seleccionando tu primer PDF arriba.</p>
         ) : (
           <div className="listaDocs">
             {filas.filter((d) => !d.esPlantilla).map((d) => (

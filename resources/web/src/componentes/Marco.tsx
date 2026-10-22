@@ -4,6 +4,8 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { PLANES } from "../../../shared/planes";
 import { plataforma, type FilaDocumento } from "../plataforma/api";
 import { usarSesion } from "../plataforma/sesion";
+import { Footer } from "./Footer";
+import { BotonGuia } from "../plataforma/GuiaProceso";
 
 /*
  * Diseño AutograFlow (inspirado en Notion): lienzo blanco, barra lateral gris clara con el espacio de trabajo, la
@@ -87,7 +89,7 @@ const enAplicacion = () =>
   /WhatsApp|FBAN|FBAV|FB_IAB|Instagram|Line\/|MicroMessenger|Telegram|; wv\)/i.test(navigator.userAgent || "");
 const esIos = () => /iPhone|iPad|iPod/i.test(navigator.userAgent || "");
 /** Portada, planes y acceso: página de presentación con su propia barra (ver PortadaMarco). */
-const RUTAS_PORTADA = /^\/(planes|ingresar|registro|sin-cuenta|olvide|restablecer)?$/;
+const RUTAS_PORTADA = /^\/(planes|ingresar|registro|sin-cuenta|olvide|restablecer|libro-de-reclamaciones|referidos|como-funciona)?$/;
 /** Páginas que abren los firmantes con su enlace: sin menú de cuenta. */
 const RUTAS_FIRMANTE = /^\/(f|s|a)\/|^\/reembolso$/;
 const CLAVE_LATERAL = "autograflow_lateral_plegada";
@@ -116,9 +118,9 @@ export function Marco({ children }: { children: ReactNode }) {
     </div>
   );
 
-  if (portada) return <>{aviso}<main className="mainPortada">{children}</main></>;
+  if (portada) return <>{aviso}<main className="mainPortada">{children}</main><Footer /></>;
   // Con sesión: barra lateral como en Notion. Firmantes y visitantes: barra superior sencilla.
-  if (usuario && !firmante) return <>{aviso}<ConLateral ancho={ancho}>{children}</ConLateral></>;
+  if (usuario && !firmante) return <>{aviso}<ConLateral ancho={ancho}>{children}</ConLateral><Footer /></>;
   return (
     <>
       {aviso}
@@ -131,6 +133,7 @@ export function Marco({ children }: { children: ReactNode }) {
         </div>
       </header>
       <main className={ancho ? "mainAncho" : ""}>{children}</main>
+      <Footer />
     </>
   );
 }
@@ -140,6 +143,7 @@ function tituloRuta(pathname: string) {
   if (pathname === "/app") return "Mis documentos";
   if (pathname.startsWith("/app/d/")) return "Documento";
   if (pathname === "/app/cuenta") return "Mi Plan";
+  if (pathname === "/app/referidos") return "Invita y gana";
   if (pathname === "/app/estadisticas") return "Estadísticas y directorio";
   if (pathname === "/app/equipo") return "Mi Equipo";
   if (pathname === "/app/pago") return "Pago";
@@ -169,6 +173,7 @@ function ConLateral({ ancho, children }: { ancho: boolean; children: ReactNode }
             {titulo && <><span className="migasSep">/</span><span className="migasActual">{titulo}</span></>}
           </nav>
           <div className="afTopbarDer">
+            <BotonGuia />
             {usuario && <Link className="chipPlan" to="/app/cuenta">{PLANES[usuario.plan]?.nombre ?? "Gratis"}</Link>}
           </div>
         </div>
@@ -237,6 +242,8 @@ function Lateral({ alPlegar }: { alPlegar: () => void }) {
       <nav className="navGrupo">
         {item("inicio", "Mis documentos", "/app")}
         {item("plan", "Mi Plan", "/app/cuenta")}
+        {item("verificar", "Cómo funciona", "/como-funciona?desde=panel")}
+        {!usuario.invitado && item("equipo", "Invita y gana", "/app/referidos")}
         {item("graficos", "Estadísticas y directorio", "/app/estadisticas")}
         {empresarial && item("equipo", "Mi Equipo", "/app/equipo")}
       </nav>

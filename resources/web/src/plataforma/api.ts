@@ -25,7 +25,8 @@ async function pedir<T>(url: string, opciones: RequestInit = {}): Promise<T> {
 const json = (metodo: string, datos?: unknown): RequestInit => ({ method: metodo, body: datos === undefined ? undefined : JSON.stringify(datos) });
 
 /** invitado: entró «sin cuenta» (Gratis, 1 firmante); su email llega vacío. */
-export interface Usuario { id: number; cuentaId: number; nombre: string; email: string; cuenta: string; plan: IdPlan; titular: boolean; invitado: boolean }
+export interface EstadoGuia { estado: "pendiente" | "activa" | "omitida" | "completa"; paso: number; documentoId: number | null }
+export interface Usuario { id: number; cuentaId: number; nombre: string; email: string; cuenta: string; plan: IdPlan; titular: boolean; invitado: boolean; guia?: EstadoGuia }
 /** Destinatario de «Enviar a varios» y su resultado (token: su enlace; error: por qué no se envió). */
 export interface Destinatario { nombre: string; telefono: string; email: string }
 export interface ResultadoEnvio extends Destinatario { documentoId: number | null; token: string | null; esperaTurno: boolean; error: string | null }
@@ -44,8 +45,9 @@ export interface FilaDocumento {
 }
 
 export const plataforma = {
+  guardarGuia: (guia: EstadoGuia) => pedir<EstadoGuia>("/api/cuenta/guia", json("PUT", guia)),
   yo: () => pedir<Usuario>("/api/auth/yo"),
-  registrar: (d: { nombre: string; empresa: string; email: string; clave: string; acepto: boolean; codigoEquipo: string }) => pedir("/api/auth/registro", json("POST", d)),
+  registrar: (d: { nombre: string; empresa: string; email: string; clave: string; acepto: boolean; codigoEquipo: string; codigoReferido?: string }) => pedir("/api/auth/registro", json("POST", d)),
   ingresar: (d: { email: string; clave: string }) => pedir("/api/auth/ingresar", json("POST", d)),
   invitado: (acepto: boolean) => pedir("/api/auth/invitado", json("POST", { acepto })),
   salir: () => pedir("/api/auth/salir", json("POST", {})),

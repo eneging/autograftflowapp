@@ -9,6 +9,7 @@ import { Editor } from "./Editor";
 import { InsigniaDoc, fechaHora } from "./Panel";
 import { usarSesion } from "./sesion";
 import { NavPaginas, PaginaPdf, posicion, usarPdf } from "./VisorPdf";
+import { GuiaProceso } from "./GuiaProceso";
 
 /** Página de un documento: editor si es borrador, seguimiento si ya se envió. */
 export function DocumentoPagina() {
@@ -70,7 +71,7 @@ export function BotonesPdfFirmado({ url, urlDescarga, nombre, texto, disponible 
   const t = usarT();
   return (
     <>
-      <div className="readyBar botonesPdf">
+      <div className="readyBar botonesPdf" data-guia="descarga">
         {disponible
           ? <a className="boton primary" href={urlDescarga}>{t("⬇️ Descargar PDF")}</a>
           : <button type="button" className="primary" disabled title={t("El PDF final todavía no se pudo generar")}>{t("⬇️ Descargar PDF")}</button>}
@@ -132,10 +133,11 @@ function Seguimiento({ d, recargar }: { d: DocumentoDetalle; recargar: () => voi
 
   return (
     <>
+      <GuiaProceso etapa="seguimiento" documentoId={d.id} completo={completo} />
       <div className="card">
         <Link to="/app" className="enlace">← Mis documentos</Link>
         <h1>{d.nombre}</h1>
-        <div className="notice">
+        <div className="notice" data-guia="seguimiento">
           <InsigniaDoc estado={d.estado} /> {firmados} de {d.firmantes.length} firmaron · enviado {fechaHora(d.enviadoEn)}
           {d.completadoEn && <> · completado {fechaHora(d.completadoEn)}</>}
           <div className="progreso"><span style={{ width: `${(firmados / Math.max(1, d.firmantes.length)) * 100}%` }} /></div>
@@ -153,7 +155,7 @@ function Seguimiento({ d, recargar }: { d: DocumentoDetalle; recargar: () => voi
         )}
 
         <h2>Firmantes {d.orden === "secuencial" ? "(en orden)" : "(todos a la vez)"}</h2>
-        <div className="listaFirmantes">
+        <div className="listaFirmantes" data-guia="compartir">
           {d.firmantes.map((f) => {
             const turno = turnoDe(f.orden);
             return (

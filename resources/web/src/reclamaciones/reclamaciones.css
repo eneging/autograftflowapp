@@ -1,0 +1,44 @@
+.libroPagina { max-width: 800px; margin: 0 auto; }
+.libroVolver { font-size: 13px; text-decoration: none; }
+.libroEncabezado { margin: 36px 0 24px; }
+.libroEncabezado h1 { font-size: clamp(30px, 5vw, 46px); letter-spacing: -.04em; margin: 12px 0; }
+.libroEncabezado p, .libroDerechos { line-height: 1.8; color: var(--ink2); }
+.libroProveedor { display: flex; flex-wrap: wrap; gap: 6px 20px; padding: 18px 22px; margin-bottom: 26px; background: var(--lateral); border: 1px solid var(--lineFuerte); border-radius: 10px; font-size: 12px; color: var(--ink2); }
+.libroProveedor strong { flex-basis: 100%; font-size: 14px; }
+.libroNota { padding: 15px 18px; background: var(--azulBg); border-radius: 8px; color: var(--ink2); font-size: 13px; line-height: 1.7; }
+.libroFormulario fieldset { border: 1px solid var(--lineFuerte); border-radius: 10px; padding: 24px; margin: 28px 0; min-width: 0; }
+.libroFormulario legend { padding: 0 10px; font-size: 17px; font-weight: 650; }
+.libroFormulario legend span { color: var(--accent); font-size: 12px; margin-right: 10px; }
+.libroGrid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 20px; }
+.libroAncho { grid-column: 1 / -1; }
+.libroFormulario label, .libroRespuesta label, .libroAdminAcceso label, .libroFiltro { display: flex; flex-direction: column; align-items: stretch; gap: 8px; font-size: 13px; color: var(--ink); }
+.libroFormulario fieldset > label { margin-top: 22px; }
+.libroFormulario :is(input:not([type=checkbox]):not([type=radio]),textarea,select), .libroAdmin :is(input,textarea,select) { width: 100%; min-width: 0; font: inherit; background: var(--campo); color: var(--ink); border: 1px solid var(--lineFuerte); border-radius: 6px; padding: 11px 12px; min-height: 44px; }
+.libroFormulario textarea, .libroRespuesta textarea { resize: vertical; }
+.libroPagina :is(a,button,input,textarea,select):focus-visible, .libroAdmin :is(button,input,textarea,select):focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.libroFormulario .libroCheck { flex-direction: row; align-items: center; gap: 10px; }
+.libroFormulario input:is([type=checkbox],[type=radio]) { width: 18px; height: 18px; accent-color: var(--accent); flex-shrink: 0; }
+.libroTipos { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.libroTipos label { flex-direction: row; align-items: flex-start; padding: 16px; border: 1px solid var(--lineFuerte); border-radius: 8px; cursor: pointer; }
+.libroTipos label:has(:checked) { border-color: var(--accent); background: var(--accentSuave); }
+.libroTipos small { display: block; margin-top: 7px; color: var(--ink2); line-height: 1.6; font-size: 12px; }
+.libroPrivacidad, .libroDerechos { font-size: 12px; line-height: 1.8; }
+.libroPrivacidad button { display: inline; border: 0; padding: 0; box-shadow: none; background: transparent; color: var(--accent); font-size: inherit; font-weight: 400; text-decoration: underline; }
+.libroEnviar { min-height: 48px; width: 100%; margin: 14px 0 22px; }
+.libroConstancia { padding: 28px; border: 1px solid var(--ok); border-radius: 12px; margin: 28px 0; scroll-margin-top: 80px; }
+.libroConstancia h2 { margin-top: 20px; }
+.libroExito { color: var(--verdeInk); background: var(--verdeBg); border-radius: 6px; padding: 6px 10px; font-size: 12px; }
+.libroResumen { background: var(--lateral); border-radius: 8px; padding: 18px; margin: 22px 0; }
+.libroResumen p, .libroTextoLargo { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink2); }
+.libroAdmin h1 { margin-top: 22px; }
+.libroAdminAcceso { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 28px 0; }
+.libroAdminAcceso label { max-width: 340px; flex: 1 1 220px; }
+.libroFiltro { display: inline-flex; margin-right: 16px; max-width: 100%; }
+.libroAdminHoja { border: 1px solid var(--lineFuerte); border-radius: 10px; padding: 24px; margin: 22px 0; }
+.libroAdminTitulo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.libroAdminTitulo h2 { margin: 0; }
+.libroRespuesta { display: grid; gap: 16px; padding-top: 24px; }
+.libroRespuesta small { color: var(--ink2); }
+.libroCorreos { margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--lineFuerte); }
+.libroCorreos p { font-size: 12px; }
+@media(max-width:600px) { .libroGrid, .libroTipos { grid-template-columns: minmax(0,1fr); } .libroFormulario fieldset, .libroConstancia, .libroAdminHoja { padding: 18px 14px; } .libroEncabezado { margin-top: 26px; } }

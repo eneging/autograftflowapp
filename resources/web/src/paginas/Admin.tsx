@@ -57,6 +57,7 @@ export function Admin() {
     <>
       <div className="titulo-pagina">
         <h1>Solicitudes</h1>
+        <Link to="/admin/reclamaciones">Atender Libro de Reclamaciones →</Link>
         <p>{filas ? `${filas.length} solicitud${filas.length === 1 ? "" : "es"} · total no rechazado ${formatoMonto(total)}` : "Cargando…"}</p>
       </div>
       <div className="filtros">

@@ -13,19 +13,19 @@ import { usarIdioma } from "./idioma";
 /** Datos del titular del servicio. Lo que está entre corchetes hay que completarlo antes de publicar. */
 export const TITULAR = {
   marca: "AutograFlow",
-  razonSocial: "[RAZÓN SOCIAL DEL TITULAR]",
-  ruc: "[RUC]",
-  domicilio: "[DOMICILIO LEGAL]",
-  correo: "[CORREO DE SOPORTE Y PRIVACIDAD]",
-  ciudad: "Lima, Perú",
+  razonSocial: "Edwar Rejas Reyes",
+  ruc: "10733361510",
+  domicilio: "Las Brisas de Jahui, Mz. D, Lt. 7, Subtanjalla, Ica, Ica",
+  correo: "edwarrejasreyes@gmail.com",
+  ciudad: "Ica, Perú",
   registroBancoDatos: "[CÓDIGO DE INSCRIPCIÓN DEL BANCO DE DATOS ANTE LA AUTORIDAD NACIONAL DE PROTECCIÓN DE DATOS PERSONALES]",
   hosting: "[PROVEEDOR DE ALOJAMIENTO Y PAÍS]",
   correoProveedor: "[PROVEEDOR DE ENVÍO DE CORREOS]",
 };
 /** Versión vigente: se guarda junto a cada aceptación. */
-export const VERSION_LEGAL = "2026-10-21.2";
-const FECHA_VERSION = "21 de octubre de 2026";
-const FECHA_VERSION_EN = "October 21, 2026";
+export const VERSION_LEGAL = "2026-10-22.2";
+const FECHA_VERSION = "22 de octubre de 2026";
+const FECHA_VERSION_EN = "October 22, 2026";
 /** Días que el firmante puede descargar su copia (COPIA_DIAS en el .env del servidor). */
 const DIAS_COPIA = 7;
 
@@ -35,6 +35,7 @@ const quien = `${T.marca}, servicio operado por ${T.razonSocial}, RUC ${T.ruc}, 
 type Seccion = [string, string];
 
 const TERMINOS: Seccion[] = [
+  ["Programa de referidos.", "La participación es opcional. Puedes compartir tu código o enlace personal con personas interesadas. La atribución se registra al crear una cuenta nueva o convertir un invitado, y no se aplica al unirse a una organización existente. Solo la primera compra válida puede generar un bono promocional para la cuenta que invitó. El programa tiene espera de acreditación, límite mensual y vencimiento publicados en la página Invita y gana. Los bonos conservan las funciones del plan vigente, no son dinero ni se transfieren. Los reembolsos o contracargos anulan el bono pendiente y el saldo promocional sin utilizar. Las condiciones se guardan con cada invitación registrada; las nuevas condiciones se aplican a invitaciones futuras. No se admiten autorreferidos ni el uso del programa para enviar publicidad no solicitada."],
   ["1. Quiénes somos.", `Estos Términos y Condiciones regulan el uso de ${quien} (en adelante, «AutograFlow», «nosotros»). Puedes escribirnos a ${T.correo}.`],
   ["2. Aceptación.", "Al crear una cuenta, entrar sin cuenta, comprar un plan o usar la plataforma, aceptas estos Términos, los Términos para firmantes (en lo que te aplique) y la Política de Privacidad, en la versión vigente al momento de aceptarlos. La aceptación se registra con su fecha y hora. Si entras sin cuenta, debes aceptarlos en cada entrada. Si no estás de acuerdo, no uses la plataforma."],
   ["3. Capacidad y representación.", "Debes ser mayor de 18 años y tener capacidad legal para contratar. Si usas AutograFlow en nombre de una empresa u organización, declaras que tienes facultades para obligarla; en ese caso, «tú» incluye también a esa organización."],
@@ -71,6 +72,8 @@ const FIRMANTES: Seccion[] = [
 ];
 
 const PRIVACIDAD: Seccion[] = [
+  ["Datos del programa de referidos.", "Si utilizas un código o enlace al registrarte, guardamos la relación entre las cuentas, el código, las condiciones del programa, la primera compra que califica y el historial de acreditación, uso, vencimiento o anulación del bono. La cuenta que invitó ve un identificador de invitación y su estado, sin tu nombre ni tu correo electrónico. El enlace no registra visitas ni añade cookies de seguimiento. Estos registros se usan para administrar el programa y prevenir duplicaciones y abusos."],
+  ["Libro de Reclamaciones.", "Los datos de la hoja, el pedido, las comunicaciones y la respuesta se tratan para atender el reclamo o queja y cumplir las obligaciones legales de protección al consumidor. Se conservan como mínimo dos años desde la presentación; el acceso se restringe al personal de atención y a la autoridad competente cuando corresponda. No se condiciona el registro a consentir publicidad ni a aceptar los términos comerciales. Puedes descargar la constancia de tu presentación."],
   ["1. Responsable y contacto.", `${quien}. Correo para privacidad y para ejercer tus derechos: ${T.correo}. Banco de datos: ${T.registroBancoDatos}.`],
   ["2. En qué calidad tratamos tus datos.", "Somos responsables de los datos de las cuentas, los pagos, el uso de la plataforma y la seguridad. Respecto del contenido de los documentos y de los datos de los firmantes, el responsable es el cliente que prepara y envía el documento (el remitente), y AutograFlow actúa como encargado del tratamiento por su cuenta."],
   ["3. Qué datos tratamos.", "(a) Cuenta: nombre, empresa, correo, contraseña (solo cifrada, nunca en texto plano), plan y fecha de aceptación de estos textos; códigos de recuperación de contraseña (válidos 60 minutos). (b) Acceso sin cuenta: un identificador de invitado guardado en tu navegador. (c) Documentos: el PDF, su nombre, la configuración de campos y lo que escribes en ellos. (d) Firmantes: nombre, WhatsApp y correo que indica el remitente; firma, sello y huella (imágenes); textos, fechas y casillas; fotos del documento de identidad si se piden; fecha y hora de apertura y de firma; IP; datos del navegador y dispositivo; hora de cada captura; ubicación aproximada solo si el firmante la autoriza; motivo de rechazo. (e) Directorio: los contactos que agregas a mano (nombre, WhatsApp y correo) y los de firmantes a los que ya enviaste documentos, para sugerírtelos; tú eres responsable de tener la autorización de esas personas y puedes editarlos o eliminarlos cuando quieras. (f) Pagos: plan comprado, monto, estado y referencia de Mercado Pago (nunca los datos de tu tarjeta). (g) Plantilla de reembolso: los datos del beneficiario, los viajes, gastos y montos, y las firmas del solicitante y del aprobador. (h) Técnicos y de seguridad: IP, fecha, navegador y registros de errores y de acceso."],
@@ -107,6 +110,8 @@ const FIRMANTES_EN: Seccion[] = [
 ];
 
 const PRIVACIDAD_EN: Seccion[] = [
+  ["Referral program data.", "If you use a referral code or link during registration, we store the account relationship, code, applicable rules, first qualifying purchase and reward history. The referring account sees an invitation identifier and its status without your name or email address. Referral links do not record visits or add tracking cookies. These records are used to operate the program and prevent duplicates and abuse."],
+  ["Complaints Book.", "Complaint records, requests, communications and responses are processed to handle the case and comply with consumer protection law. They are retained for at least two years from submission. Access is restricted to authorized staff and competent authorities when applicable. Registration does not require consent to advertising or acceptance of commercial terms. You can download your submission receipt."],
   ["1. Controller and contact.", `${quienEn}. Email for privacy matters and to exercise your rights: ${T.correo}. Database registration: ${T.registroBancoDatos}.`],
   ["2. Our role in processing your data.", "We are the controller of account data, payments, platform usage and security. For the content of documents and the data of signers, the controller is the customer who prepares and sends the document (the sender), and AutograFlow acts as a data processor on their behalf."],
   ["3. What data we process.", "(a) Account: name, company, email, password (only encrypted, never in plain text), plan and date of acceptance of these texts; password recovery codes (valid for 60 minutes). (b) Access without an account: a guest identifier stored in your browser. (c) Documents: the PDF, its name, the field configuration and what you type in them. (d) Signers: name, WhatsApp and email provided by the sender; signature, stamp and fingerprint (images); text, dates and checkboxes; identity document photos if requested; date and time of opening and signing; IP; browser and device data; time of each capture; approximate location only if the signer allows it; reason for declining. (e) Directory: contacts you add manually (name, WhatsApp and email) and those of signers you have already sent documents to, so we can suggest them; you are responsible for having those people's authorization and can edit or delete them at any time. (f) Payments: plan purchased, amount, status and Mercado Pago reference (never your card details). (g) Reimbursement template: the payee's details, trips, expenses and amounts, and the signatures of the requester and approver. (h) Technical and security data: IP, date, browser and error and access logs."],

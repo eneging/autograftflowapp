@@ -80,7 +80,7 @@ php artisan config:cache && php artisan route:cache && php artisan view:cache
 Si el comando `php` es otra versión, usa la ruta completa que indique tu hosting, por ejemplo `/opt/cpanel/ea-php82/root/usr/bin/php`.
 
 **Sin Terminal:**
-1. Abre phpMyAdmin, selecciona tu base e **importa** [deploy/base-de-datos.sql](base-de-datos.sql).
+1. Abre phpMyAdmin, selecciona una **base vacía** e **importa** [deploy/base-de-datos.sql](base-de-datos.sql), actualizado al 22 de octubre de 2026. Incluye el Libro de Reclamaciones, referidos y la guía de introducción. Consulta [las instrucciones de importación](IMPORTAR-BASE-DE-DATOS.md). Si tu base ya tiene datos, utiliza migraciones en lugar de este SQL de instalación nueva.
 2. Genera la clave en tu PC con `php artisan key:generate --show` y pega el resultado en `APP_KEY` del `.env` del servidor.
 
 Comprueba que funciona abriendo `https://tu-dominio.com/api/salud`: debe responder `{"ok":true}`.

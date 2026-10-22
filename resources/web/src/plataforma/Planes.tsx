@@ -144,6 +144,7 @@ export function MiPlan() {
           <div className="kpiCard"><div className="kpiVal">{e.limite === null ? "Ilimitados" : `${e.usados} / ${e.limite}`}</div><div className="kpiLbl">Documentos usados {cuando}</div>
             {e.limite !== null && <div className="progreso"><span style={{ width: `${Math.min(100, (e.usados / Math.max(1, e.limite)) * 100)}%` }} /></div>}</div>
           <div className="kpiCard"><div className="kpiVal">{e.creditos}</div><div className="kpiLbl">Documentos comprados (no vencen)</div></div>
+          <div className="kpiCard"><div className="kpiVal">{e.creditosReferidos}</div><div className="kpiLbl">Bonos de referido con vencimiento · <Link to="/app/referidos">Ver mis bonos</Link></div></div>
           <div className="kpiCard"><div className="kpiVal">{e.disponibles === null ? "Ilimitados" : e.disponibles}</div><div className="kpiLbl">Puedes enviar {cuando}</div></div>
           <div className="kpiCard"><div className="kpiVal">{e.firmantesPorDocumento}</div><div className="kpiLbl">Firmantes por documento{e.selloHuella ? " · con sello y huella" : " · solo firma"}</div></div>
         </div>
@@ -251,6 +252,7 @@ export function CupoPanel({ estado }: { estado: EstadoCuenta | null }) {
         {PLANES[e.plan].icono} Plan <strong>{PLANES[e.plan].nombre}</strong> ·{" "}
         {e.limite === null ? "documentos ilimitados" : `${e.usados} de ${e.limite} documentos ${cuando}`}
         {e.creditos ? ` · ${e.creditos} comprados` : ""}
+        {e.creditosReferidos > 0 ? ` · ${e.creditosReferidos} de referido` : ""}
       </span>
       <Link to={pocos ? "/planes" : "/app/cuenta"}>{pocos ? "Ver planes" : "Mi Plan"}</Link>
     </div>

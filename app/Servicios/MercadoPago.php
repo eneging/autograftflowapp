@@ -95,6 +95,13 @@ class MercadoPago
             }
             self::aplicar($pagoId, (string) $pmp['id']);
         } elseif (in_array($estado, ['rejected', 'cancelled', 'refunded', 'charged_back'], true)) {
+            if (in_array($estado, ['cancelled', 'refunded', 'charged_back'], true)
+                && $pago->aplicado_en && (string) $pago->mp_pago_id === (string) ($pmp['id'] ?? '')) {
+                DB::transaction(function () use ($pago) {
+                    DB::table('pagos')->where('id', $pago->id)->update(['estado' => 'cancelado', 'updated_at' => now()]);
+                    Referidos::anularPago($pago->id);
+                }, 3);
+            }
             DB::table('pagos')->where('id', $pagoId)->whereNull('aplicado_en')
                 ->update(['estado' => $estado === 'rejected' ? 'rechazado' : 'cancelado', 'mp_pago_id' => (string) $pmp['id'], 'updated_at' => now()]);
         }
@@ -113,8 +120,9 @@ class MercadoPago
             }
             $pago = DB::table('pagos')->find($pagoId);
             Planes::entregar((int) $pago->cuenta_id, $pago->producto);
+            Referidos::pagoAprobado($pago);
             return true;
-        });
+        }, 3);
     }
 
     /** Al volver de Mercado Pago: busca el pago por su referencia (sirve aunque el aviso no haya llegado todavía). */
