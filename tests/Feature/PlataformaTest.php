@@ -538,6 +538,50 @@ class PlataformaTest extends TestCase
         $this->assertStringContainsString('plan gratuito', $this->texto($final));
     }
 
+    public function test_ex_trae_envia_texto_a_los_otros_dispositivos_de_la_cuenta(): void
+    {
+        $this->getJson('/api/flow/ex-trae/textos', self::H)->assertStatus(401);
+        $this->registrar();
+        $this->postJson('/api/flow/ex-trae/textos', ['texto' => ''], self::H)->assertStatus(400);
+        $id = $this->postJson('/api/flow/ex-trae/textos', ['texto' => "Línea 1\nLínea 2", 'datos' => ['ruc' => '20123456789'], 'origen' => 'Celular'], self::H)
+            ->assertCreated()->json('id');
+        $this->getJson('/api/flow/ex-trae/textos', self::H)->assertOk()
+            ->assertJsonPath('0.texto', "Línea 1\nLínea 2")->assertJsonPath('0.datos.ruc', '20123456789')->assertJsonPath('0.origen', 'Celular');
+        // Solo los más nuevos que el último que ya tiene el dispositivo
+        $this->getJson("/api/flow/ex-trae/textos?despues={$id}", self::H)->assertOk()->assertJsonCount(0);
+        // Se guardan los últimos 50
+        for ($i = 0; $i < 52; $i++) {
+            DB::table('ex_trae_textos')->insert(['user_id' => DB::table('users')->where('email', 'ana@ejemplo.com')->value('id'), 'texto' => "t{$i}", 'created_at' => now()]);
+        }
+        $this->postJson('/api/flow/ex-trae/textos', ['texto' => 'último'], self::H)->assertCreated();
+        $this->assertSame(50, DB::table('ex_trae_textos')->count());
+
+        // Otra cuenta no ve, ni borra, los textos de la primera
+        $otroId = DB::table('ex_trae_textos')->max('id');
+        $this->registrar('luis@ejemplo.com');
+        $this->getJson('/api/flow/ex-trae/textos', self::H)->assertOk()->assertJsonCount(0);
+        $this->deleteJson("/api/flow/ex-trae/textos/{$otroId}", [], self::H)->assertOk();
+        $this->deleteJson('/api/flow/ex-trae/textos', [], self::H)->assertOk();
+        $this->assertSame(50, DB::table('ex_trae_textos')->count());
+    }
+
+    public function test_quitar_varias_paginas_a_la_vez(): void
+    {
+        $this->registrar();
+        $id = $this->subir();
+        $this->preparar($id, 1); // texto en la página 1, firma en la 2
+
+        $this->postJson("/api/documentos/{$id}/paginas/eliminar", ['paginas' => []], self::H)->assertStatus(400);
+        $this->postJson("/api/documentos/{$id}/paginas/eliminar", ['paginas' => [2, 5]], self::H)->assertStatus(404);
+        $this->postJson("/api/documentos/{$id}/paginas/eliminar", ['paginas' => [1, 2]], self::H)->assertStatus(400); // debe quedar al menos una
+
+        // Repetidas y desordenadas cuentan una vez; la firma de la página 2 pasa a la 1
+        $det = $this->postJson("/api/documentos/{$id}/paginas/eliminar", ['paginas' => [1, 1]], self::H)->assertOk()->json();
+        $this->assertCount(1, $det['paginas']);
+        $this->assertSame([['firma', 1]], array_map(fn ($c) => [$c['tipo'], $c['pagina']], $det['campos']));
+        $this->assertSame(1, (new Fpdi)->setSourceFile(StreamReader::createByString($this->get("/api/documentos/{$id}/archivo")->getContent())));
+    }
+
     public function test_quitar_pagina_firma_con_dni_y_certificado_de_evidencias(): void
     {
         $this->registrar();

@@ -162,7 +162,7 @@ function CopiaFirmante({ v, token, completo }: { v: VistaFirmante; token: string
 
 function Llenar({ v, token, alTerminar }: { v: VistaFirmante; token: string; alTerminar: () => void }) {
   const t = usarT(), nombreCampo = usarNombreCampo(), idioma = usarIdioma();
-  const { doc, error: errorPdf } = usarPdf(urls.originalFirmante(token));
+  const { doc, error: errorPdf, avance } = usarPdf(urls.originalFirmante(token));
   const mios = useMemo(() => v.campos.filter((c) => c.mio), [v]);
   const [valores, setValores] = useState<Valores>(() => {
     // Las fechas empiezan con el día de hoy (se pueden cambiar).
@@ -329,7 +329,7 @@ function Llenar({ v, token, alTerminar }: { v: VistaFirmante; token: string; alT
   }
 
   const vistaPagina = (interactivo: boolean) => (
-    <PaginaPdf doc={doc} numero={pagina} pagina={p} alTocar={interactivo && colocandoLibre ? ponerLibre : undefined} cursor={interactivo && colocandoLibre ? "crosshair" : undefined}>
+    <PaginaPdf doc={doc} avance={avance} numero={pagina} pagina={p} alTocar={interactivo && colocandoLibre ? ponerLibre : undefined} cursor={interactivo && colocandoLibre ? "crosshair" : undefined}>
       {libres.map((l, i) => l.pagina !== pagina ? null : interactivo ? (
         <button type="button" key={`l${i}`} className="campoFirma tipo-texto mio filled afLibre" style={{ ...posicion(l, p), "--c": v.yo.color } as CSSProperties}
           title={t("Tu texto adicional: tócalo para cambiarlo o quitarlo")} onClick={() => editarLibre(i)}><span className="afTextShown">{l.texto}</span></button>

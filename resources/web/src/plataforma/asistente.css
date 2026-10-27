@@ -70,3 +70,10 @@
 .asistentePagina :is(button, a, input, select):focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
 .panelAyuda { margin: 12px 0; font-size: 13px; }
 @media(max-width:700px) { .asistentePasos ol { gap: 5px; } .asistentePasos button { padding: 10px 4px; justify-content: center; } .asistentePasos strong { display: none; } .asistentePasos button.actual { border-width: 2px; padding-block: 9px; } .asistenteCuerpo { grid-template-columns: minmax(0,1fr); gap: 18px; margin-block: 22px; } .asistenteExplicacion { padding-top: 4px; } .asistenteDemo { padding: 16px; min-height: 0; } .asistenteHoja { padding: 20px; } .asistenteIntro { margin-block: 24px; } .asistenteSuperior .entradaEyebrow { font-size: 9px; } .asistenteNavegacion { gap: 8px; } .asistenteNavegacion button { font-size: 12px; padding-inline: 10px; } }
+
+/* Animaciones «Así se hace» y pasos concretos dentro de la guía interactiva. */
+.asistenteDemos { display: flex; flex-wrap: wrap; gap: 12px; margin: 20px 0; }
+.asistenteComo { margin: 0 0 8px; padding: 14px 16px; border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; background: var(--accentSuave); }
+.asistenteComo strong { display: block; font-size: 13px; margin-bottom: 6px; }
+.asistenteComo ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.asistenteComo li { font-size: 13.5px; line-height: 1.6; color: var(--ink2); }

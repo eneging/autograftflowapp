@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { PLANES } from "../../../shared/planes";
 import { Icono } from "../componentes/Marco";
+import { CelularFirma } from "./CelularFirma";
 import "./bienvenida.css";
 
 const PASOS = [
@@ -24,19 +25,16 @@ export function Bienvenida() {
             <Link className="boton" to="/como-funciona">Ver cómo funciona <span aria-hidden>→</span></Link>
           </div>
           <p className="entradaMicro">{PLANES.gratis.documentos} documentos gratis al día · Sin tarjeta</p>
-          <Link className="entradaInvitado" to="/sin-cuenta">¿Solo quieres probar? Entra sin cuenta →</Link>
+          <Link className="botonInvitado" to="/sin-cuenta">
+            <span className="botonInvitadoIcono" aria-hidden>🧪</span>
+            <span><strong>¿Solo quieres probar?</strong><small>Entra sin cuenta, sin registrarte</small></span>
+            <span className="botonInvitadoFlecha" aria-hidden>→</span>
+          </Link>
         </div>
-        <div className="entradaVisual" aria-label="Ejemplo de un documento completado">
-          <div className="visualCabecera"><span className="visualPunto" /> TU PRÓXIMO DOCUMENTO, RESUELTO <span>PDF</span></div>
-          <div className="papelEjemplo">
-            <div className="papelCabecera"><Icono n="doc" tam={24} /><span>DOCUMENTO DE EJEMPLO</span></div>
-            <h2>Acuerdo de servicios</h2><p>Todo listo para seguir adelante.</p>
-            <div className="papelLineas" aria-hidden><i /><i /><i /></div>
-            <div className="papelFirma"><span>Firma del destinatario</span><span className="firmaEjemplo">María García</span><small>Firmado desde el celular</small></div>
-            <div className="papelPie"><Icono n="verificar" /> Certificado de firmas incluido</div>
-          </div>
-          <div className="firmaAviso"><span className="firmaCheck" aria-hidden>✓</span><div><strong>Documento completado</strong><span>Listo para descargar y compartir</span></div></div>
-          <p className="visualLeyenda">Así se ve el resultado · Ejemplo ilustrativo</p>
+        <div className="entradaVisual">
+          <div className="visualCabecera"><span className="visualPunto" /> ASÍ FIRMAN TUS CLIENTES, DESDE SU CELULAR <span>PDF</span></div>
+          <CelularFirma />
+          <p className="visualLeyenda">Sin instalar nada ni crear cuenta · Ejemplo ilustrativo</p>
         </div>
       </section>
 

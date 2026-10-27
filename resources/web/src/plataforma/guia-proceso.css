@@ -5,13 +5,28 @@
 .guiaProcesoProgreso { height: 3px; background: var(--lineFuerte); border-radius: 3px; overflow: hidden; margin: 12px 0 18px; }
 .guiaProcesoProgreso span { display: block; height: 100%; background: var(--accent); }
 .guiaProceso h2 { font-size: 22px; letter-spacing: -.025em; margin-bottom: 8px; }
-.guiaProceso > p { max-width: 880px; font-size: 13px; line-height: 1.8; color: var(--ink2); margin: 8px 0 16px; }
+.guiaProceso p.guiaProcesoTexto { max-width: 880px; font-size: 13px; line-height: 1.8; color: var(--ink2); margin: 8px 0 16px; }
 .guiaProcesoAcciones { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .guiaProcesoAcciones :is(button,.boton) { min-height: 40px; font-size: 12px; }
 .guiaProcesoAcciones > a:not(.boton) { font-size: 12px; }
 .guiaProceso > small { display: block; margin-top: 14px; font-size: 10px; color: var(--ink2); }
 .guiaProceso .guiaProcesoPista { font-size: 11px; margin: 12px 0 0; }
-.guiaResaltado { outline: 3px solid var(--accent) !important; outline-offset: 5px; scroll-margin-block: 90px; }
+/*
+ * Resaltado de la guía y parpadeo de los modos asistidos: un anillo propio (::after) encima del control. No se anima su
+ * box-shadow ni su outline porque los botones los fijan con !important (tema.css) y eso anula cualquier animación.
+ * El control necesita position: relative; asistido.ts se lo pone solo si no tenía otra posición.
+ */
+.guiaResaltado, .asistidoParpadeo { scroll-margin-block: 90px; }
+.guiaResaltado::after, .asistidoParpadeo::after {
+  content: ""; position: absolute; inset: -6px; z-index: 30; pointer-events: none; border: 3px solid var(--accent); border-radius: 10px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent), 0 0 22px 4px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+/* Guía (modo activo): parpadea mientras sea el paso actual. */
+.guiaResaltado::after { animation: guiaParpadeo 1.1s ease-in-out infinite; }
+/* Modo pasivo (y al llegar a un paso de la guía): parpadeos contados, luego desaparece. */
+.asistidoParpadeo::after { animation: asistidoParpadeo .8s ease-in-out var(--parpadeos, 1) both; }
+@keyframes guiaParpadeo { 0%, 100% { opacity: 1; } 50% { opacity: .12; } }
+@keyframes asistidoParpadeo { 0%, 100% { opacity: 0; } 45%, 55% { opacity: 1; } }
 .guiaAcceso { display: inline-flex; align-items: center; gap: 8px; }
 .guiaAcceso button { white-space: nowrap; font-size: 11px; min-height: 30px; }
 .guiaError { font-size: 11px; color: var(--ink2); }
@@ -19,3 +34,104 @@
 .guiaProceso :is(a,button):focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 .guiaEditorInicio { margin-bottom: 18px; }
 @media(max-width:640px) { .guiaProceso { padding: 16px; } .guiaProceso h2 { font-size: 20px; } .guiaProcesoAcciones { gap: 8px; } .guiaProcesoAcciones :is(button,.boton) { flex: 1 1 140px; } .guiaAcceso .guiaError { display: none; } .afTopbar .chipPlan { display: none; } }
+
+/* Texto a la izquierda y la animación «Así se hace» a la derecha (debajo en pantallas angostas). */
+.guiaProcesoCuerpo { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 24px; align-items: start; }
+@media (max-width: 760px) { .guiaProcesoCuerpo { grid-template-columns: 1fr; } }
+
+
+/* «Así se hace»: animaciones que imitan la pantalla real de cada paso (cursor, toques y resultado), en bucle. */
+.demoGuia { position: relative; overflow: hidden; width: 300px; max-width: 100%; height: 188px; margin: 0; border-radius: 10px; border: 1px solid var(--lineFuerte); background: var(--fondo); box-shadow: var(--sombraHoja); font-size: 10px; line-height: 1.3; color: var(--ink); --t: 5s; }
+.demoGuia * { box-sizing: border-box; }
+.demoBarra { display: flex; align-items: center; gap: 4px; height: 18px; padding: 0 8px; background: var(--lateral); border-bottom: 1px solid var(--line); color: var(--muted); font-size: 8px; }
+.demoBarra i { width: 6px; height: 6px; border-radius: 50%; background: var(--lineFuerte); }
+.demoBarra span { margin-left: 6px; }
+.demoBarra b { margin-left: auto; color: var(--accent); font-weight: 650; letter-spacing: .06em; }
+.demoLienzo { position: absolute; inset: 18px 0 0; }
+.demoCursor { position: absolute; z-index: 5; width: 14px; height: 14px; left: 0; top: 0; pointer-events: none; animation: var(--ruta) var(--t) ease-in-out infinite; }
+.demoCursor::before { content: ""; position: absolute; inset: 0; background: var(--ink); clip-path: polygon(0 0, 0 85%, 28% 62%, 48% 100%, 62% 93%, 43% 57%, 80% 57%); filter: drop-shadow(0 0 1px #fff); }
+.demoCursor::after { content: ""; position: absolute; left: -7px; top: -7px; width: 14px; height: 14px; border-radius: 50%; background: var(--accent); opacity: 0; animation: var(--toques) var(--t) linear infinite; }
+.demoBoton { position: absolute; display: grid; place-items: center; padding: 0 8px; height: 20px; border-radius: 5px; border: 1px solid var(--lineFuerte); background: var(--fondo); font-weight: 600; white-space: nowrap; }
+.demoBoton.prim { background: var(--accentRelleno, var(--accent)); border-color: var(--accentRelleno, var(--accent)); color: var(--sobreAccent, #fff); }
+.demoBoton.verde { background: #25d366; border-color: #25d366; color: #fff; }
+.demoHoja { position: absolute; border-radius: 4px; background: #fff; border: 1px solid var(--lineFuerte); padding: 8px; }
+.demoHoja i { display: block; height: 3px; margin: 0 0 5px; border-radius: 2px; background: #d9d9d6; }
+.demoTexto { position: absolute; color: var(--muted); }
+.demoAparece { opacity: 0; animation: var(--aparece) var(--t) ease-out infinite; }
+
+/* 1 · Subir el PDF: el cursor arrastra el archivo a la zona y sube con su porcentaje. */
+.demo1 { --ruta: d1Ruta; --toques: d1Toques; --aparece: d1Aparece; }
+.demo1 .zona { position: absolute; left: 18px; right: 18px; top: 14px; height: 100px; border: 1.5px dashed var(--accent); border-radius: 8px; display: grid; place-items: center; color: var(--accent); font-weight: 600; background: var(--accentSuave); }
+.demo1 .archivo { position: absolute; left: 0; top: 0; z-index: 4; width: 26px; height: 32px; border-radius: 3px; background: #fff; border: 1px solid var(--lineFuerte); display: grid; place-items: end center; padding-bottom: 3px; font-size: 7px; font-weight: 700; color: #e03e3e; animation: d1Archivo var(--t) ease-in-out infinite; }
+.demo1 .barra { position: absolute; left: 60px; right: 60px; top: 128px; height: 5px; border-radius: 3px; background: var(--hover2); overflow: hidden; }
+.demo1 .barra span { display: block; height: 100%; width: 0; background: var(--accent); animation: d1Barra var(--t) linear infinite; }
+@keyframes d1Ruta { 0%, 8% { transform: translate(240px, 150px); } 18% { transform: translate(258px, 26px); } 45%, 100% { transform: translate(150px, 66px); } }
+@keyframes d1Toques { 0%, 16% { opacity: 0; } 18% { opacity: .5; transform: scale(.4); } 24% { opacity: 0; transform: scale(1.6); } 100% { opacity: 0; } }
+@keyframes d1Archivo { 0%, 18% { transform: translate(246px, 8px); opacity: 1; } 45% { transform: translate(138px, 46px); opacity: 1; } 52%, 100% { transform: translate(138px, 56px) scale(.5); opacity: 0; } }
+@keyframes d1Barra { 0%, 50% { width: 0; } 90%, 100% { width: 100%; } }
+@keyframes d1Aparece { 0%, 88% { opacity: 0; } 92%, 100% { opacity: 1; } }
+
+/* 2 · Firmantes: aumenta la cantidad y se escribe el nombre. */
+.demo2 { --ruta: d2Ruta; --toques: d2Toques; --aparece: d2Aparece; }
+.demo2 .fila { position: absolute; left: 14px; right: 14px; display: flex; align-items: center; gap: 6px; height: 22px; padding: 0 6px; border-radius: 5px; border: 1px solid var(--lineFuerte); background: var(--fondo); }
+.demo2 .cant::after { content: "1"; font-weight: 700; animation: d2Numero var(--t) steps(1) infinite; }
+.demo2 .escribe { display: inline-block; overflow: hidden; white-space: nowrap; width: 0; border-right: 1px solid var(--ink); animation: d2Escribe var(--t) steps(12) infinite; }
+@keyframes d2Numero { 0%, 25% { content: "1"; } 26%, 100% { content: "2"; } }
+@keyframes d2Escribe { 0%, 40% { width: 0; } 75%, 100% { width: 62px; } }
+@keyframes d2Ruta { 0%, 5% { transform: translate(200px, 150px); } 20%, 30% { transform: translate(262px, 26px); } 40%, 100% { transform: translate(140px, 64px); } }
+@keyframes d2Toques { 0%, 22% { opacity: 0; } 24% { opacity: .5; transform: scale(.4); } 30% { opacity: 0; transform: scale(1.6); } 38% { opacity: 0; } 40% { opacity: .5; transform: scale(.4); } 46%, 100% { opacity: 0; transform: scale(1.6); } }
+@keyframes d2Aparece { 0%, 78% { opacity: 0; } 84%, 100% { opacity: 1; } }
+
+/* 3 · Campos: «Marcar firma» y un toque en el PDF coloca el recuadro de firma. */
+.demo3 { --ruta: d3Ruta; --toques: d3Toques; --aparece: d3Aparece; }
+.demo3 .campoFirmaDemo { position: absolute; left: 180px; top: 104px; width: 96px; height: 26px; border: 1.5px dashed #2383e2; border-radius: 4px; background: rgba(35,131,226,.12); display: grid; place-items: center; color: #1f6c9f; font-weight: 700; font-size: 8px; }
+@keyframes d3Ruta { 0%, 5% { transform: translate(150px, 150px); } 22%, 32% { transform: translate(50px, 30px); } 55%, 100% { transform: translate(220px, 116px); } }
+@keyframes d3Toques { 0%, 24% { opacity: 0; } 26% { opacity: .5; transform: scale(.4); } 32% { opacity: 0; transform: scale(1.6); } 55% { opacity: 0; } 57% { opacity: .5; transform: scale(.4); } 63%, 100% { opacity: 0; transform: scale(1.6); } }
+@keyframes d3Aparece { 0%, 57% { opacity: 0; transform: scale(.7); } 63%, 100% { opacity: 1; transform: none; } }
+
+/* 4 · Enviar: «Guardar y enviar» y el documento pasa a «En firma». */
+.demo4 { --ruta: d4Ruta; --toques: d4Toques; --aparece: d4Aparece; }
+@keyframes d4Ruta { 0%, 10% { transform: translate(40px, 150px); } 40%, 100% { transform: translate(150px, 76px); } }
+@keyframes d4Toques { 0%, 42% { opacity: 0; } 44% { opacity: .5; transform: scale(.4); } 52%, 100% { opacity: 0; transform: scale(1.6); } }
+@keyframes d4Aparece { 0%, 52% { opacity: 0; transform: translateY(6px); } 60%, 100% { opacity: 1; transform: none; } }
+
+/* 5 · Compartir: «Enviar por WhatsApp» y aparece el mensaje con el enlace. */
+.demo5 { --ruta: d5Ruta; --toques: d5Toques; --aparece: d5Aparece; }
+.demo5 .burbuja { position: absolute; right: 12px; top: 64px; width: 170px; padding: 6px 8px; border-radius: 8px 8px 2px 8px; background: #dcf8c6; color: #111; line-height: 1.4; }
+@keyframes d5Ruta { 0%, 10% { transform: translate(40px, 150px); } 38%, 100% { transform: translate(240px, 24px); } }
+@keyframes d5Toques { 0%, 40% { opacity: 0; } 42% { opacity: .5; transform: scale(.4); } 50%, 100% { opacity: 0; transform: scale(1.6); } }
+@keyframes d5Aparece { 0%, 50% { opacity: 0; transform: translateY(8px); } 58%, 100% { opacity: 1; transform: none; } }
+
+/* 6 · Seguimiento: las firmas avanzan y aparece la descarga del PDF firmado. */
+.demo6 { --ruta: d6Ruta; --toques: d6Toques; --aparece: d6Aparece; }
+.demo6 .progresoDemo { position: absolute; left: 14px; right: 14px; top: 44px; height: 6px; border-radius: 3px; background: var(--hover2); overflow: hidden; }
+.demo6 .progresoDemo span { display: block; height: 100%; background: var(--ok); animation: d6Progreso var(--t) ease-in-out infinite; }
+.demo6 .estadoDemo::after { content: "0 de 2 firmaron"; animation: d6Estado var(--t) steps(1) infinite; }
+@keyframes d6Progreso { 0%, 15% { width: 0; } 35%, 45% { width: 50%; } 60%, 100% { width: 100%; } }
+@keyframes d6Estado { 0%, 30% { content: "0 de 2 firmaron"; } 31%, 55% { content: "1 de 2 firmaron"; } 56%, 100% { content: "✓ 2 de 2 · Completado"; } }
+@keyframes d6Ruta { 0%, 60% { transform: translate(60px, 150px); } 85%, 100% { transform: translate(140px, 84px); } }
+@keyframes d6Toques { 0%, 86% { opacity: 0; } 88% { opacity: .5; transform: scale(.4); } 96%, 100% { opacity: 0; transform: scale(1.6); } }
+@keyframes d6Aparece { 0%, 58% { opacity: 0; } 64%, 100% { opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .demoGuia *, .demoGuia *::before, .demoGuia *::after { animation: none !important; }
+  .demoAparece { opacity: 1; }
+  .demo2 .escribe { width: auto; }
+  .demoCursor, .demo1 .archivo { display: none; }
+  .demo1 .barra span, .demo6 .progresoDemo span { width: 100%; }
+}
+
+/* «Cómo funciona»: interruptores de los modos asistidos. */
+.asistidoAjustes { margin: 0 0 28px; padding: 18px 20px; border: 1px solid var(--lineFuerte); border-radius: 10px; background: var(--suave); }
+.asistidoAjustes h2 { font-size: 17px; margin: 0 0 4px; }
+.asistidoAjustes > p { margin: 0 0 12px; font-size: 13px; color: var(--ink2); }
+.asistidoInterruptor { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); cursor: pointer; }
+.asistidoInterruptor input[type=checkbox] { appearance: none; -webkit-appearance: none; display: inline-block; border: 0; flex-shrink: 0; position: relative; width: 38px; height: 22px; margin: 2px 0 0; border-radius: 11px; background: var(--lineFuerte); cursor: pointer; transition: background .15s; }
+.asistidoInterruptor input[type=checkbox]::after { content: ""; border: 0; margin: 0; transform: none; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s; }
+.asistidoInterruptor input[type=checkbox]:checked { background: var(--accent); }
+.asistidoInterruptor input[type=checkbox]:checked::after { transform: translateX(16px); }
+.asistidoInterruptor input[type=checkbox]:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.asistidoInterruptor input[type=checkbox]:disabled { opacity: .5; cursor: not-allowed; }
+.asistidoInterruptor strong { display: block; font-size: 14px; }
+.asistidoInterruptor small { display: block; font-size: 12.5px; color: var(--ink2); line-height: 1.5; }
+@media (prefers-reduced-motion: reduce) { .asistidoInterruptor input, .asistidoInterruptor input::after { transition: none; } }

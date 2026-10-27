@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { plataforma, type EstadoGuia, type Usuario } from "./api";
 import { usarSesion } from "./sesion";
+import { enfatizar, resaltar } from "./asistido";
 import "./guia-proceso.css";
 
 const INICIAL: EstadoGuia = { estado: "pendiente", paso: 1, documentoId: null };
@@ -82,11 +83,56 @@ export function BotonGuia() {
 const PASOS = [
   { titulo: "Vamos con tu primer PDF", texto: "Selecciona tu archivo en el botón resaltado o arrástralo. Cuando termine de subir, te acompañaré dentro del editor.", objetivo: "subir" },
   { titulo: "Indica quién va a firmar", texto: "Elige la cantidad de personas y escribe sus nombres. Añade sus contactos para preparar el envío. Si firmas tú, puedes usar «Agregar mi firma».", objetivo: "firmantes" },
-  { titulo: "Coloca los campos en el PDF", texto: "Selecciona un participante, pulsa «Marcar firma» y toca el PDF donde debe firmar. Repite para los demás. También puedes asignar campos que ya traiga el documento.", objetivo: "campos" },
+  { titulo: "Coloca los campos en el PDF", texto: "Selecciona un participante, pulsa «Marcar dónde irá la firma» y toca el PDF donde debe firmar. Si debe firmar en varias partes (por ejemplo, en cada página), pulsa otra vez y toca cada lugar: firmará una sola vez y su firma irá en todos. Repite para los demás.", objetivo: "campos" },
   { titulo: "Revisa y envía tu documento", texto: "Comprueba los nombres, los campos y el orden de firma. Luego usa «Guardar y enviar». Esta acción es real: los campos dejarán de poder editarse y se usará el cupo de tu plan.", objetivo: "enviar" },
   { titulo: "Comparte el enlace personal", texto: "Usa «Enviar por WhatsApp» o «Copiar enlace» junto a cada firmante pendiente. Abrir WhatsApp prepara el mensaje; tú decides enviarlo. No compartas el enlace de una persona con otra.", objetivo: "compartir" },
   { titulo: "Aquí puedes seguir las firmas", texto: "Revisa quién abrió y quién firmó. Cuando todos terminen, aparecerá la descarga del PDF final. Puedes salir y volver a este documento desde Mis documentos.", objetivo: "seguimiento" },
 ] as const;
+
+/**
+ * «Así se hace»: animación en bucle que imita la pantalla real del paso (cursor, toques y resultado), como un GIF pero
+ * hecha con HTML y CSS: pesa casi nada y respeta el tema claro/oscuro y «reducir movimiento».
+ */
+export function DemoPaso({ paso }: { paso: number }) {
+  const barra = (titulo: string) => <div className="demoBarra"><i /><i /><i /><span>{titulo}</span><b>ASÍ SE HACE</b></div>;
+  const escenas: Record<number, ReactNode> = {
+    1: <>{barra("Mis documentos")}<div className="demoLienzo">
+      <div className="zona">📄 Seleccionar PDF</div><div className="archivo">PDF</div>
+      <div className="barra"><span /></div><span className="demoTexto demoAparece" style={{ left: 104, top: 140 }}>✓ Documento listo</span>
+    </div></>,
+    2: <>{barra("Preparar documento")}<div className="demoLienzo">
+      <span className="demoTexto" style={{ left: 14, top: 8 }}>Personas que deben firmar</span>
+      <div className="fila" style={{ top: 22 }}><span className="cant" /><span style={{ marginLeft: "auto" }}>▲▼</span></div>
+      <span className="demoTexto" style={{ left: 14, top: 52 }}>Apodo del Firmante 2</span>
+      <div className="fila" style={{ top: 66 }}><span className="escribe">María García</span></div>
+      <span className="demoTexto demoAparece" style={{ left: 14, top: 100, color: "var(--ok)" }}>✓ Firmante 2 · María García</span>
+    </div></>,
+    3: <>{barra("Preparar documento")}<div className="demoLienzo">
+      <span className="demoBoton prim" style={{ left: 8, top: 14 }}>✍️ Marcar dónde irá la firma</span>
+      <span className="demoTexto" style={{ left: 8, top: 42, width: 140 }}>💡 Puedes marcar varios lugares</span>
+      <div className="demoHoja" style={{ left: 160, top: 8, width: 132, height: 152 }}><i /><i style={{ width: "80%" }} /><i /><i style={{ width: "60%" }} /></div>
+      <div className="campoFirmaDemo demoAparece">MARÍA · Firma aquí</div>
+    </div></>,
+    4: <>{barra("Preparar documento")}<div className="demoLienzo">
+      <span className="demoTexto" style={{ left: 14, top: 12 }}>2 firmantes · 3 campos · ✓ listo</span>
+      <span className="demoBoton verde" style={{ left: 90, top: 60 }}>Guardar y enviar</span>
+      <span className="demoTexto demoAparece" style={{ left: 74, top: 104, color: "var(--accent)", fontWeight: 600 }}>✓ Enviado · En firma</span>
+    </div></>,
+    5: <>{barra("Seguimiento")}<div className="demoLienzo">
+      <span className="demoTexto" style={{ left: 14, top: 12, color: "var(--ink)" }}>María García · pendiente</span>
+      <span className="demoBoton verde" style={{ left: 176, top: 6 }}>Enviar por WhatsApp</span>
+      <div className="burbuja demoAparece">Hola María 👋 Te comparto el documento para que lo firmes: autograflow…/f/8kQ2</div>
+    </div></>,
+    6: <>{barra("Seguimiento")}<div className="demoLienzo">
+      <span className="demoTexto estadoDemo" style={{ left: 14, top: 22, color: "var(--ink)" }} />
+      <div className="progresoDemo"><span /></div>
+      <span className="demoBoton prim demoAparece" style={{ left: 80, top: 68 }}>⬇ Descargar PDF firmado</span>
+    </div></>,
+  };
+  return <div className={`demoGuia demo${paso}`} role="img" aria-label="Animación de ejemplo del paso">
+    {escenas[paso]}<span className="demoCursor" aria-hidden />
+  </div>;
+}
 
 export function GuiaProceso({ etapa, documentoId, firmantesListos = false, camposListos = false, completo = false, plantilla = false, cargando = false, documentoDisponible = true }: {
   etapa: "panel" | "editor" | "seguimiento"; documentoId?: number; firmantesListos?: boolean; camposListos?: boolean;
@@ -108,13 +154,16 @@ export function GuiaProceso({ etapa, documentoId, firmantesListos = false, campo
   useEffect(() => {
     if (!visible || !mismo || continuarDocumento || plantilla) return;
     const elemento = document.querySelector<HTMLElement>(`[data-guia="${objetivo}"]`);
-    elemento?.classList.add("guiaResaltado");
-    return () => { elemento?.classList.remove("guiaResaltado"); };
+    // Modo asistido activo: el control real del paso parpadea mientras sea el paso actual, y al llegar a cada paso la
+    // vista va sola hasta él. Un momento de espera para que la página termine de dibujarse (el editor arma el PDF al abrir).
+    const quitar = resaltar(elemento);
+    const t = setTimeout(() => enfatizar(elemento, 0), 350);
+    return () => { clearTimeout(t); quitar(); };
   }, [visible, mismo, continuarDocumento, plantilla, objetivo]);
   if (!visible) return null;
   function mostrar() {
     const elemento = document.querySelector<HTMLElement>(`[data-guia="${objetivo}"]`);
-    elemento?.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    enfatizar(elemento, 3);
     const control = elemento?.matches("button,a,input,[tabindex]") ? elemento : elemento?.querySelector<HTMLElement>("input,button,a,select,[tabindex]");
     control?.focus({ preventScroll: true });
   }
@@ -122,8 +171,9 @@ export function GuiaProceso({ etapa, documentoId, firmantesListos = false, campo
   return <aside className="guiaProceso" data-guia-tarjeta aria-labelledby="guiaProcesoTitulo">
     <div className="guiaProcesoCabecera"><span>TE ACOMPAÑO · {continuarDocumento ? "CONTINUAR" : `${paso} DE 6`}</span><button type="button" onClick={() => cambiar({ ...guia, estado: "omitida", documentoId: null })}>Saltar guía ×</button></div>
     <div className="guiaProcesoProgreso" role="progressbar" aria-label="Progreso de la introducción" aria-valuemin={1} aria-valuemax={6} aria-valuenow={continuarDocumento ? guia.paso : paso}><span style={{ width: `${(continuarDocumento ? guia.paso : paso) / 6 * 100}%` }} /></div>
+    <div className="guiaProcesoCuerpo"><div>
     <h2 id="guiaProcesoTitulo" aria-live="polite" aria-atomic="true">{continuarDocumento ? "Tu guía continúa en el documento" : !mismo ? "¿Seguimos con este documento?" : plantilla ? "Primero crea un documento desde tu plantilla" : seleccionado.titulo}</h2>
-    <p>{continuarDocumento ? "Tu avance está guardado. Abre el documento para continuar con sus firmantes, campos y enlaces." : !mismo ? "Puedes continuar la introducción con este documento o volver al que estabas preparando." : plantilla ? "Usa «Usar esta plantilla» para crear una copia en borrador. Después puedes reiniciar la guía y preparar esa copia." : completo && etapa === "seguimiento" ? "Tu documento ya está completado. Puedes descargar el PDF firmado y su certificado con el botón resaltado." : seleccionado.texto}</p>
+    <p className="guiaProcesoTexto">{continuarDocumento ? "Tu avance está guardado. Abre el documento para continuar con sus firmantes, campos y enlaces." : !mismo ? "Puedes continuar la introducción con este documento o volver al que estabas preparando." : plantilla ? "Usa «Usar esta plantilla» para crear una copia en borrador. Después puedes reiniciar la guía y preparar esa copia." : completo && etapa === "seguimiento" ? "Tu documento ya está completado. Puedes descargar el PDF firmado y su certificado con el botón resaltado." : seleccionado.texto}</p>
     <div className="guiaProcesoAcciones">
       {continuarDocumento ? <><Link className="boton primary" to={`/app/d/${guia.documentoId}`}>Continuar en mi documento →</Link><button type="button" onClick={() => cambiar({ estado: "activa", paso: 1, documentoId: null })}>Guiarme con otro PDF</button></>
         : !mismo ? <><button type="button" className="primary" onClick={() => cambiar({ estado: "activa", paso: etapa === 'editor' ? 2 : 5, documentoId: documentoId! })}>Guiarme aquí</button><Link to={`/app/d/${guia.documentoId}`}>Volver al documento anterior</Link></>
@@ -134,6 +184,9 @@ export function GuiaProceso({ etapa, documentoId, firmantesListos = false, campo
           {etapa === "seguimiento" && paso === 5 && <button type="button" className="primary" onClick={() => avanzar(6)}>Ya compartí los enlaces →</button>}
           {etapa === "seguimiento" && paso === 6 && <button type="button" className="primary" onClick={() => cambiar({ ...guia, estado: "completa", paso: 6, documentoId: documentoId! })}>Terminar introducción ✓</button>}
         </>}
+    </div>
+    </div>
+    {!continuarDocumento && mismo && !plantilla && <DemoPaso paso={completo && etapa === "seguimiento" ? 6 : paso} />}
     </div>
     {etapa === "editor" && mismo && paso === 2 && !firmantesListos && <p className="guiaProcesoPista">Para continuar la guía, añade al menos un firmante con su nombre.</p>}
     {etapa === "editor" && mismo && paso === 3 && !camposListos && <p className="guiaProcesoPista">Asigna al menos un campo a cada firmante para continuar. La validación final se hace al enviar.</p>}

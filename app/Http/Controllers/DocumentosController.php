@@ -111,6 +111,14 @@ class DocumentosController extends Controlador
         return Documentos::detalle($r->user()->cuenta_id, $id);
     }
 
+    /** Varias páginas a la vez: {"paginas": [2, 3, 4, 5]}. */
+    public function eliminarPaginas(Request $r, int $id)
+    {
+        $d = $this->validar($r->all(), ['paginas' => 'required|array|min:1|max:'.config('autograflow.limites.paginas'), 'paginas.*' => 'integer|min:1']);
+        Documentos::eliminarPaginas($r->user()->cuenta_id, $id, $d['paginas'], $this->origen($r));
+        return Documentos::detalle($r->user()->cuenta_id, $id);
+    }
+
     public function recordar(Request $r, int $id, int $firmante)
     {
         Documentos::recordar($r->user()->cuenta_id, $id, $firmante);

@@ -92,7 +92,7 @@ function Seguimiento({ d, recargar }: { d: DocumentoDetalle; recargar: () => voi
   const { usuario } = usarSesion();
   const navegar = useNavigate();
   const completo = d.estado === "completado";
-  const { doc } = usarPdf(completo ? urls.final(d.id) : urls.original(d.id));
+  const { doc, avance } = usarPdf(completo ? urls.final(d.id) : urls.original(d.id));
   const [pagina, setPagina] = useState(1);
   const [copiado, setCopiado] = useState<number | null>(null);
   const [recordado, setRecordado] = useState<Record<number, string>>({});
@@ -203,7 +203,7 @@ function Seguimiento({ d, recargar }: { d: DocumentoDetalle; recargar: () => voi
         <h2>{completo ? "Documento firmado" : "Documento"}</h2>
         <NavPaginas actual={pagina} total={totalPaginas} alCambiar={setPagina} />
         <div className="preview">
-          <PaginaPdf doc={doc} numero={pagina} pagina={tamano}>
+          <PaginaPdf doc={doc} avance={avance} numero={pagina} pagina={tamano}>
             {!completo && d.campos.filter((c) => c.pagina === pagina).map((c) => {
               const f = d.firmantes.find((x) => x.clave === c.firmante);
               const quien = c.tipo === "calculo" ? "lo calcula el PDF" : f?.nombre ?? "lo llenaste tú";

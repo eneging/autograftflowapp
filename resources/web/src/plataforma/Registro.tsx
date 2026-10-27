@@ -106,6 +106,12 @@ export function RegistroDinamico() {
     <div className="registroPagina">
       <div className="registroArriba"><Link to="/">← Inicio</Link><span>¿Ya tienes cuenta? <Link to={`/ingresar${search}`}>Ingresar</Link></span></div>
       <div className="registroIntro"><span className="entradaEyebrow">TU PRIMER DOCUMENTO EMPIEZA AQUÍ</span><h1>Crea tu cuenta,<br />paso a paso.</h1><p>{planElegido && PLANES[planElegido].precio > 0 ? `Elegiste ${PLANES[planElegido].nombre}. Primero creamos tu cuenta.` : `${PLANES.gratis.documentos} documentos gratis al día. Sin tarjeta.`}</p></div>
+      {/* Arriba del formulario para que se vea sin bajar: quien solo quiere probar no tiene que llenar nada. */}
+      {paso === 0 && !usuario && <Link className="botonInvitado registroSinCuenta" to="/sin-cuenta">
+        <span className="botonInvitadoIcono" aria-hidden>🧪</span>
+        <span><strong>¿Prefieres explorar primero?</strong><small>Prueba sin cuenta, sin llenar nada</small></span>
+        <span className="botonInvitadoFlecha" aria-hidden>→</span>
+      </Link>}
       {usuario?.invitado && <p className="registroInvitado">Conservarás los documentos que preparaste como invitado al crear tu cuenta propia.</p>}
       <nav className="registroPasos" aria-label="Pasos para crear tu cuenta"><ol>{PASOS.map((nombre, i) => <li key={nombre}><button type="button" disabled={i > paso || enviando} aria-current={i === paso ? "step" : undefined} onClick={() => retroceder(i)}><span aria-hidden>{i < paso ? "✓" : i + 1}</span>{nombre}</button></li>)}</ol></nav>
       <div className="registroProgreso" role="progressbar" aria-label="Progreso del registro" aria-valuemin={1} aria-valuemax={3} aria-valuenow={paso + 1}><span style={{ width: `${(paso + 1) / 3 * 100}%` }} /></div>
@@ -134,7 +140,6 @@ export function RegistroDinamico() {
         </fieldset>
         {aviso && <div className="afAlerta" role="alert">{aviso}</div>}
         <div className="registroAcciones">{paso > 0 && <button type="button" disabled={enviando} onClick={() => retroceder(paso - 1)}>← Atrás</button>}<button type="submit" className="primary" disabled={enviando}>{enviando ? "Creando tu cuenta…" : paso < 2 ? "Continuar →" : pago ? "Crear cuenta y continuar al pago →" : "Crear mi cuenta →"}</button></div>
-        {paso === 0 && !usuario && <p className="registroSinCuenta">¿Prefieres explorar primero? <Link to="/sin-cuenta">Probar sin cuenta</Link></p>}
       </form>
     </div>
     {legal && <VentanaLegal tipo={legal} alCerrar={() => setLegal(null)} />}

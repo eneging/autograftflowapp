@@ -1,0 +1,73 @@
+/* EX-Trae (ExTrae.tsx), con los colores de AutograFlow: sigue el tema claro/oscuro y la paleta elegida. */
+.etPagina { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.etNota { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--amarilloBg); color: var(--amarilloInk); font-size: 13px; }
+.etNota a { color: inherit; font-weight: 600; }
+.etTrabajo { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 14px; align-items: start; }
+.etTarjeta { display: grid; gap: 12px; padding: 16px; border-radius: 12px; border: 1px solid var(--lineFuerte); background: var(--fondo); min-width: 0; }
+.etPaso { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.etPaso > span { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--accentRelleno, var(--accent)); color: var(--sobreAccent, #fff); font-size: 12px; font-weight: 700; }
+.etPaso h2 { margin: 0; font-size: 16px; }
+.etModo { display: inline-flex; margin-left: auto; padding: 2px; border-radius: 8px; background: var(--hover); }
+.etModo button { min-height: 0; padding: 5px 10px; font-size: 12.5px; border: 0 !important; background: transparent !important; box-shadow: none !important; }
+.etModo button.activa { background: var(--fondo) !important; color: var(--ink) !important; font-weight: 650; box-shadow: 0 1px 2px rgba(0,0,0,.12) !important; }
+
+.etZona { display: grid; justify-items: center; gap: 6px; padding: 34px 16px; border: 2px dashed var(--lineFuerte); border-radius: 10px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+.etZona:hover, .etZona:focus-visible { border-color: var(--accent); background: var(--accentSuave); }
+.etZonaIcono { font-size: 36px; }
+.etZona span:last-child { font-size: 13px; color: var(--muted); }
+.etVista { position: relative; display: grid; place-items: center; max-height: 420px; overflow: hidden; border-radius: 10px; background: var(--lienzo); }
+.etVista img { max-width: 100%; max-height: 420px; object-fit: contain; }
+.etLeyendo { position: absolute; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--fondo) 82%, transparent); }
+.etBotones { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.etPrivado { margin: 0; font-size: 12px; color: var(--muted); }
+
+.etEnviar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px; border-radius: 10px; border: 1px solid var(--accent); background: var(--accentSuave); }
+.etEnviar > span, .etEnviar > strong { flex: 1 1 200px; font-size: 14px; color: var(--ink); }
+.etEnviar.enviado { border-color: var(--ok); background: var(--verdeBg); }
+.etEnviar.enviado strong { color: var(--verdeInk); }
+.etBotonEnviar { font-weight: 700; }
+.etTexto { width: 100%; min-height: 260px; resize: vertical; font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.etContador { margin-left: auto; font-size: 12px; color: var(--muted); }
+.etRevisar { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--amarilloBg); color: var(--amarilloInk); font-size: 13px; }
+.etCampos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
+.etCampos label { display: grid; gap: 4px; font-size: 12.5px; font-weight: 600; color: var(--ink2); }
+.etCampos label.ancho { grid-column: 1 / -1; }
+.etCampo { display: flex; gap: 4px; }
+.etCampo input { flex: 1; min-width: 0; }
+.etCampo button { min-width: 36px; padding: 0 8px; }
+.etTodo summary { cursor: pointer; font-size: 13px; color: var(--accent); }
+.etTodo pre, .etRecibidoTexto { margin: 8px 0 0; padding: 10px; border-radius: 8px; background: var(--suave); border: 1px solid var(--line); white-space: pre-wrap; word-break: break-word; font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--ink); max-height: 260px; overflow: auto; }
+
+/* Bandeja de recibidos */
+.etBandeja.conNuevo { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accentSuave); }
+.etBandejaCabecera { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.etBandejaCabecera h2 { margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+.etCuenta { padding: 0 7px; border-radius: 99px; font-size: 12px; background: var(--accentSuave); color: var(--accent); }
+.etEnVivo { display: inline-flex; align-items: center; gap: 6px; margin-right: auto; font-size: 12px; color: var(--muted); }
+.etEnVivo i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); animation: etLatido 1.6s ease-in-out infinite; }
+@keyframes etLatido { 50% { opacity: .3; } }
+.etComo { padding: 12px 14px; border-radius: 10px; border: 1px dashed var(--lineFuerte); font-size: 13.5px; }
+.etComo ol { margin: 6px 0 0; padding-left: 20px; display: grid; gap: 4px; color: var(--ink2); }
+.etRecibidos { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.etRecibidos li { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--suave); }
+.etRecibidos li.nuevo { border-color: var(--accent); background: var(--accentSuave); animation: etLlega .5s ease-out; }
+@keyframes etLlega { from { transform: translateY(-6px); opacity: 0; } }
+.etRecibidoCabecera { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; font-size: 12.5px; color: var(--muted); }
+.etRecibidoCabecera .etBotones button { min-height: 30px; padding: 4px 10px; font-size: 12.5px; }
+.etNuevo { margin-left: 8px; padding: 1px 7px; border-radius: 99px; background: var(--accentRelleno, var(--accent)); color: var(--sobreAccent, #fff); font-size: 11px; }
+.etDatos { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 6px 12px; margin: 8px 0 0; }
+.etDatos div { min-width: 0; }
+.etDatos dt { font-size: 11px; color: var(--muted); }
+.etDatos dd { margin: 0; font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
+
+.etAviso { position: fixed; z-index: 200; left: 50%; bottom: 22px; transform: translateX(-50%); padding: 10px 16px; border-radius: 10px; box-shadow: var(--sombraMenu); font-size: 14px; background: var(--oscuro); color: var(--sobreOscuro); }
+.etAviso.error { background: var(--rojoInk); color: #fff; }
+
+/* Celular: la imagen y el botón de enviar primero, con botones grandes. */
+.etCelular .etTrabajo { grid-template-columns: minmax(0, 1fr); }
+.etCelular .etBotones button { flex: 1 1 140px; min-height: 46px; font-size: 15px; }
+.etCelular .etBotonEnviar { flex: 1 1 100%; min-height: 54px; font-size: 16px; }
+.etCelular .etEnviar .primary { flex: 1 1 100%; min-height: 50px; }
+@media (max-width: 860px) { .etTrabajo { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 520px) { .etCampos { grid-template-columns: minmax(0, 1fr); } .etTarjeta { padding: 12px; } }
+@media (prefers-reduced-motion: reduce) { .etEnVivo i, .etRecibidos li.nuevo { animation: none; } .etZona { transition: none; } }

@@ -3,15 +3,60 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Icono } from "../componentes/Marco";
 import { PortadaMarco } from "./Portada";
 import { usarSesion } from "./sesion";
+import { DemoPaso, usarGuia } from "./GuiaProceso";
+import { cambiarPasivo, usarPasivo } from "./asistido";
 import "./asistente.css";
 
+/*
+ * Cada paso: qué es (texto), cómo se hace en la app real (como: acciones concretas, con los nombres de los botones) y
+ * las animaciones «Así se hace» de la guía (demos: número de escena de DemoPaso).
+ */
 const PASOS = [
-  { nombre: "Tu documento", titulo: "Empieza con tu PDF", texto: "En Mis documentos, selecciona el archivo que quieres enviar a firmar. Si tiene campos rellenables, la app los detecta.", consejo: "Puedes usar contratos, solicitudes, actas o recibos en formato PDF.", icono: "doc" },
-  { nombre: "Los firmantes", titulo: "Elige quién debe firmar", texto: "Añade el nombre y el contacto de cada persona. Puedes elegir que firmen en orden o todos a la vez.", consejo: "Cada persona recibe un enlace personal para completar sus propios campos.", icono: "equipo" },
-  { nombre: "Los campos", titulo: "Indica dónde va cada firma", texto: "En el editor, agrega los campos al PDF y asígnalos a un firmante. Puedes moverlos y ajustar su tamaño sobre la hoja.", consejo: "Los sellos, las huellas y otras funciones dependen del plan que tengas.", icono: "mas" },
-  { nombre: "El envío", titulo: "Revisa y comparte el enlace", texto: "Cuando el documento esté listo, envíalo a firmar y comparte el enlace personal por WhatsApp. La otra persona lo abre desde su navegador.", consejo: "Tus firmantes no necesitan crear una cuenta ni instalar una aplicación.", icono: "usuario" },
-  { nombre: "El resultado", titulo: "Sigue las firmas y recibe el PDF", texto: "En tu panel puedes consultar quién ha firmado. Cuando todos terminan, descargas el PDF firmado con su certificado de firmas.", consejo: "El certificado registra la actividad. También puedes verificar la integridad del PDF en Verificar PDF.", icono: "verificar" },
+  { nombre: "Tu documento", titulo: "Empieza con tu PDF", texto: "Todo empieza con el archivo que quieres que firmen: un contrato, una solicitud, un acta o un recibo. Solo tiene que estar en PDF; si lo tienes en Word, guárdalo como PDF primero.",
+    como: ["Entra a «Mis documentos».", "Pulsa «📄 Seleccionar PDF» o arrastra el archivo hasta el recuadro.", "Espera a que el logo llegue al 100 %: la app lee el PDF y detecta sola sus casillas y campos para llenar.", "Elige quién lo firma: solo tú, otras personas o ambos."],
+    demos: [1], consejo: "Puedes usar contratos, solicitudes, actas o recibos en formato PDF, de hasta 20 MB.", icono: "doc" },
+  { nombre: "Los firmantes", titulo: "Elige quién debe firmar", texto: "Indica cuántas personas firmarán y quiénes son. Cada una recibirá su propio enlace, así nadie puede firmar por otra.",
+    como: ["En «Cantidad de firmantes», sube el número con las flechas.", "Pulsa «✉️ Apodo y envío» y escribe su nombre y su WhatsApp o correo.", "Si tú también firmas, usa «✍️ Agregar mi firma».", "Elige si firman «En orden» (uno después del otro) o «Todos a la vez»."],
+    demos: [2], consejo: "Si ya guardaste a la persona en tu Directorio, al escribir su nombre se completan sus datos.", icono: "equipo" },
+  { nombre: "Los campos", titulo: "Indica dónde va cada firma", texto: "Ahora marca en la hoja dónde debe firmar cada persona, como cuando pones una banderita adhesiva «firme aquí» en un papel.",
+    como: ["Elige al firmante en «Configurar participante».", "Pulsa «✍️ Marcar dónde irá la firma» y toca el PDF en ese lugar.", "¿Debe firmar en varias partes, por ejemplo en cada página? Pulsa otra vez y toca cada lugar: firmará una sola vez y su firma aparecerá en todos.", "Arrastra el recuadro para moverlo y usa su esquina para cambiar su tamaño."],
+    demos: [3], consejo: "Los sellos, las huellas y otras funciones dependen del plan que tengas.", icono: "mas" },
+  { nombre: "El envío", titulo: "Revisa y comparte el enlace", texto: "Cuando todo esté en su lugar, envías el documento. Desde ese momento ya no se pueden mover los campos, y cada persona recibe su enlace para firmar desde el celular.",
+    como: ["Revisa los nombres, los campos y el orden de firma.", "Pulsa «Guardar y enviar» (o «✍️ Firmar documento» si solo firmas tú).", "Junto a cada firmante, pulsa «Enviar por WhatsApp» o «Copiar enlace».", "Envía a cada persona solo su enlace: es personal."],
+    demos: [4, 5], consejo: "Tus firmantes no necesitan crear una cuenta ni instalar una aplicación: el enlace se abre en el navegador.", icono: "usuario" },
+  { nombre: "El resultado", titulo: "Sigue las firmas y recibe el PDF", texto: "Desde tu panel ves en todo momento quién abrió el documento y quién ya firmó. Cuando firman todos, el PDF final queda listo.",
+    como: ["Abre el documento desde «Mis documentos» para ver su avance.", "Si alguien se demora, pulsa «📧 Recordar por correo» junto a su nombre.", "Cuando todos firmen, pulsa «⬇️ Descargar PDF»: es el documento firmado, con su certificado de firmas."],
+    demos: [6], consejo: "El certificado registra la actividad. También puedes verificar la integridad del PDF en Verificar PDF.", icono: "verificar" },
 ] as const;
+
+/**
+ * Las dos ayudas mientras preparas un documento. Activo: la guía «Te acompaño» (tarjeta con pasos y animaciones, va a
+ * cada control y lo hace parpadear); necesita sesión porque se guarda en tu cuenta. Pasivo: sin tarjeta, al terminar un
+ * paso del editor la vista baja al siguiente y parpadea una vez; se guarda en este navegador.
+ */
+function AjustesAsistencia() {
+  const { usuario } = usarSesion();
+  const { guia, cambiar } = usarGuia();
+  const pasivo = usarPasivo();
+  const activo = guia.estado === "pendiente" || guia.estado === "activa";
+  return <section className="asistidoAjustes" aria-labelledby="asistidoTitulo">
+    <h2 id="asistidoTitulo">Ayudas mientras trabajas</h2>
+    <p>Elige cómo quieres que te acompañemos al preparar tus documentos. Puedes cambiarlo cuando quieras.</p>
+    <label className="asistidoInterruptor">
+      <input type="checkbox" role="switch" checked={!!usuario && activo} disabled={!usuario}
+        onChange={(e) => cambiar(e.target.checked ? { estado: "activa", paso: 1, documentoId: null } : { ...guia, estado: "omitida", documentoId: null })} />
+      <span><strong>Modo asistido activo (guía paso a paso)</strong>
+        <small>{usuario
+          ? "Una tarjeta te explica cada paso con una animación, lleva la vista al botón o campo real y lo hace parpadear."
+          : "Entra a tu cuenta o prueba sin cuenta para activar la guía paso a paso."}</small></span>
+    </label>
+    <label className="asistidoInterruptor">
+      <input type="checkbox" role="switch" checked={pasivo} onChange={(e) => cambiarPasivo(e.target.checked)} />
+      <span><strong>Modo asistido pasivo</strong>
+        <small>Sin tarjetas: al terminar un paso del editor (nombre, firmantes, orden…), la vista baja al siguiente y este parpadea una vez. Si la guía está activa, ella tiene prioridad.</small></span>
+    </label>
+  </section>;
+}
 
 export function Asistente() {
   const { usuario } = usarSesion();
@@ -49,10 +94,14 @@ export function Asistente() {
   return <PortadaMarco><div className="asistentePagina">
     <div className="asistenteSuperior"><span className="entradaEyebrow">CONOCE AUTOGRAFLOW · GUÍA INTERACTIVA</span><Link to={volver}>Salir de la guía <span aria-hidden>↗</span></Link></div>
     <div className="asistenteIntro"><h1>Tu primera firma empieza aquí.</h1><p>Explora el recorrido con un documento de ejemplo. Puedes probar cada paso o avanzar a tu ritmo.</p></div>
+    <AjustesAsistencia />
     <nav aria-label="Pasos de la guía" className="asistentePasos"><ol>{PASOS.map((item, i) => <li key={item.nombre}><button type="button" aria-label={`Paso ${i + 1}: ${item.nombre}`} aria-current={paso === i ? "step" : undefined} className={paso === i ? "actual" : ""} onClick={() => ir(i)}><span>{String(i + 1).padStart(2, "0")}</span><strong>{item.nombre}</strong></button></li>)}</ol></nav>
     <div className="asistenteProgreso" role="progressbar" aria-label="Progreso de la guía" aria-valuemin={1} aria-valuemax={PASOS.length} aria-valuenow={paso + 1} aria-valuetext={`Paso ${paso + 1} de ${PASOS.length}: ${p.nombre}`}><span style={{ width: `${(paso + 1) / PASOS.length * 100}%` }} /></div>
     <div className="asistenteCuerpo">
-      <section className="asistenteExplicacion" aria-labelledby="asistenteTitulo"><span className="asistenteNumero">PASO {paso + 1} DE {PASOS.length}</span><h2 id="asistenteTitulo" ref={titulo} tabIndex={-1}>{p.titulo}</h2><p>{p.texto}</p><div className="asistenteConsejo"><Icono n={p.icono} tam={22} /><p>{p.consejo}</p></div>
+      <section className="asistenteExplicacion" aria-labelledby="asistenteTitulo"><span className="asistenteNumero">PASO {paso + 1} DE {PASOS.length}</span><h2 id="asistenteTitulo" ref={titulo} tabIndex={-1}>{p.titulo}</h2><p>{p.texto}</p>
+        <div className="asistenteDemos">{p.demos.map((n) => <DemoPaso key={n} paso={n} />)}</div>
+        <div className="asistenteComo"><strong>Cómo se hace en AutograFlow</strong><ol>{p.como.map((c) => <li key={c}>{c}</li>)}</ol></div>
+        <div className="asistenteConsejo"><Icono n={p.icono} tam={22} /><p>{p.consejo}</p></div>
         {paso === 0 && <button type="button" className="primary" onClick={() => { setCargado(true); setAviso("El PDF de ejemplo está listo. Puedes continuar al paso de firmantes."); }}>{cargado ? "PDF de ejemplo preparado ✓" : "Probar con un PDF de ejemplo"}</button>}
         {paso === 1 && <div className="asistenteControles"><label htmlFor="ejemploFirmante">Nombre del firmante de ejemplo<input id="ejemploFirmante" value={nombre} onChange={e => setNombre(e.target.value)} maxLength={60} autoComplete="off" /></label><label htmlFor="ejemploOrden">Orden de firma<select id="ejemploOrden" value={orden} onChange={e => setOrden(e.target.value)}><option value="paralelo">Todos a la vez</option><option value="secuencial">En orden</option></select></label></div>}
         {paso === 2 && <div className="asistenteCampos" aria-label="Campos del documento de ejemplo"><button type="button" aria-pressed={firma} onClick={() => { setFirma(!firma); setAviso(firma ? "Campo de firma retirado del ejemplo." : "Campo de firma añadido y asignado al firmante de ejemplo."); }}>{firma ? "✓ Firma añadida" : "+ Añadir firma"}</button><button type="button" aria-pressed={fecha} onClick={() => { setFecha(!fecha); setAviso(fecha ? "Campo de fecha retirado del ejemplo." : "Campo de fecha añadido al ejemplo."); }}>{fecha ? "✓ Fecha añadida" : "+ Añadir fecha"}</button></div>}

@@ -22,6 +22,23 @@ async function pedir<T>(url: string, opciones: RequestInit = {}): Promise<T> {
   if (!r.ok) throw new ErrorApi(cuerpo.error || `Error ${r.status}`, r.status, cuerpo.campos);
   return cuerpo as T;
 }
+/** Como pedir, pero con XMLHttpRequest: fetch no informa cuánto se lleva subido. alAvance recibe de 0 a 1. */
+function subirConAvance<T>(url: string, datos: FormData, alAvance: (fraccion: number) => void): Promise<T> {
+  return new Promise((resolver, rechazar) => {
+    const x = new XMLHttpRequest();
+    x.open("POST", url);
+    x.setRequestHeader("X-AutograFlow", "1");
+    x.upload.onprogress = (e) => { if (e.lengthComputable) alAvance(e.loaded / e.total); };
+    x.onerror = () => rechazar(new ErrorApi("No hay conexión con el servidor. Revisa tu internet e inténtalo de nuevo.", 0));
+    x.onload = () => {
+      let cuerpo: { error?: string; campos?: Record<string, string> } = {};
+      try { cuerpo = JSON.parse(x.responseText); } catch { /* respuesta sin JSON */ }
+      if (x.status >= 200 && x.status < 300) resolver(cuerpo as T);
+      else rechazar(new ErrorApi(cuerpo.error || `Error ${x.status}`, x.status, cuerpo.campos));
+    };
+    x.send(datos);
+  });
+}
 const json = (metodo: string, datos?: unknown): RequestInit => ({ method: metodo, body: datos === undefined ? undefined : JSON.stringify(datos) });
 
 /** invitado: entró «sin cuenta» (Gratis, 1 firmante); su email llega vacío. */
@@ -56,8 +73,9 @@ export const plataforma = {
   recordar: (id: number, firmante: number) => pedir(`/api/documentos/${id}/recordar/${firmante}`, json("POST", {})),
 
   documentos: () => pedir<FilaDocumento[]>("/api/documentos"),
-  subir: async (archivo: File) => {
-    const { preparado, campos, formulario, idioma } = await prepararPdf(archivo);
+  /** alAvance (de 0 a 1): hasta 0,4 se prepara el PDF en el navegador; el resto es la subida. */
+  subir: async (archivo: File, alAvance: (fraccion: number) => void = () => {}) => {
+    const { preparado, campos, formulario, idioma } = await prepararPdf(archivo, (f) => alAvance(f * 0.4));
     const datos = new FormData();
     datos.append("original", archivo);
     datos.append("preparado", preparado, "preparado.pdf");
@@ -65,20 +83,24 @@ export const plataforma = {
     if (formulario) datos.append("formulario", JSON.stringify(formulario));
     datos.append("nombre", archivo.name);
     datos.append("idioma", idioma);
-    return pedir<{ id: number; camposDetectados: number }>("/api/documentos", { method: "POST", body: datos });
+    // Lo que queda (0,95 → 1) es el servidor guardando el documento.
+    const r = await subirConAvance<{ id: number; camposDetectados: number }>("/api/documentos", datos, (f) => alAvance(0.4 + f * 0.55));
+    alAvance(1);
+    return r;
   },
   documento: (id: number) => pedir<DocumentoDetalle>(`/api/documentos/${id}`),
   guardar: (id: number, d: DatosGuardarDocumento) => pedir(`/api/documentos/${id}`, json("PUT", d)),
   enviar: (id: number) => pedir<DocumentoDetalle>(`/api/documentos/${id}/enviar`, json("POST", {})),
   /** Crea un documento del editor a partir de la plantilla incluida «Solicitud de reembolso». */
-  desdePlantillaReembolso: async () => {
+  desdePlantillaReembolso: async (alAvance?: (fraccion: number) => void) => {
     const r = await fetch("/api/plantillas/reembolso.pdf", { credentials: "same-origin", headers: { "X-AutograFlow": "1" } });
     if (!r.ok) throw new ErrorApi("No se pudo abrir la plantilla.", r.status);
-    return plataforma.subir(new File([await r.blob()], "Solicitud de reembolso.pdf", { type: "application/pdf" }));
+    return plataforma.subir(new File([await r.blob()], "Solicitud de reembolso.pdf", { type: "application/pdf" }), alAvance);
   },
   plantilla: (id: number, es: boolean) => pedir(`/api/documentos/${id}/plantilla`, json("POST", { es })),
   duplicar: (id: number) => pedir<{ id: number }>(`/api/documentos/${id}/duplicar`, json("POST", {})),
   eliminarPagina: (id: number, pagina: number) => pedir<DocumentoDetalle>(`/api/documentos/${id}/paginas/${pagina}`, { method: "DELETE" }),
+  eliminarPaginas: (id: number, paginas: number[]) => pedir<DocumentoDetalle>(`/api/documentos/${id}/paginas/eliminar`, json("POST", { paginas })),
   subirLogo: (archivo: File) => pedir("/api/cuenta/logo", { method: "PUT", body: archivo, headers: { "Content-Type": archivo.type } }),
   quitarLogo: () => pedir("/api/cuenta/logo", { method: "DELETE" }),
   verificar: (sha: string) => pedir<Verificacion>(`/api/verificar/${sha}`),
@@ -99,11 +121,21 @@ export const plataforma = {
   comprar: (producto: string) => pedir<{ pagoId: number; url: string }>("/api/pagos", json("POST", { producto })),
   verificarPago: (id: number) => pedir<PagoFila>(`/api/pagos/${id}/verificar`, json("POST", {})),
 
-  vista: (token: string) => pedir<VistaFirmante>(`/api/firmar/${encodeURIComponent(token)}`),
+  // EX-Trae (Flow Tools): textos que van de un dispositivo a los demás con la misma cuenta.
+  textosRecibidos: (despues: number) => pedir<TextoExTrae[]>(`/api/flow/ex-trae/textos?despues=${despues}`),
+  enviarTexto: (texto: string, datos: Record<string, string> | null, origen: string) =>
+    pedir<{ id: number }>("/api/flow/ex-trae/textos", json("POST", { texto, datos, origen })),
+  borrarTexto: (id: number) => pedir(`/api/flow/ex-trae/textos/${id}`, { method: "DELETE" }),
+  limpiarTextos: () => pedir("/api/flow/ex-trae/textos", { method: "DELETE" }),
+
+  vista: (token: string) =>pedir<VistaFirmante>(`/api/firmar/${encodeURIComponent(token)}`),
   firmar: (token: string, valores: Record<string, string | boolean>, evidencias: Evidencias = {}, calculos: Record<string, string> = {}, libres: TextoLibre[] = [], versionLegal = "") =>
     pedir<{ completo: boolean }>(`/api/firmar/${encodeURIComponent(token)}`, json("POST", { valores, evidencias, calculos, libres, acepto: true, versionLegal })),
   rechazar: (token: string, motivo: string) => pedir(`/api/firmar/${encodeURIComponent(token)}/rechazar`, json("POST", { motivo })),
 };
+
+/** origen: «Celular|id» o «Computadora|id» (tipo de dispositivo y quién lo envió, para no mostrarse sus propios envíos). */
+export interface TextoExTrae { id: number; texto: string; datos: Record<string, string> | null; origen: string; creadoEn: string | null }
 
 /** Texto libre que agrega el firmante (en puntos PDF, como los campos). */
 export interface TextoLibre { pagina: number; x: number; y: number; w: number; h: number; texto: string }

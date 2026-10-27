@@ -3,6 +3,7 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CuentaController;
 use App\Http\Controllers\DocumentosController;
+use App\Http\Controllers\ExTraeController;
 use App\Http\Controllers\FirmaController;
 use App\Http\Controllers\ReembolsoController;
 use App\Http\Controllers\ReclamacionesController;
@@ -32,6 +33,14 @@ Route::prefix('api')->middleware(CabeceraAutograFlow::class)->group(function () 
     Route::post('auth/olvide', [AuthController::class, 'olvide']);
     Route::post('auth/restablecer', [AuthController::class, 'restablecer']);
 
+    // Flow Tools · EX-Trae: textos enviados de un dispositivo a otro con la misma cuenta.
+    Route::middleware(ConSesion::class)->prefix('flow/ex-trae/textos')->group(function () {
+        Route::get('/', [ExTraeController::class, 'recibir']);
+        Route::post('/', [ExTraeController::class, 'enviar'])->middleware('throttle:30,1');
+        Route::delete('/', [ExTraeController::class, 'limpiar']);
+        Route::delete('{id}', [ExTraeController::class, 'borrar'])->whereNumber('id');
+    });
+
     // Documentos (dueño)
     Route::middleware(ConSesion::class)->prefix('documentos')->group(function () {
         Route::get('/', [DocumentosController::class, 'index']);
@@ -45,7 +54,8 @@ Route::prefix('api')->middleware(CabeceraAutograFlow::class)->group(function () 
         Route::post('{id}/enviar-a-varios', [DocumentosController::class, 'enviarAVarios'])->whereNumber('id');
         Route::get('{id}/envios', [DocumentosController::class, 'envios'])->whereNumber('id');
         Route::get('{id}/firmados.zip', [DocumentosController::class, 'zipFirmados'])->whereNumber('id');
-        Route::delete('{id}/paginas/{pagina}', [DocumentosController::class, 'eliminarPagina'])->whereNumber(['id', 'pagina']);
+        Route::post('{id}/paginas/eliminar', [DocumentosController::class, 'eliminarPaginas'])->whereNumber('id');
+        Route::delete('{id}/paginas/{pagina}',[DocumentosController::class, 'eliminarPagina'])->whereNumber(['id', 'pagina']);
         Route::delete('{id}', [DocumentosController::class, 'destroy'])->whereNumber('id');
         Route::get('{id}/archivo', [DocumentosController::class, 'archivo'])->whereNumber('id');
         Route::get('{id}/final', [DocumentosController::class, 'final'])->whereNumber('id');

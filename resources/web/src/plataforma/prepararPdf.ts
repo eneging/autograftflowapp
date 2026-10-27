@@ -13,8 +13,9 @@ export interface CampoDetectado { tipo: TipoCampo; pagina: number; x: number; y:
  *    formulario, que suele estar en inglés o abreviado;
  *  - detecta el idioma del documento (español o inglés), con el que se abrirá la página del firmante;
  *  - lo guarda sin «object streams»: así lo puede leer FPDI, la librería PHP que genera el PDF final.
+ * alAvance recibe cuánto lleva (de 0 a 1): leer las páginas es lo que más demora.
  */
-export async function prepararPdf(archivo: File) {
+export async function prepararPdf(archivo: File, alAvance: (fraccion: number) => void = () => {}) {
   const bytes = new Uint8Array(await archivo.arrayBuffer());
   let doc: PDFDocument;
   try {
@@ -33,7 +34,8 @@ export async function prepararPdf(archivo: File) {
     return { giro, recorte, recta: giro === 0 && recorte.x === 0 && recorte.y === 0 };
   });
   const todasRectas = geometria.every((g) => g.recta);
-  const { formulario, textos, idioma } = await leerConPdfJs(bytes, todasRectas);
+  alAvance(0.1);
+  const { formulario, textos, idioma } = await leerConPdfJs(bytes, todasRectas, (f) => alAvance(0.1 + f * 0.75));
   const calculados = new Set(formulario ? Object.entries(formulario.objects).filter(([, l]) => l.some((o) => o.actions?.Calculate?.length)).map(([n]) => n) : []);
   const campos = todasRectas ? detectarCampos(doc, calculados, textos) : [];
 
@@ -56,6 +58,7 @@ export async function prepararPdf(archivo: File) {
     }
   }
   const preparado = await salida.save({ useObjectStreams: false });
+  alAvance(1);
   // El formulario (con sus scripts) solo se guarda si el PDF tiene campos calculados.
   return { preparado: new Blob([preparado as Uint8Array<ArrayBuffer>], { type: "application/pdf" }), campos, formulario: calculados.size ? formulario : null, idioma };
 }
@@ -67,7 +70,7 @@ interface Trozo { x0: number; x1: number; arriba: number; abajo: number; texto: 
  * Con pdf.js: los campos y scripts del formulario (lo que necesita su entorno aislado para ejecutar los cálculos), los
  * textos visibles de cada página (para nombrar los campos) y el idioma del documento.
  */
-async function leerConPdfJs(bytes: Uint8Array, conCampos: boolean): Promise<{ formulario: FormularioPdf | null; textos: Trozo[][]; idioma: Idioma }> {
+async function leerConPdfJs(bytes: Uint8Array, conCampos: boolean, alAvance: (fraccion: number) => void): Promise<{ formulario: FormularioPdf | null; textos: Trozo[][]; idioma: Idioma }> {
   let formulario: FormularioPdf | null = null;
   const textos: Trozo[][] = [];
   try {
@@ -90,6 +93,7 @@ async function leerConPdfJs(bytes: Uint8Array, conCampos: boolean): Promise<{ fo
           return [{ x0: e, x1: e + it.width, arriba: alto - f - tam, abajo: alto - f + tam * 0.2, texto: it.str }];
         })));
         pagina.cleanup();
+        alAvance(i / Math.min(pdf.numPages, LIMITES_PLATAFORMA.paginas));
       }
     } finally {
       pdf.destroy();

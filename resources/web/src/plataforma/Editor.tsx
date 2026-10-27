@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as EventoPuntero } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FocusEvent, type PointerEvent as EventoPuntero } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   COLORES_FIRMANTE, DEDOS, ETIQUETA_TIPO, LIMITES_PLATAFORMA, PREPARADOR, TAMANO_CAMPO, TIPOS_DATO, etiquetaDedo, leerDedo,
@@ -11,9 +11,11 @@ import { VERSION_LEGAL } from "../componentes/Legal";
 import { PLANES, type EstadoCuenta } from "../../../shared/planes";
 import { ErrorApi, plataforma, urls, type Contacto } from "./api";
 import { calcularPdf } from "./calculos";
+import { leerRangoPaginas, textoRango } from "../../../shared/rangoPaginas";
 import { usarSesion } from "./sesion";
 import { PaginaPdf, posicion, usarPdf } from "./VisorPdf";
 import { GuiaProceso, usarGuia } from "./GuiaProceso";
+import { enfatizar, usarPasivo } from "./asistido";
 
 type CampoLocal = CampoEditor & { k: string };
 type ImagenPropia = "firma" | "sello" | "huella";
@@ -27,7 +29,16 @@ let siguienteClave = 1;
 const nuevaClave = (p: string) => `${p}n${Date.now().toString(36)}${siguienteClave++}`;
 const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5];
 const zoomGuardado = () => { try { const z = Number(localStorage.getItem("autograflow_zoom")); return z >= 0.5 && z <= 2.5 ? z : 1; } catch { return 1; } };
-const WA_SVG = <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden className="waIcono"><path d="M12 2.2A9.8 9.8 0 0 0 3.6 17l-1.3 4.8 4.9-1.3A9.8 9.8 0 1 0 12 2.2zm5.7 13.9c-.2.7-1.4 1.3-2 1.3-.5.1-1.2.1-1.9-.1-.4-.1-1-.3-1.7-.6-3-1.3-4.9-4.3-5-4.5-.2-.2-1.2-1.6-1.2-3s.8-2.2 1-2.5c.3-.3.6-.4.8-.4h.6c.2 0 .4 0 .6.5l.9 2.1c.1.2.1.4 0 .5l-.3.5-.4.5c-.1.1-.3.3-.1.6.2.3.7 1.2 1.6 2 1.1 1 2 1.3 2.3 1.4.3.1.5.1.6-.1l.9-1.1c.2-.3.4-.2.6-.1l2 1c.3.1.5.2.5.3.1.2.1.8-.1 1.5z" /></svg>;
+/** Pasos del modo asistido pasivo, en orden (su elemento lleva data-paso). */
+const PASOS_PASIVO = ["nombre", "firmantes", "orden", "enviar"] as const;
+type PasoPasivo = (typeof PASOS_PASIVO)[number];
+/** Quién firma el documento: solo tú, otras personas o tú y otras personas. Decide qué opciones muestra el editor. */
+type Quien = "yo" | "otros" | "ambos";
+const quienGuardado = (id: number): Quien | null => {
+  try { const q = localStorage.getItem(`autograflow_quien_${id}`); return q === "yo" || q === "otros" || q === "ambos" ? q : null; } catch { return null; }
+};
+const guardarQuien = (id: number, q: Quien) => { try { localStorage.setItem(`autograflow_quien_${id}`, q); } catch { /* sin almacenamiento */ } };
+const WA_SVG =<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden className="waIcono"><path d="M12 2.2A9.8 9.8 0 0 0 3.6 17l-1.3 4.8 4.9-1.3A9.8 9.8 0 1 0 12 2.2zm5.7 13.9c-.2.7-1.4 1.3-2 1.3-.5.1-1.2.1-1.9-.1-.4-.1-1-.3-1.7-.6-3-1.3-4.9-4.3-5-4.5-.2-.2-1.2-1.6-1.2-3s.8-2.2 1-2.5c.3-.3.6-.4.8-.4h.6c.2 0 .4 0 .6.5l.9 2.1c.1.2.1.4 0 .5l-.3.5-.4.5c-.1.1-.3.3-.1.6.2.3.7 1.2 1.6 2 1.1 1 2 1.3 2.3 1.4.3.1.5.1.6-.1l.9-1.1c.2-.3.4-.2.6-.1l2 1c.3.1.5.2.5.3.1.2.1.8-.1 1.5z" /></svg>;
 
 /**
  * Editor de un documento en borrador (diseño del prototipo v43): panel «Preparar documento» y vista previa con zoom.
@@ -37,10 +48,18 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
   inicial: DocumentoDetalle; alEnviar: (d: DocumentoDetalle) => void; alCambiarPdf: (d: DocumentoDetalle, aviso: string) => void; avisoInicial?: string;
 }) {
   const navegar = useNavigate();
-  const { seguirDocumento } = usarGuia();
+  const { guia, seguirDocumento } = usarGuia();
+  const pasivo = usarPasivo();
+  const pasoPasivo = useRef<PasoPasivo | null>(null);
   const { usuario } = usarSesion();
-  const detectados = (useLocation().state as { detectados?: number } | null)?.detectados ?? 0;
-  const { doc, error: errorPdf } = usarPdf(urls.original(inicial.id));
+  const estadoNav = useLocation().state as { detectados?: number; preguntarQuien?: boolean } | null;
+  const detectados = estadoNav?.detectados ?? 0;
+  const { doc, error: errorPdf, avance: avancePdf } = usarPdf(urls.original(inicial.id));
+  // Sin respuesta guardada (borradores anteriores) se muestra todo, como antes.
+  const [quien, setQuien] = useState<Quien>(() => quienGuardado(inicial.id) ?? "ambos");
+  // Recién subido: se pregunta quién firma. Cualquier respuesta (también «Decidir después») se guarda y no se vuelve a preguntar.
+  const [preguntarQuien, setPreguntarQuien] = useState(() => !!estadoNav?.preguntarQuien && !inicial.esPlantilla && !quienGuardado(inicial.id));
+  const soloYo = quien === "yo";
   const [nombre, setNombre] = useState(inicial.nombre);
   const [orden, setOrden] = useState(inicial.orden);
   const [mensaje, setMensaje] = useState(inicial.mensaje);
@@ -67,7 +86,7 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
   const [calculo, setCalculo] = useState<Record<string, string>>({});
   // «Agregar mi firma»: firmante que es quien prepara el documento. Al enviar se abre su enlace de firma si ya es su turno.
   // Si un firmante ya tiene el correo de la cuenta, se reconoce solo al volver a abrir el borrador.
-  const [miClave, setMiClave] = useState<string | null>(() => usuario && !usuario.invitado && usuario.email
+  const [miClave, setMiClave] = useState<string | null>(() => quien !== "otros" && usuario && !usuario.invitado && usuario.email
     ? firmantes.find((f) => f.email && f.email.toLowerCase() === usuario.email.toLowerCase())?.clave ?? null : null);
   // Tu firma, sello y huella hechos aquí mismo (como en el prototipo): se ven en el documento y se aplican al enviar.
   const [misImagenes, setMisImagenes] = useState<Partial<Record<ImagenPropia, string>>>({});
@@ -86,6 +105,11 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
   // «Funciones avanzadas» (bloqueos, DNI, certificado y Flujo): se pueden minimizar; se recuerda la última elección.
   const [avanzadas, setAvanzadas] = useState(() => { try { return localStorage.getItem("autograflow_avanzadas") === "1"; } catch { return false; } });
   const [enviando, setEnviando] = useState(false);
+  // «Navegar por páginas / Eliminar páginas»: minimizado salvo que la última vez se dejara abierto.
+  const [verPaginas, setVerPaginas] = useState(() => { try { return localStorage.getItem("autograflow_ver_paginas") === "1"; } catch { return false; } });
+  const [rangoQuitar, setRangoQuitar] = useState("");
+  const [errorRango, setErrorRango] = useState("");
+  const [quitandoRango, setQuitandoRango] = useState(false);
   const [limitePlan, setLimitePlan] = useState(false);
   const [esPlantilla, setEsPlantilla] = useState(inicial.esPlantilla);
   const [estado, setEstado] = useState<EstadoCuenta | null>(null);
@@ -104,6 +128,7 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
   }, []);
   useEffect(() => { try { localStorage.setItem("autograflow_zoom", String(zoom)); } catch { /* sin almacenamiento */ } }, [zoom]);
   useEffect(() => { try { localStorage.setItem("autograflow_avanzadas", avanzadas ? "1" : "0"); } catch { /* sin almacenamiento */ } }, [avanzadas]);
+  useEffect(() => { try { localStorage.setItem("autograflow_ver_paginas", verPaginas ? "1" : "0"); } catch { /* sin almacenamiento */ } }, [verPaginas]);
   // Sin firma, sello ni huella en el documento no hay nada que certificar: la opción se desmarca (prototipo).
   const sinEvidencias = !campos.some((c) => ES_IMAGEN(c.tipo));
   useEffect(() => { if (sinEvidencias) setCertificado(false); }, [sinEvidencias]);
@@ -278,24 +303,83 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
       continuarCaptura(miClave, {});
       return;
     }
-    const ya = !usuario.invitado && usuario.email ? firmantes.find((f) => f.email && f.email.toLowerCase() === usuario.email.toLowerCase()) : undefined;
+    const ya = miFirmante();
     const clave = ya?.clave ?? activo;
     if (!ya) {
       const generico = /^Firmante \d+$/.test(fActivo.nombre);
-      let nombreYo = usuario.nombre;
-      if (usuario.invitado) {
-        // Sin cuenta no hay nombre real: se pide para la firma y el certificado.
-        const n = prompt("¿Cómo te llamas? Tu nombre aparecerá junto a tu firma y en el certificado.", generico ? "" : fActivo.nombre);
-        if (n === null) return;
-        if (n.trim().length < 2) { setAviso("Escribe tu nombre (al menos 2 letras) para agregar tu firma."); return; }
-        nombreYo = n.trim().slice(0, 120);
-      } else if ((!generico || fActivo.email || fActivo.telefono) && !confirm(`¿El Firmante ${iActivo + 1} eres tú? Se reemplazarán su nombre y su correo por los tuyos.`)) return;
+      if (!usuario.invitado && (!generico || fActivo.email || fActivo.telefono) && !confirm(`¿El Firmante ${iActivo + 1} eres tú? Se reemplazarán su nombre y su correo por los tuyos.`)) return;
+      const nombreYo = miNombre(fActivo);
+      if (nombreYo === null) return;
       setFirmantes((fs) => fs.map((f) => (f.clave === clave ? { ...f, nombre: nombreYo, email: usuario.invitado ? f.email : usuario.email } : f)));
     }
     setActivo(clave);
     setMiClave(clave);
     setMisImagenes({});
     continuarCaptura(clave, {});
+  }
+
+  /** El firmante que ya tiene el correo de tu cuenta (sin cuenta no hay correo con qué reconocerte). */
+  const miFirmante = () => usuario && !usuario.invitado && usuario.email
+    ? firmantes.find((f) => f.email && f.email.toLowerCase() === usuario.email.toLowerCase()) : undefined;
+
+  /** Tu nombre para firmar: el de tu cuenta o, sin cuenta, se pide (aparece junto a tu firma y en el certificado). null: no se dio. */
+  function miNombre(f: FirmanteEditor): string | null {
+    if (!usuario) return null;
+    if (!usuario.invitado) return usuario.nombre;
+    const n = prompt("¿Cómo te llamas? Tu nombre aparecerá junto a tu firma y en el certificado.", /^Firmante \d+$/.test(f.nombre) ? "" : f.nombre);
+    if (n === null) return null;
+    if (n.trim().length < 2) { setAviso("Escribe tu nombre (al menos 2 letras) para agregar tu firma."); return null; }
+    return n.trim().slice(0, 120);
+  }
+
+  /**
+   * Respuesta a «¿Quién firma este documento?». Solo tú: quedas como único firmante y se abre tu firma. Otras personas:
+   * no firmas tú (se oculta «Agregar mi firma»). Tú y otras personas: eres el Firmante 1 y se agrega otro si hace falta.
+   */
+  function elegirQuien(q: Quien) {
+    if (preguntarQuien) empezarPasivo();
+    setPreguntarQuien(false);
+    setQuien(q);
+    guardarQuien(inicial.id, q);
+    if (q === "otros") {
+      setMiClave(null);
+      setMisImagenes({});
+      setCapturando(null);
+      abrirTrasColocar.current = false;
+      setAviso("Marca dónde firma cada persona y, en «Apodo y envío», su WhatsApp o correo para enviarle su enlace.");
+      return;
+    }
+    const ya = (miClave ? firmantes.find((f) => f.clave === miClave) : undefined) ?? miFirmante();
+    const yo = ya ?? firmantes[0];
+    if (!usuario || !yo) return;
+    let lista = firmantes;
+    if (q === "yo" && firmantes.length > 1) {
+      const otros = firmantes.filter((f) => f.clave !== yo.clave), conCampos = campos.filter((c) => otros.some((f) => f.clave === c.firmante)).length;
+      if (conCampos && !confirm(`Solo firmarás tú: se quitarán ${otros.length} firmante(s) y sus ${conCampos} campo(s). ¿Continuar?`)) {
+        setQuien("ambos");
+        guardarQuien(inicial.id, "ambos");
+        return;
+      }
+      lista = [yo];
+      setCampos((cs) => cs.filter((c) => !otros.some((f) => f.clave === c.firmante)));
+    }
+    if (q === "yo") {
+      // Opciones para los firmantes que ya no se muestran: bloquear la firma dibujada te impediría hacer la tuya.
+      setBloquearDibujo(false);
+      setBloquearSello(false);
+      setFlujo(false);
+    }
+    if (q === "ambos" && lista.length < 2 && maxFirmantes >= 2)
+      lista = [...lista, { clave: nuevaClave("f"), nombre: `Firmante ${lista.length + 1}`, telefono: "", email: "", pedirDni: false, modoTexto: "solo" }];
+    // Sin cuenta, si no da su nombre, queda «Firmante 1» y lo escribe después en «Tu nombre».
+    const nombreYo = ya ? ya.nombre : miNombre(yo) ?? yo.nombre;
+    lista = lista.map((f) => (f.clave === yo.clave ? { ...f, nombre: nombreYo, email: usuario.invitado ? f.email : usuario.email } : f));
+    setFirmantes(lista);
+    setActivo(yo.clave);
+    setMiClave(yo.clave);
+    setMisImagenes({});
+    if (q === "yo") continuarCaptura(yo.clave, {});
+    else setAviso(`Eres el Firmante ${lista.findIndex((f) => f.clave === yo.clave) + 1}. Configura a las demás personas y pulsa «Hacer mi firma» cuando quieras firmar.`);
   }
 
   function quitarMiFirma() {
@@ -314,8 +398,10 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
   function continuarCaptura(clave: string, imgs: Partial<Record<ImagenPropia, string>>) {
     const yo = firmantes.find((f) => f.clave === clave), n = firmantes.findIndex((f) => f.clave === clave) + 1;
     if (!yo) return;
+    // Si firmas solo tú, no hace falta decir qué número de firmante eres.
+    const eres = firmantes.length > 1 ? `El Firmante ${n} eres tú. ` : "";
     if (yo.pedirDni) {
-      setAviso(`El Firmante ${n} eres tú y tu firma se toma con el DNI: al pulsar «Guardar y enviar» se abrirá tu enlace para capturarlo.`);
+      setAviso(`${eres}Tu firma se toma con el DNI: al pulsar «${firmantes.length > 1 ? "Guardar y enviar" : "Firmar documento"}» se abrirá tu enlace para capturarlo.`);
       return;
     }
     const pedidos: ImagenPropia[] = ["firma", ...(pide[clave]?.sello ? ["sello" as const] : []), ...(pide[clave]?.huella ? ["huella" as const] : [])];
@@ -326,13 +412,15 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
         setHerramienta(t);
         setParaMi(false);
         abrirTrasColocar.current = true;
-        setAviso(`El Firmante ${n} eres tú. Toca el documento donde va tu ${t}; después se abrirá para que ${t === "firma" ? "firmes" : t === "sello" ? "pongas tu sello" : "pongas tu huella"}.`);
+        setAviso(`${eres}Toca el documento donde va tu ${t}; después se abrirá para que ${t === "firma" ? "firmes" : t === "sello" ? "pongas tu sello" : "pongas tu huella"}.`);
         return;
       }
       setCapturando(t);
       return;
     }
-    setAviso(`✓ Listo, Firmante ${n}: tu ${pedidos.join(", ")} ya está en el documento. Al pulsar «Guardar y enviar» quedará firmado por ti y se enviará a los demás.`);
+    setAviso(firmantes.length > 1
+      ? `✓ Listo, Firmante ${n}: tu ${pedidos.join(", ")} ya está en el documento. Al pulsar «Guardar y enviar» quedará firmado por ti y se enviará a los demás.`
+      : `✓ Listo: tu ${pedidos.join(", ")} ya está en el documento. Pulsa «Firmar documento» para terminar y descargar el PDF firmado.`);
   }
 
   function terminarCaptura(t: ImagenPropia, png: string | null) {
@@ -356,6 +444,23 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
     }
   }
 
+  /** «Quitar varias páginas»: escribe «2-5» (de la 2 a la 5), «2,5» (la 2 y la 5) o ambas cosas, «1-3, 8». */
+  async function quitarRango() {
+    const total = inicial.paginas.length, r = leerRangoPaginas(rangoQuitar, total);
+    if ("error" in r) { setErrorRango(r.error); return; }
+    const enEsas = campos.filter((c) => r.paginas.includes(c.pagina)).length;
+    if (!confirm(`¿Quitar ${r.paginas.length === 1 ? "la página" : `${r.paginas.length} páginas`} (${textoRango(r.paginas)}) de ${total}? No se enviarán a los firmantes${enEsas ? ` y se borrarán sus ${enEsas} campo(s)` : ""}. El archivo que subiste no cambia.`)) return;
+    setQuitandoRango(true);
+    try {
+      await plataforma.guardar(inicial.id, datos);
+      alCambiarPdf(await plataforma.eliminarPaginas(inicial.id, r.paginas),
+        `Se quitaron ${r.paginas.length === 1 ? "la página" : "las páginas"} ${textoRango(r.paginas)}. El documento ahora tiene ${total - r.paginas.length} página(s).`);
+    } catch (e) {
+      setErrorRango(e instanceof ErrorApi ? e.message : "No se pudieron quitar las páginas.");
+      setQuitandoRango(false);
+    }
+  }
+
   function cambiarDedo(cambio: Partial<{ mano: Mano; dedo: Dedo }>) {
     const d = { ...dedoDe(activo), ...cambio };
     setCampos((cs) => cs.map((c) => (c.firmante === activo && c.tipo === "huella" ? { ...c, etiqueta: etiquetaDedo(d.mano, d.dedo) } : c)));
@@ -372,10 +477,13 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
       if (pide[f.clave]?.huella && !campos.some((c) => c.firmante === f.clave && c.tipo === "huella")) problemas.push(`Marca dónde va la huella del Firmante ${i + 1}.`);
       if (f.pedirDni && !campos.some((c) => c.firmante === f.clave && c.tipo === "firma")) problemas.push(`Marca dónde va la firma del Firmante ${i + 1} (se tomará con su DNI).`);
     }
+    if (soloYo && firmantes.some((f) => /^Firmante \d+$/.test(f.nombre.trim()))) problemas.push("Escribe tu nombre en «Tu nombre»: aparecerá junto a tu firma y en el certificado.");
     if (problemas.length) { setAviso(problemas.join(" ")); setLimitePlan(false); return; }
     const sinFirma = firmantes.filter((f) => !campos.some((c) => c.firmante === f.clave && c.tipo === "firma"));
     if (sinFirma.length && !confirm(`Falta configurar la firma de: ${sinFirma.map((f) => f.nombre).join(", ")}. Solo deberán completar sus otros campos. ¿Continuar?`)) return;
-    if (!confirm(`¿Enviar «${datos.nombre}» a firmar a ${firmantes.length} persona${firmantes.length === 1 ? "" : "s"}? Después ya no podrás cambiar los campos.`)) return;
+    if (!confirm(firmoSoloYo
+      ? `¿Firmar «${datos.nombre}»? Después ya no podrás cambiar los campos.`
+      : `¿Enviar «${datos.nombre}» a firmar a ${firmantes.length} persona${firmantes.length === 1 ? "" : "s"}? Después ya no podrás cambiar los campos.`)) return;
     setEnviando(true);
     try {
       // Con tu firma ya hecha y el envío en orden, tienes que firmar primero para que quede aplicada ahora.
@@ -442,6 +550,8 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
   const textoPermitido = estado?.selloHuella ?? true;
   const destino = paraMi ? "que llenas tú" : `del Firmante ${iActivo + 1}`;
   const iYo = firmantes.findIndex((f) => f.clave === miClave);
+  // Eres el único firmante: no hay nada que enviar, el botón final firma el documento.
+  const firmoSoloYo = firmantes.length === 1 && iYo === 0;
 
   /** Rótulo del campo sobre el documento, como en el prototipo: «APODO / Firma aquí» o «FIRMANTE 2», «SELLO 2», «HUELLA 2». */
   const rotulo = (c: CampoLocal) => {
@@ -491,7 +601,7 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
     setFirmantes((fs) => fs.map((f) => (f.clave === fActivo.clave && f.modoTexto === "solo" ? { ...f, modoTexto: "asignados" } : f)));
   }
   const quitarObligatorios = () => setCampos((cs) => cs.map((c) => (TIPOS_DATO.includes(c.tipo) && c.firmante !== PREPARADOR ? { ...c, obligatorio: false } : c)));
-  const barraObligatorios = campos.some((c) => TIPOS_DATO.includes(c.tipo) && !c.bloqueado) && (
+  const barraObligatorios = !soloYo && campos.some((c) => TIPOS_DATO.includes(c.tipo) && !c.bloqueado) && (
     <>
       <div className="afLockBar">
         <button type="button" className={modoObligatorio ? "primary" : ""} onClick={() => { setModoObligatorio(!modoObligatorio); setModoBloqueo(false); setHerramienta(null); }}>
@@ -555,13 +665,63 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
   const irACampo = (c: CampoLocal) => { setPagina(c.pagina); setSel(c.k); };
   const opcionesQuien = (yo: string, otro: string) => <>
     <option value={PREPARADOR}>{yo}</option>
-    {firmantes.map((f, i) => <option key={f.clave} value={f.clave}>{otro}{i + 1}{/^Firmante \d+$/.test(f.nombre) ? "" : ` · ${f.nombre}`}</option>)}
+    {/* Si firmas solo tú, todo lo llenas tú: no hay a quién asignarlo. */}
+    {!soloYo && firmantes.map((f, i) => <option key={f.clave} value={f.clave}>{otro}{i + 1}{/^Firmante \d+$/.test(f.nombre) ? "" : ` · ${f.nombre}`}</option>)}
   </>;
-  const activasAvanzadas = [bloquearDibujo, bloquearSello, !!fActivo?.pedirDni, certificado, flujo].filter(Boolean).length;
+  // Si firmas solo tú, los bloqueos de la firma y del sello y el Flujo (opciones para los firmantes) no se muestran.
+  const activasAvanzadas = (soloYo ? [!!fActivo?.pedirDni, certificado] : [bloquearDibujo, bloquearSello, !!fActivo?.pedirDni, certificado, flujo]).filter(Boolean).length;
   // El certificado necesita algo que certificar (firma, sello o huella), como en el prototipo.
   const hayEvidencias = campos.some((c) => ES_IMAGEN(c.tipo));
   const conDni = firmantes.flatMap((f, i) => (f.pedirDni ? [i] : []));
   const hayDatosFirmantes = campos.some((c) => c.firmante !== PREPARADOR && TIPOS_DATO.includes(c.tipo));
+  // ------------------------------------------------ modo asistido pasivo
+  // Al terminar un paso, la vista baja al siguiente y este parpadea una vez. Empieza al subir un PDF (tras «¿Quién firma?»)
+  // y solo avanza. No se usa si la guía (modo activo) acompaña este documento: ella ya lleva la vista a cada paso.
+  const guiaAqui = (guia.estado === "activa" || guia.estado === "pendiente") && (!guia.documentoId || guia.documentoId === inicial.id);
+  const asistir = pasivo && !guiaAqui && !esPlantilla;
+  // Solo tú: listo cuando tu firma está hecha (con DNI se hace al firmar, basta con marcar dónde va). Con otros: cuando
+  // cada firmante tiene sus campos.
+  const firmantesCompletos = soloYo ? (fActivo?.pedirDni ? camposDe(fActivo.clave, "firma") > 0 : !!misImagenes.firma)
+    : firmantes.length > 0 && firmantes.every(listo);
+  useEffect(() => { if (firmantesCompletos) pasarA("orden"); }, [firmantesCompletos]);
+
+  /** Avanza al paso p (nunca hacia atrás). Con parpadeo baja la vista hasta él; sin él solo recuerda dónde vas. */
+  function pasarA(p: PasoPasivo, conParpadeo = true) {
+    if (p === "orden" && soloYo) p = "enviar"; // si firmas solo tú no hay paso de orden y mensaje
+    const actual = pasoPasivo.current;
+    if (!asistir || !actual || PASOS_PASIVO.indexOf(p) <= PASOS_PASIVO.indexOf(actual)) return;
+    pasoPasivo.current = p;
+    if (conParpadeo) setTimeout(() => enfatizar(document.querySelector(`[data-paso="${p}"]`)), 150);
+  }
+  /** Al salir de un paso: si vas a otro paso, avanza en silencio (no mueve la vista bajo tu clic); si no, va al siguiente. */
+  const alSalirDe = (p: PasoPasivo) => (e: FocusEvent<HTMLElement>) => {
+    const destino = e.relatedTarget as HTMLElement | null;
+    if (destino && e.currentTarget.contains(destino)) return;
+    const otro = destino?.closest?.("[data-paso]")?.getAttribute("data-paso") as PasoPasivo | null | undefined;
+    if (otro && otro !== p) pasarA(otro, false);
+    else pasarA(PASOS_PASIVO[PASOS_PASIVO.indexOf(p) + 1] ?? p);
+  };
+  /** Primer paso del modo pasivo: el nombre del documento, recién subido y respondido «¿Quién firma?». */
+  function empezarPasivo() {
+    // Con la guía, su paso es el de los firmantes: se muestra desde su título (mientras «¿Quién firma?» estuvo abierta,
+    // la guía no movió la vista).
+    if (guiaAqui) { setTimeout(() => enfatizar(document.querySelector('[data-paso="firmantes"]'), 0), 300); return; }
+    if (!asistir || pasoPasivo.current) return;
+    pasoPasivo.current = "nombre";
+    setTimeout(() => enfatizar(document.querySelector('[data-paso="nombre"]')), 300);
+  }
+
+  const botonMiFirma = !esPlantilla && usuario && (
+    <div className="afMiFirma">
+      <button type="button" className={`afReceiveSignBtn ${iYo >= 0 && misImagenes.firma ? "success" : "primary"}`} onClick={agregarMiFirma} disabled={!fActivo}
+        title={iYo >= 0 ? "Vuelve a hacer tu firma" : "Serás el firmante que estás configurando y firmarás ahora mismo"}>
+        {iYo < 0 ? "✍️ Agregar mi firma"
+          : misImagenes.firma ? `✓ Tu firma está lista${firmoSoloYo ? "" : ` (Firmante ${iYo + 1})`} · cambiar`
+          : `✍️ Hacer mi firma${firmoSoloYo ? "" : ` (Firmante ${iYo + 1})`}`}
+      </button>
+      {iYo >= 0 && !soloYo && <button type="button" className="enlace" onClick={quitarMiFirma}>Quitar mi firma</button>}
+    </div>
+  );
 
   return (
     <>
@@ -596,17 +756,33 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
           </div>
         </div>
 
-        <div className="step">
+        <div className="step" data-paso="nombre" onBlur={alSalirDe("nombre")}>
           <div className="stepTitle"><span className="stepNumber">2</span>Aplica nombre al documento</div>
-          <input className="tituloDoc" value={nombre} onChange={(e) => setNombre(e.target.value)} aria-label="Nombre del documento" maxLength={160} />
+          <input className="tituloDoc" value={nombre} onChange={(e) => setNombre(e.target.value)} aria-label="Nombre del documento" maxLength={160}
+            onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()} />
           <span className={`estadoGuardado ${guardado}`}>
             {guardado === "guardando" ? "Guardando…" : guardado === "pendiente" ? "Cambios sin guardar" : guardado === "error" ? "No se pudo guardar" : "✓ Guardado automáticamente"}
           </span>
         </div>
 
-        <div className="step">
-          <div className="stepTitle"><span className="stepNumber">3</span>Cantidad de firmantes</div>
+        <div className="step" data-paso="firmantes" onFocus={() => pasarA("firmantes", false)}>
+          <div className="stepTitle"><span className="stepNumber">3</span>{soloYo ? "Tu firma" : "Cantidad de firmantes"}</div>
+          {!esPlantilla && (
+            <div className="quienFirmaBarra" role="group" aria-label="¿Quién firma?">
+              {([["yo", "✍️ Solo yo"], ["otros", "👥 Otras personas"], ["ambos", "✍️👥 Yo y otras"]] as const).map(([q, texto]) => (
+                <button type="button" key={q} className={quien === q ? "activa" : ""} aria-pressed={quien === q}
+                  disabled={q === "ambos" && maxFirmantes < 2 && quien !== "ambos"} onClick={() => quien !== q && elegirQuien(q)}>{texto}</button>
+              ))}
+            </div>
+          )}
           <div className="participantSetup" data-guia="firmantes">
+            {soloYo && fActivo && (
+              <label className="participantSelectLabel">Tu nombre (aparece junto a tu firma y en el certificado)
+                <input value={/^Firmante \d+$/.test(fActivo.nombre) ? "" : fActivo.nombre} maxLength={120} placeholder="Ej. Juan Pérez"
+                  onChange={(e) => setFirmantes((fs) => fs.map((f) => (f.clave === fActivo.clave ? { ...f, nombre: e.target.value } : f)))} />
+              </label>
+            )}
+            {!soloYo && <>
             <div className="participantCountRow">
               <label htmlFor="cantidadFirmantes">Personas que deben firmar</label>
               <input id="cantidadFirmantes" type="number" min={1} max={maxFirmantes} value={firmantes.length} inputMode="numeric" onChange={(e) => cantidad(Number(e.target.value))} />
@@ -625,29 +801,34 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
             <select id="participanteActivo" value={activo} onChange={(e) => { setActivo(e.target.value); setHerramienta(null); }}>
               {firmantes.map((f, i) => <option key={f.clave} value={f.clave}>Firmante {i + 1}{f.nombre && !/^Firmante \d+$/.test(f.nombre) ? ` · ${f.nombre}` : ""}{f.clave === miClave ? " (tú)" : ""}{listo(f) ? " · ✓" : ""}</option>)}
             </select>
+            </>}
             {fActivo && (
               <>
-                <div className="activeParticipantTitle" style={{ "--c": color(fActivo.clave) } as CSSProperties}><span className="punto" /> Firmante {iActivo + 1} · {fActivo.nombre}</div>
+                {!soloYo && <div className="activeParticipantTitle" style={{ "--c": color(fActivo.clave) } as CSSProperties}><span className="punto" /> Firmante {iActivo + 1} · {fActivo.nombre}</div>}
                 <div className="participantProgress">
                   {camposDe(fActivo.clave) ? `${camposDe(fActivo.clave)} campo(s) configurado(s)` : "Aún no configurado"}
-                  {(fActivo.telefono || fActivo.email) && ` · ${[fActivo.telefono, fActivo.email].filter(Boolean).join(" · ")}`}
+                  {!soloYo && (fActivo.telefono || fActivo.email) && ` · ${[fActivo.telefono, fActivo.email].filter(Boolean).join(" · ")}`}
                 </div>
-                <div className="filaBotones">
+                {!soloYo && <div className="filaBotones">
                   <button type="button" className="crece" onClick={() => setEditandoContacto(true)}>✉️ Apodo y envío para el Firmante {iActivo + 1}</button>
                   {firmantes.length > 1 && <>
                     <button type="button" title="Firma antes" disabled={iActivo === 0} onClick={() => moverFirmante(-1)}>↑</button>
                     <button type="button" title="Firma después" disabled={iActivo === firmantes.length - 1} onClick={() => moverFirmante(1)}>↓</button>
                   </>}
-                </div>
+                </div>}
 
                 <div className="participantFieldsHeading">Delimite los campos:</div>
                 <div className="participantTools" data-guia="campos">
                   <div className="participantTool">
                     <div className="participantToolHead"><strong>Firma</strong><button type="button" className="renameFieldBtn" title="Cambiar el nombre del campo de firma" onClick={() => renombrar("firma")}>✏️ Nombre</button></div>
                     <div className="participantToolActions">
-                      {herramientaBoton("firma", "✍️ Marcar firma", "placeFirma")}
+                      {herramientaBoton("firma", camposDe(fActivo.clave, "firma") ? "✍️ Marcar otro lugar de firma" : "✍️ Marcar dónde irá la firma", "placeFirma")}
                       <button type="button" className="danger" disabled={!camposDe(fActivo.clave, "firma")} onClick={() => borrarTipo("firma")}>Borrar</button>
                     </div>
+                    {/* Se puede firmar en varios lugares (p. ej. al pie de cada página): el firmante firma una vez y su firma va en todos. */}
+                    <p className="small afFirmaVarias">{camposDe(fActivo.clave, "firma")
+                      ? <>✓ <strong>{camposDe(fActivo.clave, "firma")} lugar{camposDe(fActivo.clave, "firma") === 1 ? "" : "es"}</strong> de firma marcado{camposDe(fActivo.clave, "firma") === 1 ? "" : "s"}. ¿Debe firmar en otra parte (por ejemplo, en cada página)? Pulsa otra vez y toca ese lugar.</>
+                      : <>💡 Puedes marcar <strong>más de un lugar</strong>: {soloYo ? "firmas" : "el firmante firma"} una sola vez y la firma se coloca en todos.</>}</p>
                   </div>
                   <div className="participantTool">
                     <label className="checkrow"><input type="checkbox" checked={!!pide[activo]?.sello} onChange={(e) => pedir("sello", e.target.checked)} /><strong>Solicitar sello</strong>{!selloPermitido && <span className="afPaidBadge">🔒 Plan de pago</span>}</label>
@@ -681,12 +862,16 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
                       setCampos((cs) => cs.filter((c) => c.firmante === PREPARADOR || c.tipo === "calculo")); setSel(null);
                     }
                   }}>Limpiar todos los campos</button>
+                  {soloYo && botonMiFirma}
                   <div className="participantTool">
+                    {/* Si firmas solo tú no hay «texto del firmante»: lo que haya que escribir lo llenas tú. */}
+                    {!soloYo && <>
                     <div className="participantToolHead"><strong>Texto del firmante</strong></div>
                     <select className="afTextModeSelect" aria-label={`Texto del Firmante ${iActivo + 1}`} value={fActivo.modoTexto} onChange={(e) => cambiarModo(e.target.value as ModoTexto)}>
                       <option value="solo">🔒 Solo firmar, sellar o poner huella</option>
                       <option value="asignados">✏️ Completar los campos de texto que le asigne</option>
-                      <option value="libre" disabled={!textoPermitido}>📝 Completar campos y agregar texto libre{!textoPermitido ? " · Plan de pago" : ""}</option>
+                      {/* Sin «disabled»: en Gratis se puede elegir y cambiarModo explica que requiere un plan (con «Ver planes»). */}
+                      <option value="libre">📝 Completar campos y agregar texto libre{!textoPermitido ? " · Plan de pago" : ""}</option>
                     </select>
                     {fActivo.modoTexto !== "solo" && (
                       <>
@@ -702,6 +887,7 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
                     )}
                     {!textoPermitido && <p className="small">Agregar texto libre requiere un <Link to="/planes">plan de pago</Link>. Puedes asignarle los campos que ya trae el PDF con tu plan actual.</p>}
                     {fActivo.modoTexto === "libre" && <p className="small afHerramientaAyuda">Al firmar podrá agregar texto adicional donde el documento no tenga un campo.</p>}
+                    </>}
                     {/* Ajustes del campo de texto, fecha o casilla tocado en el documento. */}
                     {seleccionado && TIPOS_DATO.includes(seleccionado.tipo) && !seleccionado.bloqueado && (
                       <div className="afCampoSel">
@@ -829,7 +1015,8 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
 
         <div className="privNote">🔒 <strong>Tus documentos y firmas se guardan de forma privada.</strong> Solo los ven tú y las personas a las que envíes su enlace.</div>
 
-        <div className="step">
+        {/* Orden, mensaje e idioma son para los firmantes: si firmas solo tú no hacen falta. */}
+        {!soloYo && <div className="step" data-paso="orden" onBlur={alSalirDe("orden")}>
           <div className="stepTitle"><span className="stepNumber">4</span>Orden, mensaje e idioma</div>
           {firmantes.length > 1 && <>
             <label className="checkrow"><input type="radio" name="orden" checked={orden === "secuencial"} onChange={() => setOrden("secuencial")} /><div><strong>En orden</strong><div className="small">Cada firmante recibe su enlace cuando firma el anterior. Cambia el orden con ↑ ↓.</div></div></label>
@@ -844,16 +1031,17 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
             </select>
             <small className="small">Los botones e instrucciones que verán los firmantes. Se eligió según el idioma del PDF; cada firmante también puede cambiarlo en su página. Los nombres de los campos son los del documento.</small>
           </label>
-        </div>
+        </div>}
 
-        <div className="step">
-          <div className="stepTitle"><span className="stepNumber">5</span>Guardar configuración</div>
+        <div className="step" data-paso="enviar">
+          <div className="stepTitle"><span className="stepNumber">{soloYo ? 4 : 5}</span>{firmoSoloYo ? "Firmar" : "Guardar configuración"}</div>
           <div className="actions">
             {esPlantilla ? (
               <button type="button" className="success" onClick={async () => { await plataforma.guardar(inicial.id, datos); navegar(`/app/d/${(await plataforma.duplicar(inicial.id)).id}`); }}>📋 Usar esta plantilla</button>
             ) : (
               <button type="button" data-guia="enviar" className={conWhatsApp ? "green" : "primary"} disabled={enviando} onClick={enviar}>
-                {conWhatsApp && WA_SVG}{enviando ? "Enviando…" : conWhatsApp ? "Guardar y enviar" : "💾 Guardar y enviar"}
+                {firmoSoloYo ? (enviando ? "Firmando…" : "✍️ Firmar documento")
+                  : <>{conWhatsApp && WA_SVG}{enviando ? "Enviando…" : conWhatsApp ? "Guardar y enviar" : "💾 Guardar y enviar"}</>}
               </button>
             )}
             <button type="button" onClick={async () => {
@@ -863,18 +1051,13 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
             }}>{esPlantilla ? "Quitar de plantillas" : "📋 Guardar como plantilla"}</button>
             <button type="button" className="danger" onClick={eliminar}>{esPlantilla ? "🗑️ Eliminar plantilla" : "Eliminar borrador"}</button>
           </div>
-          <p className="small">Al enviar, cada firmante recibe su enlace por WhatsApp o correo. Puedes seguir el avance y descargar el PDF firmado con su certificado.</p>
+          <p className="small">{firmoSoloYo
+            ? "Tu firma se aplica al documento y podrás descargar el PDF firmado con su certificado."
+            : "Al enviar, cada firmante recibe su enlace por WhatsApp o correo. Puedes seguir el avance y descargar el PDF firmado con su certificado."}</p>
         </div>
 
-        {!esPlantilla && usuario && (
-          <div className="afMiFirma">
-            <button type="button" className={`afReceiveSignBtn ${iYo >= 0 && misImagenes.firma ? "success" : "primary"}`} onClick={agregarMiFirma} disabled={!fActivo}
-              title={iYo >= 0 ? "Vuelve a hacer tu firma" : "Serás el firmante que estás configurando y firmarás ahora mismo"}>
-              {iYo < 0 ? "✍️ Agregar mi firma" : misImagenes.firma ? `✓ Tu firma está lista (Firmante ${iYo + 1}) · cambiar` : `✍️ Hacer mi firma (Firmante ${iYo + 1})`}
-            </button>
-            {iYo >= 0 && <button type="button" className="enlace" onClick={quitarMiFirma}>Quitar mi firma</button>}
-          </div>
-        )}
+        {/* Si firmas solo tú, el botón va junto a tus campos (paso 3); si solo firman otros, no se muestra. */}
+        {quien === "ambos" && botonMiFirma}
 
         <div className="field">
           <span className="fieldLabel">Estado</span>
@@ -905,11 +1088,13 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
           </button>
           {avanzadas && (
             <div id="afAvanzadasCuerpo" className="afSecurityRow">
+              {!soloYo && <>
               <label className="checkrow"><input type="checkbox" checked={bloquearDibujo} onChange={(e) => setBloquearDibujo(e.target.checked)} />
                 <div><strong>🔒 Bloquear firma con el dedo o en pantalla</strong><div className="small">Los firmantes deberán fotografiar o subir su firma hecha en papel.</div></div></label>
               <label className={`checkrow ${pide[activo]?.sello || campos.some((c) => c.tipo === "sello") ? "" : "afInactiva"}`}>
                 <input type="checkbox" checked={bloquearSello} onChange={(e) => setBloquearSello(e.target.checked)} />
                 <div><strong>🔒 Bloquear confección del sello</strong><div className="small">El firmante deberá fotografiar o subir su sello real.{!campos.some((c) => c.tipo === "sello") && " Se aplica cuando pidas un sello."}</div></div></label>
+              </>}
               <label className="checkrow"><input type="checkbox" checked={!!fActivo?.pedirDni} disabled={!fActivo} onChange={(e) => pedirDni(e.target.checked)} />
                 <div><div className="afTituloOpcion"><strong>🪪 Requerir firma y huella capturando DNI</strong>{!selloPermitido && <span className="afPaidBadge">🔒 Plan de pago</span>}</div>
                   <div className="small">Para el Firmante {iActivo + 1}{conDni.length > (fActivo?.pedirDni ? 1 : 0) ? ` (también: ${conDni.filter((i) => i !== iActivo).map((i) => `Firmante ${i + 1}`).join(", ")})` : ""}: foto frontal del DNI, su firma en papel y el reverso, de donde sale la huella. Las fotos del DNI van en una hoja de evidencias del PDF{certificado ? ", junto a su cronología" : ""}. No valida identidad ante RENIEC.</div></div></label>
@@ -917,12 +1102,20 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
                 <div><strong>📜 Generar certificado de evidencias</strong><div className="small">{hayEvidencias
                   ? `Añade al PDF una hoja por firmante con la cronología de su firma, sello y huella${conDni.length ? ", las fotos de su DNI" : ""}, sus imágenes y su ubicación si la autoriza.`
                   : "Disponible cuando marques una firma, un sello o una huella."}</div></div></label>
-              <label className="checkrow"><input type="checkbox" checked={flujo} onChange={(e) => setFlujo(e.target.checked)} />
-                <div><strong>✨ Convertir en Flujo</strong><div className="small">El firmante verá primero el documento, luego completará en un formulario guiado los campos de texto, fecha y casillas que le asignaste{conDni.length ? " (después, los pasos del DNI)" : ""} y al final firmará. Los campos bloqueados quedan fuera del formulario.{flujo && !hayDatosFirmantes ? " Ahora ningún firmante tiene campos de texto: firmarán directamente." : ""}</div></div></label>
+              {!soloYo && <label className="checkrow"><input type="checkbox" checked={flujo} onChange={(e) => setFlujo(e.target.checked)} />
+                <div><strong>✨ Convertir en Flujo</strong><div className="small">El firmante verá primero el documento, luego completará en un formulario guiado los campos de texto, fecha y casillas que le asignaste{conDni.length ? " (después, los pasos del DNI)" : ""} y al final firmará. Los campos bloqueados quedan fuera del formulario.{flujo && !hayDatosFirmantes ? " Ahora ningún firmante tiene campos de texto: firmarán directamente." : ""}</div></div></label>}
             </div>
           )}
         </div>
+        {/* «Navegar por páginas / Eliminar páginas»: se minimiza para que no ocupe espacio; se recuerda la última elección. */}
         {inicial.paginas.length > 1 && (
+          <div className={`afAvanzadas afPaginas ${verPaginas ? "abierto" : ""}`}>
+          <button type="button" className="afAvanzadasBoton" aria-expanded={verPaginas} aria-controls="afPaginasCuerpo" onClick={() => setVerPaginas(!verPaginas)}>
+            <span>📑 Navegar por páginas / Eliminar páginas</span>
+            <span className="afAvanzadasCuenta">Página {pagina} de {inicial.paginas.length}</span>
+            <span className="afAvanzadasFlecha" aria-hidden>{verPaginas ? "▲ Minimizar" : "▼ Maximizar"}</span>
+          </button>
+          {verPaginas && <div id="afPaginasCuerpo">
           <div className="pdfPageNav">
             <button type="button" aria-label="Página anterior" disabled={pagina <= 1} onClick={() => { setPagina(pagina - 1); setSel(null); }}>←</button>
             <label htmlFor="numPagina">Página</label>
@@ -931,12 +1124,25 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
             <button type="button" aria-label="Página siguiente" disabled={pagina >= inicial.paginas.length} onClick={() => { setPagina(pagina + 1); setSel(null); }}>→</button>
             <button type="button" className="danger" title="Quitar esta página del documento que se enviará" onClick={quitarPagina}>🗑️ Eliminar esta página</button>
           </div>
+        {inicial.paginas.length > 2 && (
+          <form className="pdfQuitarRango" onSubmit={(e) => { e.preventDefault(); quitarRango(); }}>
+            <label htmlFor="rangoQuitar">🗑️ Quitar varias páginas</label>
+            <input id="rangoQuitar" value={rangoQuitar} placeholder="Ej.: 2-5 o 2,5" autoComplete="off" inputMode="text" maxLength={300}
+              aria-describedby="rangoQuitarAyuda" aria-invalid={!!errorRango} onChange={(e) => { setRangoQuitar(e.target.value); setErrorRango(""); }} />
+            <button type="submit" className="danger" disabled={quitandoRango || !rangoQuitar.trim()}>{quitandoRango ? "Quitando…" : "Quitar"}</button>
+            <small id="rangoQuitarAyuda" className={errorRango ? "pdfQuitarError" : ""} role={errorRango ? "alert" : undefined}>
+              {errorRango || "«2-5» quita de la 2 a la 5 · «2,5» quita solo la 2 y la 5 · puedes combinarlas: «1-3, 8»."}
+            </small>
+          </form>
+        )}
+          </div>}
+          </div>
         )}
         {herramienta && <div className="avisoColocar">👆 Toca el documento donde va el campo «{ETIQUETA_TIPO[herramienta]}» {destino}. <button type="button" className="enlace" onClick={() => setHerramienta(null)}>Cancelar</button></div>}
         {errorPdf && <div className="afAlerta">{errorPdf}</div>}
         <div className="preview">
           <div className="zoomCaja" style={{ width: `calc(min(100%, 1000px) * ${zoom})` }}>
-            <PaginaPdf doc={doc} numero={pagina} pagina={p} alTocar={colocar} cursor={herramienta ? "crosshair" : undefined} refContenedor={(el) => { contenedor.current = el; }}>
+            <PaginaPdf doc={doc} avance={avancePdf} numero={pagina} pagina={p} alTocar={colocar} cursor={herramienta ? "crosshair" : undefined} refContenedor={(el) => { contenedor.current = el; }}>
               {campos.filter((c) => c.pagina === pagina).map((c) => {
                 const mio = llenaCampo(c), lleno = c.valor === true || (typeof c.valor === "string" && c.valor.trim() !== "");
                 const quien = c.tipo === "calculo" ? "lo calcula el PDF" : c.firmante === PREPARADOR ? "lo llenas tú" : nombreDe(c.firmante);
@@ -1002,6 +1208,9 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
         />
       )}
 
+      {preguntarQuien && <QuienFirma puedeVarios={maxFirmantes >= 2} alElegir={elegirQuien}
+        alDespues={() => { setPreguntarQuien(false); guardarQuien(inicial.id, "ambos"); empezarPasivo(); }} />}
+
       {editandoContacto && fActivo && (
         <EditorContacto
           numero={iActivo + 1} firmante={fActivo} contactos={contactos}
@@ -1011,6 +1220,41 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
       )}
     </div>
     </>
+  );
+}
+
+/**
+ * Emergente al subir un PDF: «¿Quién firma este documento?». Según la respuesta el editor muestra solo lo necesario.
+ * «Decidir después» (o Esc) deja todas las opciones, como «Yo y otras personas», sin agregar firmantes.
+ */
+function QuienFirma({ puedeVarios, alElegir, alDespues }: { puedeVarios: boolean; alElegir: (q: Quien) => void; alDespues: () => void }) {
+  const despues = alDespues;
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && despues();
+    document.addEventListener("keydown", esc);
+    return () => document.removeEventListener("keydown", esc);
+  }, [despues]);
+  const opcion = (q: Quien, icono: string, titulo: string, detalle: string, disabled = false) => (
+    <button type="button" className="quienFirmaOpcion" disabled={disabled} onClick={() => alElegir(q)}>
+      <span className="quienIcono" aria-hidden>{icono}</span>
+      <span><strong>{titulo}</strong><small>{detalle}</small></span>
+    </button>
+  );
+  return (
+    <div className="nicknameEditor">
+      <section className="nicknameEditorCard" role="dialog" aria-modal="true" aria-labelledby="quienFirmaTitulo">
+        <h2 id="quienFirmaTitulo">¿Quién firma este documento?</h2>
+        <p>Así te mostramos solo las opciones que necesitas. Puedes cambiarlo después en el paso 3.</p>
+        <div className="quienFirmaOpciones">
+          {opcion("yo", "✍️", "Solo yo", "Lo firmo yo mismo ahora y descargo el PDF firmado.")}
+          {opcion("otros", "👥", "Otras personas", "Marco dónde firma cada una y les envío su enlace por WhatsApp o correo.")}
+          {opcion("ambos", "✍️👥", "Yo y otras personas", puedeVarios
+            ? "Firmo yo y también envío el documento a otras personas."
+            : "Tu plan actual permite un solo firmante por documento.", !puedeVarios)}
+        </div>
+        <div className="quienFirmaDespues"><button type="button" className="enlace" onClick={despues}>Decidir después</button></div>
+      </section>
+    </div>
   );
 }
 

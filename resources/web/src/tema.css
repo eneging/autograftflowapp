@@ -209,10 +209,12 @@ button, .boton, .filebtn {
 :is(button, .boton, .filebtn):not(:disabled):hover { background: var(--hover); transform: none; filter: none; box-shadow: none; }
 :is(button, .boton, .filebtn):not(:disabled):active { background: var(--hover2); transform: none; }
 :is(button, .boton, .filebtn):focus-visible { outline: 2px solid rgba(35,131,226,.6); outline-offset: 2px; }
+/* Relleno de los botones principales y su texto: separados de --accent (textos y bordes) para que una paleta con botón
+   claro (p. ej. amarillo) lleve texto oscuro encima y enlaces legibles sobre el fondo. */
 :is(button, .boton, .filebtn).primary, .placeFirma {
-  background: var(--accent) !important; color: #fff !important; border: 1px solid transparent !important; box-shadow: none !important; text-shadow: none;
+  background: var(--accentRelleno, var(--accent)) !important; color: var(--sobreAccent, #fff) !important; border: 1px solid transparent !important; box-shadow: none !important; text-shadow: none;
 }
-:is(button, .boton, .filebtn).primary:not(:disabled):hover, .placeFirma:not(:disabled):hover { background: var(--accentHover) !important; }
+:is(button, .boton, .filebtn).primary:not(:disabled):hover, .placeFirma:not(:disabled):hover { background: var(--accentRellenoHover, var(--accentHover)) !important; }
 :is(button, .boton).oscuro { background: var(--oscuro) !important; color: var(--sobreOscuro) !important; border-color: transparent !important; }
 :is(button, .boton).oscuro:not(:disabled):hover { opacity: .85; }
 :is(button, .boton).success { background: #2f7d5b !important; color: #fff !important; border: 1px solid transparent !important; box-shadow: none !important; text-shadow: none; }
@@ -229,7 +231,7 @@ button, .boton, .filebtn {
   background: var(--accentSuave) !important; color: var(--accent) !important; border: 1px solid var(--accent) !important; outline: none;
 }
 :is(button, .boton, .filebtn):disabled { opacity: .45; cursor: not-allowed; filter: none; transform: none; }
-:is(button, .boton, .filebtn).primary:disabled { background: var(--accent) !important; }
+:is(button, .boton, .filebtn).primary:disabled { background: var(--accentRelleno, var(--accent)) !important; }
 .botonChico { padding: 4px 10px !important; font-size: 13px !important; min-height: 28px !important; }
 .botonIcono {
   width: 28px; height: 28px; min-height: 0; padding: 0 !important; border: 0 !important; border-radius: 6px; background: transparent !important;
@@ -673,7 +675,7 @@ header.authHeader { background: transparent; border: 0; padding: 0; justify-cont
 .afSheetTitles small, .afSheetNav span, .afSheetHint { color: var(--muted); }
 .afSheetNav button { width: 36px; height: 36px; padding: 0; border-radius: 50%; color: var(--ink); font-size: 20px; }
 .afDayBtn { min-height: 42px; border: 1px solid var(--lineFuerte); border-radius: 6px; background: var(--fondo); color: var(--ink); font-size: 15px; }
-.afDayBtn.on { background: var(--accent) !important; border-color: var(--accent); color: #fff !important; }
+.afDayBtn.on { background: var(--accentRelleno, var(--accent)) !important; border-color: var(--accentRelleno, var(--accent)); color: var(--sobreAccent, #fff) !important; }
 #screen { background: var(--fondo); }
 #screen .top, #screen .methods, #screen .bottom, #screen .hintBar, .top, .methods, .bottom, .hintBar { background: var(--fondo); border-color: var(--line); color: var(--ink); backdrop-filter: none; }
 #screen .area, .area { background-color: #fff; }
@@ -747,7 +749,7 @@ header.authHeader { background: transparent; border: 0; padding: 0; justify-cont
 .titulo-pagina h1, .titulo-pagina p { color: var(--ink); text-shadow: none; }
 .titulo-pagina p { color: var(--muted); }
 .tarjeta.angosta { max-width: 420px; }
-.boton-principal { background: var(--accent); color: #fff; }
+.boton-principal { background: var(--accentRelleno, var(--accent)); color: var(--sobreAccent, #fff); }
 
 /* Aviso de navegador interno (WhatsApp, Facebook…) */
 .afInAppBanner { background: var(--amarilloBg); border-bottom: 1px solid var(--line); color: var(--amarilloInk); }
@@ -764,3 +766,55 @@ header.authHeader { background: transparent; border: 0; padding: 0; justify-cont
   .preview { padding: 10px; }
   .card { padding: 16px; }
 }
+
+/* Logo «cargando»: el trazo de firma se dibuja una y otra vez; con porcentaje y barra cuando se sabe el avance. */
+.cargaLogo { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.cargaLogoMarca { display: inline-flex; animation: cargaFlotar 1.6s ease-in-out infinite; }
+.cargaLogo .logoTrazo { stroke-dasharray: 32; stroke-dashoffset: 32; animation: cargaTrazo 1.6s ease-in-out infinite; }
+.cargaLogoPct { font-size: 20px; font-variant-numeric: tabular-nums; color: var(--ink); }
+.cargaLogoBarra { width: min(220px, 60vw); height: 6px; border-radius: 3px; background: var(--hover2); overflow: hidden; }
+.cargaLogoBarra > span { display: block; height: 100%; background: var(--accent); border-radius: inherit; transition: width .25s ease; }
+.cargaLogoTexto { font-size: 13.5px; color: var(--muted); }
+.cargaLogoPantalla { position: fixed; inset: 0; z-index: 130; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--fondo) 88%, transparent); }
+@keyframes cargaTrazo { 0% { stroke-dashoffset: 32; } 55%, 75% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: -32; } }
+@keyframes cargaFlotar { 50% { transform: translateY(-4px); } }
+@media (prefers-reduced-motion: reduce) { .cargaLogoMarca, .cargaLogo .logoTrazo { animation: none; stroke-dashoffset: 0; } }
+
+/* «¿Quién firma este documento?»: se pregunta al subir un PDF; según la respuesta el editor oculta lo que sobra. */
+.quienFirmaOpciones { display: grid; gap: 10px; }
+.quienFirmaOpcion { display: flex; gap: 12px; align-items: flex-start; width: 100%; text-align: left; padding: 14px; border-radius: 8px; border: 1px solid var(--lineFuerte); background: var(--fondo); color: var(--ink); cursor: pointer; }
+.quienFirmaOpcion:hover:not(:disabled), .quienFirmaOpcion:focus-visible { border-color: var(--accent); background: var(--accentSuave); }
+.quienFirmaOpcion:disabled { opacity: .55; cursor: not-allowed; }
+.quienFirmaOpcion .quienIcono { font-size: 24px; line-height: 1; }
+.quienFirmaOpcion strong { display: block; font-size: 15px; margin-bottom: 2px; }
+.quienFirmaOpcion small { display: block; color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+.quienFirmaDespues { margin-top: 12px; text-align: center; }
+.quienFirmaBarra { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.quienFirmaBarra button { flex: 1 1 auto; font-size: 12.5px; padding: 6px 8px; }
+
+/* «Probar sin cuenta»: botón secundario con borde, para que no pase desapercibido junto a «Empezar gratis». */
+.botonInvitado { display: inline-flex; align-items: center; gap: 12px; margin-top: 14px; padding: 10px 14px; border: 1.5px dashed var(--accent); border-radius: 10px; background: var(--accentSuave); color: var(--ink); text-decoration: none; max-width: 100%; transition: background .15s, border-color .15s, transform .15s; }
+.botonInvitado:hover, .botonInvitado:focus-visible { border-style: solid; background: color-mix(in srgb, var(--accent) 18%, transparent); transform: translateY(-1px); }
+.botonInvitado strong { display: block; font-size: 14px; color: var(--accent); }
+.botonInvitado small { display: block; font-size: 12.5px; color: var(--ink2); }
+.botonInvitadoIcono { font-size: 22px; line-height: 1; }
+.botonInvitadoFlecha { margin-left: auto; font-size: 18px; color: var(--accent); transition: transform .15s; }
+.botonInvitado:hover .botonInvitadoFlecha { transform: translateX(3px); }
+@media (prefers-reduced-motion: reduce) { .botonInvitado, .botonInvitadoFlecha { transition: none; } }
+
+/* Bajo «Marcar dónde irá la firma»: se puede marcar más de un lugar. */
+.afFirmaVarias { margin: 6px 0 0; padding: 7px 9px; border-radius: 6px; background: var(--azulBg); color: var(--azulInk); line-height: 1.45; }
+.afFirmaVarias strong { color: inherit; }
+
+/* «Quitar varias páginas» (2-5, 2,5…) bajo la navegación de páginas del editor. */
+.pdfQuitarRango { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin: -4px 0 12px; padding: 8px 10px; border-radius: 8px; border: 1px dashed rgba(224,62,62,.32); background: var(--fondo); font-size: 13.5px; }
+.pdfQuitarRango label { font-weight: 600; color: var(--ink2); }
+.pdfQuitarRango input { width: 170px; padding: 5px 8px; }
+.pdfQuitarRango small { flex-basis: 100%; text-align: center; font-size: 12px; }
+.pdfQuitarRango small.pdfQuitarError { color: var(--rojoInk); }
+@media (max-width: 480px) { .pdfQuitarRango input { flex: 1 1 120px; width: auto; } }
+
+/* Dentro de «Navegar por páginas / Eliminar páginas»: sin recuadros dobles. */
+.afPaginas .pdfPageNav { margin: 4px 10px 0; border: 0; padding: 4px; }
+.afPaginas .pdfQuitarRango { margin: 8px 10px 0; }
+.afPaginas .afAvanzadasCuenta { font-variant-numeric: tabular-nums; }

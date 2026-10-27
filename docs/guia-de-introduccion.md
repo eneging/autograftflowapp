@@ -13,6 +13,13 @@ La introducción se muestra automáticamente la primera vez que cada usuario ent
 
 «Mostrar dónde» desplaza la vista y enfoca el control correspondiente. «Ver guía», disponible en la barra superior fija, vuelve a la tarjeta sin reiniciar los pasos.
 
+## Modos asistidos
+
+- **Activo (la guía):** cada paso trae una animación «Así se hace» (HTML y CSS que imitan la pantalla real, en bucle; sin archivos GIF). Al llegar a un paso la vista va sola al control real y este parpadea 3 veces; «Mostrar dónde» repite el parpadeo.
+- **Pasivo:** sin tarjeta. Empieza al subir un PDF, después de responder «¿Quién firma?»: parpadea el paso 2 (nombre). Al salir del nombre (o con Enter) baja al paso 3; cuando cada firmante tiene sus campos (o, si firmas solo tú, cuando tu firma está hecha) baja al paso 4; al salir del paso 4, al botón de envío. Cada paso parpadea una vez y solo se avanza: si haces clic directamente en otro paso, avanza sin mover la vista. No actúa si la guía acompaña ese documento.
+- Ambos se activan o desactivan en «Cómo funciona» → «Ayudas mientras trabajas». El activo se guarda en la cuenta (como «Saltar guía»); el pasivo, en el navegador (`autograflow_asistido_pasivo`), activado por defecto.
+- Con «reducir movimiento» no hay desplazamiento animado; el parpadeo se cambia por un resaltado breve y las animaciones muestran su imagen final.
+
 ## Preferencia y reactivación
 
 - «Saltar guía» la oculta inmediatamente y guarda `omitida` por usuario. No se vuelve a abrir automáticamente en siguientes accesos.

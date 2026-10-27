@@ -1,0 +1,16 @@
+/* Panel «Organizar PDF» a la derecha (PanelOrganizarPdf.tsx). */
+.opFondo { position: fixed; inset: 0; z-index: 1000; background: rgba(15,15,15,.45); display: flex; justify-content: flex-end; }
+.opPanel { width: min(400px, 100%); height: 100%; overflow: auto; display: flex; flex-direction: column; gap: 14px; padding: 20px 18px; background: var(--fondoMenu); color: var(--ink); box-shadow: var(--sombraMenu); animation: opEntra .22s ease-out; }
+@keyframes opEntra { from { transform: translateX(40px); opacity: 0; } }
+.opCabecera { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.opCabecera h2 { margin: 0 0 2px; font-size: 20px; }
+.opCabecera p { margin: 0; font-size: 13px; }
+.opLista { display: grid; gap: 6px; }
+.opHerramienta { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 10px; border: 1px solid transparent; color: var(--ink); text-decoration: none; transition: background .15s, border-color .15s; }
+.opHerramienta:hover, .opHerramienta:focus-visible { background: var(--hover); border-color: var(--line); }
+.opHerramienta strong { display: block; font-size: 14px; }
+.opHerramienta small { display: block; font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+.opIcono { display: grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: 10px; background: var(--accentSuave); color: var(--accent); }
+.opFlecha { margin-left: auto; font-size: 20px; color: var(--muted); }
+.opPie { margin: auto 0 0; padding: 10px 12px; border-radius: 8px; background: var(--verdeBg); color: var(--verdeInk); font-size: 12.5px; }
+@media (prefers-reduced-motion: reduce) { .opPanel { animation: none; } .opHerramienta { transition: none; } }

@@ -1,0 +1,95 @@
+/* «Organizar PDF» (HerramientasPdf.tsx): cabecera con la cinta de herramientas, zona de carga, cuadrícula de páginas. */
+/* minmax(0, 1fr): una columna de cuadrícula sin esto se estira al texto más largo (p. ej. el nombre del archivo) y la página se sale por la derecha. */
+.hpPagina { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; max-width: 1400px; margin: 0 auto; width: 100%; }
+.hpPagina > *, .hpTrabajo > * { min-width: 0; }
+.hpCabecera { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.hpTitulo h1 { margin: 0 0 2px; }
+.hpTitulo p { margin: 0; }
+.hpCinta { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.hpCintaBoton { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 6px; border-radius: 10px; border: 1px solid var(--lineFuerte); background: var(--fondo); color: var(--ink2); font-size: 12.5px; font-weight: 600; text-align: center; text-decoration: none; transition: border-color .15s, background .15s; }
+.hpCintaBoton:hover { border-color: var(--accent); background: var(--hover); color: var(--ink); }
+.hpCintaBoton.activa { border-color: var(--accent); background: var(--accentSuave); color: var(--accent); }
+.hpIcono { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: var(--accentSuave); color: var(--accent); flex-shrink: 0; }
+.hpCintaBoton.activa .hpIcono { background: var(--accentRelleno, var(--accent)); color: var(--sobreAccent, #fff); }
+.hpPrivado { margin: 0; padding: 8px 12px; border-radius: 8px; background: var(--verdeBg); color: var(--verdeInk); font-size: 12.5px; }
+.hpIntro h2 { display: flex; align-items: center; gap: 10px; margin: 6px 0 2px; }
+.hpIntro p { margin: 0; }
+
+.hpZona { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 42px 20px; text-align: center; border: 2px dashed var(--lineFuerte); cursor: pointer; transition: border-color .15s, background .15s; }
+.hpZona:hover, .hpZona:focus-visible, .hpZona.encima { border-color: var(--accent); background: var(--accentSuave); }
+.hpZonaEscaner { cursor: default; }
+.hpZonaIcono { font-size: 40px; line-height: 1; }
+.hpZona strong { font-size: 17px; }
+.hpZona .boton { margin-top: 8px; pointer-events: none; }
+
+.hpTrabajo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.hpBarra { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+.hpBarra > strong { flex: 1 1 260px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hpBarraBotones { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.hpBarraBotones button { font-size: 13px; }
+
+.hpCuadricula { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 12px; }
+.hpHoja { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 10px; border: 1px solid var(--line); background: var(--suave); transition: border-color .15s, box-shadow .15s, opacity .15s; }
+.hpHoja.movible { cursor: grab; }
+.hpHoja.movible:active { cursor: grabbing; }
+.hpHoja.hpSobre { border-color: var(--accent); box-shadow: -4px 0 0 0 var(--accent); }
+.hpHojaVista { position: relative; display: block; width: 100%; padding: 0; border: 0 !important; background: transparent !important; box-shadow: none !important; min-height: 0; }
+button.hpHojaVista { cursor: pointer; }
+.hpMini { position: relative; display: grid; place-items: center; height: 150px; border-radius: 6px; background: var(--lienzo); overflow: hidden; }
+.hpMini canvas, .hpMini img { max-width: 100%; max-height: 100%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.18); opacity: 0; transition: opacity .2s, transform .2s; }
+.hpMini canvas.lista, .hpMini img { opacity: 1; }
+.hpMiniCargando { position: absolute; width: 22px; height: 22px; border-radius: 50%; border: 2.5px solid var(--lineFuerte); border-top-color: var(--accent); animation: hpGira .8s linear infinite; }
+@keyframes hpGira { to { transform: rotate(360deg); } }
+.hpComoDocumento img { filter: grayscale(1) contrast(1.6) brightness(1.08); }
+.hpHojaPie { display: flex; align-items: center; justify-content: space-between; gap: 4px; flex-wrap: wrap; }
+.hpNumero { font-size: 12.5px; font-weight: 650; color: var(--ink2); font-variant-numeric: tabular-nums; }
+.hpOrigen { margin-left: 4px; font-weight: 400; color: var(--muted); }
+.hpMiniBotones { display: inline-flex; gap: 2px; }
+.hpMiniBotones button { min-width: 0; min-height: 0; width: 24px; height: 24px; padding: 0; font-size: 12px; line-height: 1; }
+.hpArchivoNombre { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hpOrden { position: absolute; top: 6px; left: 6px; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--accentRelleno, var(--accent)); color: var(--sobreAccent, #fff); font-size: 12px; font-weight: 700; }
+
+/* Marcas: quitar (rojo ✕), elegida (✓) y fuera de los rangos de «Dividir». */
+.hpSello { position: absolute; top: 6px; right: 6px; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; color: #fff; font-weight: 700; font-size: 14px; }
+.hpSello.quitar { background: #e03e3e; }
+.hpSello.elegida { background: var(--accentRelleno, var(--accent)); color: var(--sobreAccent, #fff); }
+.hpHoja.hp-quitar { border-color: #e03e3e; background: var(--rojoBg); }
+.hpHoja.hp-quitar .hpMini canvas { opacity: .35; }
+.hpHoja.hp-elegida { border-color: var(--accent); background: var(--accentSuave); }
+.hpHoja.hp-fuera { opacity: .4; }
+
+.hpOpciones { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
+.hpOpciones label { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--lineFuerte); cursor: pointer; }
+.hpOpciones label.elegida { border-color: var(--accent); background: var(--accentSuave); }
+.hpOpciones small { display: block; color: var(--muted); font-size: 12px; }
+.hpCampo { display: grid; gap: 5px; font-size: 13px; font-weight: 600; color: var(--ink2); max-width: 420px; }
+.hpCampo small { font-weight: 400; color: var(--muted); }
+.hpError, .hpCampo small.hpError { color: var(--rojoInk); }
+.hpGrupos { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.hpGrupos li, .hpGrupo { padding: 2px 8px; border-radius: 99px; font-size: 12px; font-weight: 600; background: hsl(var(--g, 210) 70% 50% / .16); color: hsl(var(--g, 210) 60% 38%); }
+[data-theme="dark"] .hpGrupos li, [data-theme="dark"] .hpGrupo { color: hsl(var(--g, 210) 70% 72%); }
+.hpGrupo { margin-left: 6px; padding: 1px 6px; font-size: 11px; }
+
+.hpRango { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.hpRango label { font-size: 13px; font-weight: 600; color: var(--ink2); }
+.hpRango input { width: 170px; }
+.hpRango small { flex-basis: 100%; }
+.hpCheck { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; cursor: pointer; }
+.hpCheck small { color: var(--muted); }
+.hpOpcionesFila { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; }
+.hpCampoCorto { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; }
+.hpCampoCorto select { width: auto; }
+
+/* Barra de acciones: queda a la vista al bajar por muchas páginas. */
+.hpAcciones { position: sticky; bottom: 8px; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; padding: 10px 12px; border: 1px solid var(--lineFuerte); border-radius: 10px; background: var(--fondoMenu); box-shadow: var(--sombraMenu); }
+.hpAccionesNota { margin-right: auto; font-size: 13px; color: var(--ink2); }
+
+@media (max-width: 900px) { .hpCinta { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 520px) {
+  .hpCinta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hpCuadricula { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); }
+  .hpMini { height: 128px; }
+  .hpAcciones button { flex: 1 1 100%; }
+  .hpBarraBotones { margin-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .hpMiniCargando { animation-duration: 2s; } .hpCintaBoton, .hpHoja, .hpMini canvas { transition: none; } }

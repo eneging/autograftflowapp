@@ -493,36 +493,72 @@ class Documentos
      */
     public static function eliminarPagina(int $cuentaId, int $id, int $pagina, array $origen): void
     {
+        self::eliminarPaginas($cuentaId, $id, [$pagina], $origen);
+    }
+
+    /**
+     * Quita varias páginas del borrador a la vez (p. ej. «2-5» o «2,5» en el editor): se rearma el PDF con las demás,
+     * se borran los campos de las quitadas y los de las siguientes pasan a su nuevo número.
+     */
+    public static function eliminarPaginas(int $cuentaId, int $id, array $quitar, array $origen): void
+    {
         $d = self::documentoDe($cuentaId, $id);
         if ($d->estado !== 'borrador') {
             throw new ErrorUso('El documento ya fue enviado y no se puede modificar', 409);
         }
         $paginas = json_decode($d->paginas, true);
-        if (! isset($paginas[$pagina - 1])) {
+        $quitar = array_values(array_unique(array_map('intval', $quitar)));
+        sort($quitar);
+        if (! $quitar || $quitar[0] < 1 || end($quitar) > count($paginas)) {
             throw new ErrorUso('Esa página no existe', 404);
         }
-        if (count($paginas) === 1) {
+        if (count($quitar) >= count($paginas)) {
             throw new ErrorUso('El documento debe tener al menos una página');
         }
+        $quitadas = array_flip($quitar);
         $pdf = PdfFinal::nuevo();
         $total = $pdf->setSourceFile(StreamReader::createByString(self::disco()->get($d->archivo)));
+        // Nuevo número de cada página que queda (las quitadas no tienen).
+        $nuevo = [];
         for ($i = 1; $i <= $total; $i++) {
-            if ($i === $pagina) {
+            if (isset($quitadas[$i])) {
                 continue;
             }
+            $nuevo[$i] = count($nuevo) + 1;
             $tpl = $pdf->importPage($i);
             $t = $pdf->getTemplateSize($tpl);
             $pdf->AddPage($t['orientation'], [$t['width'], $t['height']]);
             $pdf->useTemplate($tpl, 0, 0, $t['width'], $t['height']);
         }
-        array_splice($paginas, $pagina - 1, 1);
-        DB::transaction(function () use ($id, $pagina, $paginas, $pdf, $d, $origen) {
+        $paginas = array_values(array_filter($paginas, fn ($i) => ! isset($quitadas[$i + 1]), ARRAY_FILTER_USE_KEY));
+        DB::transaction(function () use ($id, $quitar, $nuevo, $paginas, $pdf, $d, $origen) {
             self::disco()->put($d->archivo, $pdf->Output('', 'S'));
             DB::table('documentos')->where('id', $id)->update(['paginas' => json_encode($paginas), 'updated_at' => now()]);
-            DB::table('campos')->where('documento_id', $id)->where('pagina', $pagina)->delete();
-            DB::table('campos')->where('documento_id', $id)->where('pagina', '>', $pagina)->decrement('pagina');
-            self::evento($id, 'pagina', "Se quitó la página {$pagina} antes de enviarlo", $origen);
+            DB::table('campos')->where('documento_id', $id)->whereIn('pagina', $quitar)->delete();
+            // En orden ascendente: cada página baja a un número que ya quedó libre (quitado o ya renumerado).
+            foreach ($nuevo as $antes => $despues) {
+                if ($antes !== $despues) {
+                    DB::table('campos')->where('documento_id', $id)->where('pagina', $antes)->update(['pagina' => $despues]);
+                }
+            }
+            $texto = count($quitar) === 1 ? "Se quitó la página {$quitar[0]}" : 'Se quitaron las páginas '.self::rangoTexto($quitar);
+            self::evento($id, 'pagina', "{$texto} antes de enviarlo", $origen);
         });
+    }
+
+    /** [2,3,4,5,9] → «2-5, 9» (para el historial). */
+    private static function rangoTexto(array $paginas): string
+    {
+        $partes = [];
+        foreach ($paginas as $p) {
+            $u = count($partes) - 1;
+            if ($u >= 0 && $partes[$u][1] === $p - 1) {
+                $partes[$u][1] = $p;
+            } else {
+                $partes[] = [$p, $p];
+            }
+        }
+        return implode(', ', array_map(fn ($r) => $r[0] === $r[1] ? (string) $r[0] : "{$r[0]}-{$r[1]}", $partes));
     }
 
     public static function eliminar(User $u, int $id, array $origen): string

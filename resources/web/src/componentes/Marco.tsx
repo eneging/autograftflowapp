@@ -6,23 +6,17 @@ import { plataforma, type FilaDocumento } from "../plataforma/api";
 import { usarSesion } from "../plataforma/sesion";
 import { Footer } from "./Footer";
 import { BotonGuia } from "../plataforma/GuiaProceso";
+import { CargaLogoPantalla, LogoMarca } from "./CargaLogo";
+import { cambiarApariencia, usarApariencia } from "./apariencia";
+import { BotonPaletas } from "./Paletas";
+import { PanelOrganizarPdf } from "../plataforma/pdf/PanelOrganizarPdf";
 
 /*
  * Diseño AutograFlow (inspirado en Notion): lienzo blanco, barra lateral gris clara con el espacio de trabajo, la
  * navegación y los documentos recientes, tipografía del sistema, iconos de línea y un solo color de acento.
  */
 
-/** Marca: una hoja con sombra sólida (bloque blanco con borde negro) y una «A» con serifa sobre un trazo de firma. */
-export function LogoMarca({ tam = 26 }: { tam?: number }) {
-  return (
-    <svg className="logoF" viewBox="0 0 64 64" width={tam} height={tam} aria-hidden>
-      <rect x="10" y="10" width="48" height="48" rx="10" className="logoTinta" />
-      <rect x="5" y="5" width="48" height="48" rx="10" className="logoPapel" strokeWidth="3.6" />
-      <text x="29" y="38" textAnchor="middle" className="logoLetra" fontFamily="Georgia, 'Times New Roman', serif" fontWeight="700" fontSize="29">A</text>
-      <path d="M14.5 45.5c5-4.2 8.6 2.4 13.2-.8 4.2-3 7.6-4.6 12.3-.6" fill="none" className="logoTrazo" strokeWidth="2.6" strokeLinecap="round" />
-    </svg>
-  );
-}
+export { LogoMarca };
 
 export function Logo({ grande = false, a = "/" }: { grande?: boolean; a?: string }) {
   return (
@@ -44,6 +38,8 @@ const ICONOS: Record<string, ReactNode> = {
   equipo: <><circle cx="7.5" cy="7.5" r="2.5" {...trazo} /><circle cx="13.5" cy="8.5" r="2" {...trazo} /><path d="M3 16c.6-2.8 2.4-4 4.5-4s3.9 1.2 4.5 4M12.5 12.3c2 .1 3.4 1.3 4 3.7" {...trazo} /></>,
   planes: <><path d="M10 3 12 7.5l5 .6-3.7 3.4 1 4.9L10 14l-4.3 2.4 1-4.9L3 8.1l5-.6z" {...trazo} /></>,
   verificar: <><circle cx="9" cy="9" r="5" {...trazo} /><path d="m13 13 4 4M7 9l1.5 1.5L11.5 7.5" {...trazo} /></>,
+  flow: <><rect x="3" y="3" width="6" height="6" rx="1.5" {...trazo} /><rect x="11" y="3" width="6" height="6" rx="1.5" {...trazo} /><rect x="3" y="11" width="6" height="6" rx="1.5" {...trazo} /><path d="M14 10.5v7M10.5 14h7" {...trazo} /></>,
+  organizar: <><rect x="3" y="3" width="6" height="7.5" rx="1.2" {...trazo} /><rect x="11" y="3" width="6" height="7.5" rx="1.2" {...trazo} /><path d="M3 14h14M3 17h9" {...trazo} /></>,
   recibo: <><path d="M5 3h10v14l-2-1.3-1.7 1.3-1.6-1.3-1.7 1.3L6.3 15.7 5 17z" {...trazo} /><path d="M7.5 7h5M7.5 10h5" {...trazo} /></>,
   mas: <path d="M10 4v12M4 10h12" {...trazo} />,
   salir: <><path d="M8 4H4.5v12H8" {...trazo} /><path d="M12 6.5 15.5 10 12 13.5M15.5 10H8" {...trazo} /></>,
@@ -59,18 +55,10 @@ export const Icono = ({ n, tam = 18 }: { n: keyof typeof ICONOS; tam?: number })
 
 // ---------------------------------------------------------------- tema claro / oscuro
 
-const CLAVE_TEMA = "autograflow_tema";
-const temaGuardado = (): "light" | "dark" => {
-  try { return localStorage.getItem(CLAVE_TEMA) === "dark" ? "dark" : "light"; } catch { return "light"; }
-};
-
+// El tema vive junto con la paleta de colores (apariencia.ts): cambiar uno recalcula la otra.
 export function usarTema() {
-  const [tema, setTema] = useState(temaGuardado);
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", tema);
-    try { localStorage.setItem(CLAVE_TEMA, tema); } catch { /* navegador sin almacenamiento */ }
-  }, [tema]);
-  return { tema, cambiar: () => setTema((t) => (t === "dark" ? "light" : "dark")) };
+  const { tema } = usarApariencia();
+  return { tema, cambiar: () => cambiarApariencia({ tema: tema === "dark" ? "light" : "dark" }) };
 }
 
 export function BotonTema({ conTexto = false }: { conTexto?: boolean }) {
@@ -101,7 +89,8 @@ export function Marco({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   const portada = RUTAS_PORTADA.test(pathname);
   const firmante = RUTAS_FIRMANTE.test(pathname);
-  const ancho = pathname.startsWith("/app/d/");
+  // Editor y «Organizar PDF»: usan todo el ancho que deja la barra lateral (abierta o plegada).
+  const ancho = pathname.startsWith("/app/d/") || pathname.startsWith("/app/pdf") || pathname.startsWith("/app/flow-tools");
   useEffect(() => {
     document.body.classList.toggle("conPortada", portada);
     window.scrollTo({ top: 0 });
@@ -192,6 +181,7 @@ function Lateral({ alPlegar }: { alPlegar: () => void }) {
   const [plantillas, setPlantillas] = useState<FilaDocumento[]>([]);
   const [reembolsoOculto, setReembolsoOculto] = usarReembolsoOculto();
   const [menuCuenta, setMenuCuenta] = useState(false);
+  const [verOrganizar, setVerOrganizar] = useState(false);
   const caja = useRef<HTMLDivElement>(null);
   // Los documentos recientes se actualizan al cambiar de página (p. ej. al crear o enviar uno).
   useEffect(() => {
@@ -272,6 +262,11 @@ function Lateral({ alPlegar }: { alPlegar: () => void }) {
 
       <nav className="navGrupo">
         <div className="navTitulo">Herramientas</div>
+        <button type="button" className={`navItem ${pathname.startsWith("/app/pdf") ? "activo" : ""}`} aria-haspopup="dialog" onClick={() => setVerOrganizar(true)}>
+          <Icono n="organizar" /><span>Organizar PDF</span>
+        </button>
+        {verOrganizar && <PanelOrganizarPdf alCerrar={() => setVerOrganizar(false)} />}
+        <Link to="/app/flow-tools" className={`navItem ${pathname.startsWith("/app/flow-tools") ? "activo" : ""}`}><Icono n="flow" /><span>Flow Tools</span></Link>
         {item("planes", "Planes", "/planes")}
         {item("verificar", "Verificar un PDF", "/verificar")}
         {!reembolsoOculto && item("recibo", "Plantilla de reembolso", "/reembolso")}
@@ -279,6 +274,7 @@ function Lateral({ alPlegar }: { alPlegar: () => void }) {
 
       <div className="lateralPie">
         <Link to="/app" className="navItem nuevoDoc"><Icono n="mas" /><span>Nuevo documento</span></Link>
+        <BotonPaletas />
         <BotonTema conTexto />
       </div>
     </aside>
@@ -314,14 +310,16 @@ export function AdministrarPlantillaIncluida() {
   const navegar = useNavigate();
   const [oculto, setOculto] = usarReembolsoOculto();
   const [creando, setCreando] = useState(false);
+  const [avance, setAvance] = useState(0);
   const [error, setError] = useState("");
   if (!usuario) return null;
   async function editar() {
     setCreando(true);
+    setAvance(0);
     setError("");
     try {
-      const r = await plataforma.desdePlantillaReembolso();
-      navegar(`/app/d/${r.id}`, { state: { detectados: r.camposDetectados } });
+      const r = await plataforma.desdePlantillaReembolso(setAvance);
+      navegar(`/app/d/${r.id}`, { state: { detectados: r.camposDetectados, preguntarQuien: true } });
     } catch (e) {
       setError(e instanceof Error && e.message ? e.message : "No se pudo abrir la plantilla.");
       setCreando(false);
@@ -329,6 +327,7 @@ export function AdministrarPlantillaIncluida() {
   }
   return (
     <div className="card plantillaIncluida">
+      {creando && <CargaLogoPantalla avance={avance} texto="Abriendo la plantilla en el editor…" />}
       <div className="plantillaIncluidaFila">
         <div>
           <strong>📋 Plantilla incluida: Solicitud de reembolso</strong>

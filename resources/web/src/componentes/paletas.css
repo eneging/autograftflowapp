@@ -1,0 +1,80 @@
+/*
+ * Paletas de colores (apariencia.ts, «🎨 Cambiar tema»). Cada una tiene versión clara y oscura; los selectores llevan
+ * data-theme y data-paleta, así ganan a :root y a [data-theme="dark"] sin depender del orden de las hojas.
+ * --accent: textos y bordes de acento (legible sobre el fondo). --accentRelleno / --sobreAccent: botón principal y su texto.
+ * Avisos y etiquetas de colores (--azulBg, --verdeBg…) se mantienen del tema claro u oscuro.
+ */
+
+/* Urban nocturne: grafito y amarillo neón (#141414 #444444 #979797 #D6D6D6 #E2E800). */
+[data-theme="light"][data-paleta="urban"] {
+  --fondo: #ededed; --lateral: #d6d6d6; --fondoMenu: #f7f7f7; --lienzo: #d6d6d6; --suave: #e4e4e4; --campo: #fafafa; --gris: #e0e0e0;
+  --ink: #141414; --ink2: #2b2b2b; --muted: #444444; --tenue: #979797;
+  --line: rgba(20,20,20,.1); --lineFuerte: rgba(20,20,20,.18); --hover: rgba(20,20,20,.06); --hover2: rgba(20,20,20,.1);
+  --accent: #5e6100; --accent2: #5e6100; --accentHover: #474900; --accentSuave: rgba(226,232,0,.35);
+  --accentRelleno: #e2e800; --accentRellenoHover: #cdd200; --sobreAccent: #141414;
+}
+[data-theme="dark"][data-paleta="urban"] {
+  --fondo: #141414; --lateral: #1c1c1c; --fondoMenu: #222222; --lienzo: #0b0b0b; --suave: #191919; --campo: #222222; --gris: #262626;
+  --ink: #ededed; --ink2: #d6d6d6; --muted: #979797; --tenue: #6b6b6b;
+  --line: rgba(214,214,214,.1); --lineFuerte: rgba(214,214,214,.18); --hover: rgba(214,214,214,.06); --hover2: rgba(214,214,214,.1);
+  --accent: #e2e800; --accent2: #e2e800; --accentHover: #f0f53d; --accentSuave: rgba(226,232,0,.16);
+  --accentRelleno: #e2e800; --accentRellenoHover: #f0f53d; --sobreAccent: #141414;
+}
+
+/* Frosted aura: azul acero y gris escarcha (#5C7E8F #A2A2A2 #D4DDE2). */
+[data-theme="light"][data-paleta="frosted"] {
+  --fondo: #f4f7f8; --lateral: #d4dde2; --fondoMenu: #ffffff; --lienzo: #e3e9ec; --suave: #edf1f3; --campo: #ffffff; --gris: #e6ecef;
+  --ink: #22323a; --ink2: #3b4c55; --muted: #5f717a; --tenue: #a2a2a2;
+  --line: rgba(34,50,58,.1); --lineFuerte: rgba(34,50,58,.18); --hover: rgba(92,126,143,.08); --hover2: rgba(92,126,143,.14);
+  --accent: #4f6f7f; --accent2: #4f6f7f; --accentHover: #3f5b69; --accentSuave: rgba(92,126,143,.15);
+  --accentRelleno: #5c7e8f; --accentRellenoHover: #4a6877; --sobreAccent: #ffffff;
+}
+[data-theme="dark"][data-paleta="frosted"] {
+  --fondo: #1b2328; --lateral: #222c32; --fondoMenu: #27323a; --lienzo: #141a1e; --suave: #1f282d; --campo: #27323a; --gris: #2a353c;
+  --ink: #e6edf0; --ink2: #d4dde2; --muted: #a2a2a2; --tenue: #74838b;
+  --line: rgba(212,221,226,.1); --lineFuerte: rgba(212,221,226,.17); --hover: rgba(212,221,226,.06); --hover2: rgba(212,221,226,.1);
+  --accent: #9dbccb; --accent2: #9dbccb; --accentHover: #b5ccd7; --accentSuave: rgba(143,179,196,.18);
+  --accentRelleno: #5c7e8f; --accentRellenoHover: #6d91a3; --sobreAccent: #ffffff;
+}
+
+/* Autumn luxe: lavanda pálida, topo y cobre (#E2E1EB #AAAAAE #7F7265 #BF8440 #322D27). */
+[data-theme="light"][data-paleta="autumn"] {
+  --fondo: #f6f5f9; --lateral: #e2e1eb; --fondoMenu: #ffffff; --lienzo: #e9e8f0; --suave: #efeef4; --campo: #ffffff; --gris: #ebeaf1;
+  --ink: #322d27; --ink2: #4a433b; --muted: #6e6257; --tenue: #aaaaae;
+  --line: rgba(50,45,39,.1); --lineFuerte: rgba(50,45,39,.18); --hover: rgba(127,114,101,.08); --hover2: rgba(127,114,101,.14);
+  --accent: #96622a; --accent2: #96622a; --accentHover: #7d5122; --accentSuave: rgba(191,132,64,.16);
+  --accentRelleno: #bf8440; --accentRellenoHover: #a97336; --sobreAccent: #221e1a;
+}
+[data-theme="dark"][data-paleta="autumn"] {
+  --fondo: #322d27; --lateral: #3a342d; --fondoMenu: #403a32; --lienzo: #27231f; --suave: #36312a; --campo: #403a32; --gris: #443d35;
+  --ink: #f0eee9; --ink2: #e2e1eb; --muted: #aaaaae; --tenue: #7f7265;
+  --line: rgba(226,225,235,.1); --lineFuerte: rgba(226,225,235,.17); --hover: rgba(226,225,235,.06); --hover2: rgba(226,225,235,.1);
+  --accent: #dba467; --accent2: #dba467; --accentHover: #e6b985; --accentSuave: rgba(191,132,64,.22);
+  --accentRelleno: #bf8440; --accentRellenoHover: #cf9555; --sobreAccent: #221e1a;
+}
+
+/* Ventana «Cambiar tema». */
+/* Ancho fijo como los íconos SVG del menú: sin esto «.navItem > span { flex: 1 }» le da la mitad del ancho. */
+.navItem > .iconoPaleta { display: inline-grid; place-items: center; flex: 0 0 auto; width: 18px; font-size: 14px; line-height: 1; }
+.navItem > .iconoPaleta + span { text-align: left; }
+.ventanaPaletas { width: min(560px, 100%); }
+.paletasModo { display: flex; gap: 6px; margin: 0 0 14px; }
+.paletasModo button { flex: 1; }
+.paletasLista { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.paletaOpcion { display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 8px; border-radius: 10px; border: 1.5px solid var(--lineFuerte); background: var(--fondo); text-align: left; min-height: 0; }
+.paletaOpcion.elegida { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accentSuave); }
+.paletaMuestras { display: flex; height: 46px; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); }
+.paletaMuestras i { flex: 1; }
+.paletaNombre { font-size: 13px; font-weight: 600; color: var(--ink); }
+.paletaPropia { margin: 16px 0 6px; padding: 12px 14px; border: 1px solid var(--lineFuerte); border-radius: 10px; display: grid; gap: 10px; }
+.paletaPropia:disabled { opacity: .55; }
+.paletaPropia legend { padding: 0 6px; font-size: 12px; font-weight: 650; color: var(--ink2); }
+.paletaPropia label { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; color: var(--ink); cursor: pointer; }
+.paletaPropia label small { display: block; font-weight: 400; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.paletaPropia input[type=color] { width: 44px; height: 32px; padding: 2px; border: 1px solid var(--lineFuerte); border-radius: 6px; background: var(--fondo); cursor: pointer; }
+.paletaVista { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px; border-radius: 8px; background: var(--lateral); }
+.paletaVista a { color: var(--accent); text-decoration: underline; font-size: 13px; }
+@media (max-width: 480px) { .paletasLista { grid-template-columns: 1fr 1fr; } }
+
+/* Por encima de todo (barra superior 30, menú móvil 70, ventanas 110-130, anillo de la guía 30). */
+.capaPaletas { z-index: 1000; }

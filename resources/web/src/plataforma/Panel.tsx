@@ -6,6 +6,7 @@ import { plataforma, type FilaDocumento } from "./api";
 import { usarSesion } from "./sesion";
 import { AvisoInvitado, CupoPanel } from "./Planes";
 import { GuiaProceso, usarGuia } from "./GuiaProceso";
+import { CargaLogoPantalla } from "../componentes/CargaLogo";
 
 export const InsigniaDoc = ({ estado }: { estado: EstadoDocumento }) => <span className={`insignia doc-${estado}`}>{ETIQUETA_ESTADO[estado]}</span>;
 export const fechaHora = (iso: string | null) =>
@@ -19,6 +20,7 @@ export function Panel() {
   const [filas, setFilas] = useState<FilaDocumento[] | null>(null);
   const [error, setError] = useState("");
   const [subiendo, setSubiendo] = useState(false);
+  const [avance, setAvance] = useState(0);
   const [arrastrando, setArrastrando] = useState(false);
   const [estado, setEstado] = useState<EstadoCuenta | null>(null);
   const entrada = useRef<HTMLInputElement>(null);
@@ -50,11 +52,13 @@ export function Panel() {
     if (archivo.type !== "application/pdf" && !/\.pdf$/i.test(archivo.name)) return setError("El archivo debe ser un PDF.");
     if (archivo.size > LIMITES_PLATAFORMA.pdfBytes) return setError(`El PDF pesa más de ${LIMITES_PLATAFORMA.pdfBytes / 1024 / 1024} MB.`);
     setSubiendo(true);
+    setAvance(0);
     setError("");
     try {
-      const r = await plataforma.subir(archivo);
+      const r = await plataforma.subir(archivo, setAvance);
       seguirDocumento(r.id, 2, true);
-      navegar(`/app/d/${r.id}`, { state: { detectados: r.camposDetectados } });
+      // El editor pregunta primero quién firma (tú, otras personas o ambos) para mostrar solo lo que hace falta.
+      navegar(`/app/d/${r.id}`, { state: { detectados: r.camposDetectados, preguntarQuien: true } });
     } catch (e) {
       // Los errores de prepararPdf (PDF protegido, dañado…) ya traen un mensaje para la persona.
       setError(e instanceof Error && e.message ? e.message : "No se pudo subir el archivo.");
@@ -65,6 +69,8 @@ export function Panel() {
   return (
     <>
       <GuiaProceso etapa="panel" cargando={!filas} documentoDisponible={!!filas?.some(d => d.id === guia.documentoId)} />
+      {subiendo && <CargaLogoPantalla avance={avance}
+        texto={avance < 0.4 ? "Leyendo el PDF y detectando sus campos…" : avance < 0.95 ? "Subiendo el documento…" : "Preparando el editor…"} />}
       <div className="card">
         <h1>Preparar documento</h1>
         <p>Hola{usuario && !usuario.invitado ? `, ${usuario.nombre}` : ""}. Sube un PDF, marca dónde firma cada persona y envíalo por WhatsApp.</p>

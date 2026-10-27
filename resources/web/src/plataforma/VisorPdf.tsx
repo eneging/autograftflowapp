@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode, type PointerEvent } from "react";
 import { usarT } from "../componentes/idioma";
+import { CargaLogo } from "../componentes/CargaLogo";
 import * as pdfjs from "pdfjs-dist";
 import trabajador from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { Pagina } from "../../../shared/plataforma";
@@ -14,14 +15,17 @@ export const leerPdf = (datos: Uint8Array) => pdfjs.getDocument({ data: datos })
 export function usarPdf(url: string | null) {
   const [doc, setDoc] = useState<DocPdf | null>(null);
   const [error, setError] = useState("");
+  // De 0 a 1 mientras se descarga; null si el servidor no dice cuánto pesa.
+  const [avance, setAvance] = useState<number | null>(null);
   useEffect(() => {
     if (!url) return;
     let cancelado = false;
     const tarea = pdfjs.getDocument({ url, withCredentials: true });
+    tarea.onProgress = ({ loaded, total }: { loaded: number; total: number }) => { if (!cancelado && total > 0) setAvance(loaded / total); };
     tarea.promise.then((d) => !cancelado && setDoc(d)).catch(() => !cancelado && setError("No se pudo abrir el documento."));
     return () => { cancelado = true; tarea.destroy(); };
   }, [url]);
-  return { doc, error };
+  return { doc, error, avance };
 }
 
 /** Porcentajes para colocar un rectángulo (en puntos, desde arriba a la izquierda) sobre la página. */
@@ -38,15 +42,18 @@ interface Props {
   alTocar?: (punto: { x: number; y: number }, e: PointerEvent<HTMLDivElement>) => void;
   cursor?: string;
   refContenedor?: (el: HTMLDivElement | null) => void;
+  /** Avance de la descarga del PDF (de usarPdf), para mostrar el porcentaje mientras llega. */
+  avance?: number | null;
 }
 
 /** Una página del PDF dibujada al ancho disponible, con los campos encima en el mismo sistema de coordenadas. */
-export function PaginaPdf({ doc, numero, pagina, children, alTocar, cursor, refContenedor }: Props) {
+export function PaginaPdf({ doc, numero, pagina, children, alTocar, cursor, refContenedor, avance = null }: Props) {
   const contenedor = useRef<HTMLDivElement | null>(null);
   const lienzo = useRef<HTMLCanvasElement>(null);
   const [ancho, setAncho] = useState(0);
   // Número de la última página que terminó de dibujarse: al cambiar solo el tamaño no se vuelve a mostrar «Cargando».
   const [dibujada, setDibujada] = useState(0);
+  const t = usarT();
 
   useEffect(() => {
     const el = contenedor.current!;
@@ -90,7 +97,9 @@ export function PaginaPdf({ doc, numero, pagina, children, alTocar, cursor, refC
       } : undefined}
     >
       <canvas ref={lienzo} className="pdfLienzo" aria-label={`Página ${numero}`} />
-      {dibujada !== numero && <div className="pdfCargando">Cargando página {numero}…</div>}
+      {dibujada !== numero && <div className="pdfCargando">
+        <CargaLogo tam={44} avance={doc ? null : avance} texto={doc ? t("Cargando página {n}…", { n: numero }) : t("Abriendo el documento…")} />
+      </div>}
       {children}
     </div>
   );

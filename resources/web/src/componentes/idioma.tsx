@@ -32,6 +32,8 @@ const EN: Record<string, string> = {
   // Página del firmante: estados
   "Este enlace no es válido.": "This link is not valid.",
   "Cargando documento...": "Loading document...",
+  "Cargando página {n}…": "Loading page {n}…",
+  "Abriendo el documento…": "Opening the document…",
   "No se pudo abrir el documento.": "The document could not be opened.",
   "Documento rechazado": "Document declined",
   "Uno de los firmantes rechazó este documento, así que ya no se puede firmar.": "One of the signers declined this document, so it can no longer be signed.",
