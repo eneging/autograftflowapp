@@ -475,6 +475,9 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
   const bloqueados = camposPdf.filter((c) => c.bloqueado).length;
   // Campos de texto, fecha y casilla que llena un firmante: opcionales salvo los marcados como obligatorios.
   const datosFirmantes = campos.filter((c) => TIPOS_DATO.includes(c.tipo) && c.firmante !== PREPARADOR && !c.bloqueado);
+  const datosDelActivo = datosFirmantes.filter((c) => c.firmante === activo);
+  const pdfVacios = camposPdf.filter((c) => !c.bloqueado && c.firmante === PREPARADOR
+    && (c.valor == null || c.valor === false || (typeof c.valor === "string" && !c.valor.trim())));
   const obligatorios = datosFirmantes.filter((c) => c.obligatorio).length;
   const esRequerido = (c: CampoLocal) => TIPOS_DATO.includes(c.tipo) && c.firmante !== PREPARADOR && !c.bloqueado && c.obligatorio;
   /**
@@ -683,13 +686,21 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
                     <select className="afTextModeSelect" aria-label={`Texto del Firmante ${iActivo + 1}`} value={fActivo.modoTexto} onChange={(e) => cambiarModo(e.target.value as ModoTexto)}>
                       <option value="solo">🔒 Solo firmar, sellar o poner huella</option>
                       <option value="asignados">✏️ Completar los campos de texto que le asigne</option>
-                      <option value="libre">📝 Completar campos y agregar texto libre</option>
+                      <option value="libre" disabled={!textoPermitido}>📝 Completar campos y agregar texto libre{!textoPermitido ? " · Plan de pago" : ""}</option>
                     </select>
                     {fActivo.modoTexto !== "solo" && (
-                      <div className="participantToolActions">
-                        <button type="button" className={`crece ${herramienta === "texto" && !paraMi ? "activa" : ""}`} onClick={() => marcarTexto(false)}>🔤 Marcar campo de texto</button>
-                      </div>
+                      <>
+                        <p className="small" role="status">{datosDelActivo.length
+                          ? `El Firmante ${iActivo + 1} podrá llenar ${datosDelActivo.length} campo(s) de texto, fecha o casilla en su enlace.`
+                          : "Aún no tiene campos para llenar. Asígnale los campos del PDF o marca un campo de texto."}</p>
+                        <div className="participantToolActions">
+                          {pdfVacios.length > 0 && <button type="button" className="crece" onClick={() => asignar(pdfVacios.map((c) => c.k), fActivo.clave)}>Asignarle los campos vacíos del PDF ({pdfVacios.length})</button>}
+                          <button type="button" className={`crece ${herramienta === "texto" && !paraMi ? "activa" : ""}`} onClick={() => marcarTexto(false)}>🔤 Marcar campo de texto</button>
+                        </div>
+                        <p className="small">Para elegir quién llena cada campo, usa «Campos del PDF» → «Mostrar contenido».</p>
+                      </>
                     )}
+                    {!textoPermitido && <p className="small">Agregar texto libre requiere un <Link to="/planes">plan de pago</Link>. Puedes asignarle los campos que ya trae el PDF con tu plan actual.</p>}
                     {fActivo.modoTexto === "libre" && <p className="small afHerramientaAyuda">Al firmar podrá agregar texto adicional donde el documento no tenga un campo.</p>}
                     {/* Ajustes del campo de texto, fecha o casilla tocado en el documento. */}
                     {seleccionado && TIPOS_DATO.includes(seleccionado.tipo) && !seleccionado.bloqueado && (

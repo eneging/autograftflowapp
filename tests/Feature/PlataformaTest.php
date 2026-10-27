@@ -473,6 +473,45 @@ class PlataformaTest extends TestCase
         $this->assertSame('texto', $libre['tipo']);
     }
 
+    public function test_el_enlace_permite_completar_campos_asignados_en_ambos_modos_de_texto(): void
+    {
+        $this->registrar();
+        foreach (['asignados', 'libre'] as $modo) {
+            if ($modo === 'libre') {
+                MercadoPago::activarManual(DB::table('users')->where('email', 'ana@ejemplo.com')->value('cuenta_id'), 'profesional');
+            }
+            $id = $this->subir();
+            $base = ['pagina' => 1, 'x' => 50, 'y' => 60, 'w' => 120, 'h' => 18, 'obligatorio' => true];
+            $campos = [];
+            foreach (['texto', 'fecha', 'casilla'] as $i => $tipo) {
+                $campos[] = ['firmante' => 'f0', 'tipo' => $tipo, 'nombrePdf' => $tipo, 'etiqueta' => $tipo, 'y' => 60 + 30 * $i] + $base;
+            }
+            $campos[] = ['firmante' => 'f0', 'tipo' => 'firma', 'etiqueta' => 'Firma'] + $base;
+            $campos[] = ['firmante' => 'preparador', 'tipo' => 'texto', 'nombrePdf' => 'Preparado', 'valor' => 'Dato del remitente'] + $base;
+            $campos[] = ['firmante' => 'f0', 'tipo' => 'texto', 'nombrePdf' => 'Bloqueado', 'bloqueado' => true] + $base;
+            $this->putJson("/api/documentos/{$id}", [
+                'nombre' => 'Formulario', 'orden' => 'secuencial', 'mensaje' => '',
+                'firmantes' => [['clave' => 'f0', 'nombre' => 'Luis', 'modoTexto' => $modo]], 'campos' => $campos,
+            ], self::H)->assertOk();
+            $token = $this->postJson("/api/documentos/{$id}/enviar", [], self::H)->assertOk()->json('firmantes.0.token');
+            $vista = $this->getJson("/api/firmar/{$token}")->assertOk()->assertJsonPath('yo.modoTexto', $modo)->json();
+            $mios = collect($vista['campos'])->where('mio', true);
+            $this->assertCount(4, $mios);
+            $this->assertNotContains('Bloqueado', array_column($vista['campos'], 'nombrePdf'));
+            $this->assertFalse(collect($vista['campos'])->firstWhere('nombrePdf', 'Preparado')['mio']);
+            $valores = ['texto' => 'Luis Gómez', 'fecha' => '2026-10-23', 'casilla' => true, 'firma' => $this->firmaDataUrl()];
+            $this->postJson("/api/firmar/{$token}", [
+                'acepto' => true, 'valores' => $mios->mapWithKeys(fn ($c) => [(string) $c['id'] => $valores[$c['tipo']]])->all(),
+            ], self::H)->assertOk()->assertJsonPath('completo', true);
+            $guardados = collect($this->getJson("/api/documentos/{$id}")->json('campos'))->keyBy('nombrePdf');
+            $this->assertSame('Luis Gómez', $guardados['texto']['valor']);
+            $this->assertSame('2026-10-23', $guardados['fecha']['valor']);
+            $this->assertTrue($guardados['casilla']['valor']);
+            $this->assertSame('Dato del remitente', $guardados['Preparado']['valor']);
+            $this->assertNull($guardados['Bloqueado']['valor']);
+        }
+    }
+
     public function test_logo_plantillas_y_marca_del_plan_gratis(): void
     {
         $this->registrar();
