@@ -5,6 +5,7 @@ use App\Http\Controllers\CuentaController;
 use App\Http\Controllers\DocumentosController;
 use App\Http\Controllers\ExTraeController;
 use App\Http\Controllers\FirmaController;
+use App\Http\Controllers\PerfilController;
 use App\Http\Controllers\ReembolsoController;
 use App\Http\Controllers\ReclamacionesController;
 use App\Http\Controllers\ReferidosController;
@@ -95,6 +96,9 @@ Route::prefix('api')->middleware(CabeceraAutograFlow::class)->group(function () 
         Route::delete('cuenta/logo', [CuentaController::class, 'quitarLogo']);
         Route::post('pagos', [CuentaController::class, 'comprar']);
         Route::post('pagos/{id}/verificar', [CuentaController::class, 'verificarPago'])->whereNumber('id');
+        Route::get('pagos/{id}/comprobante', [PerfilController::class, 'comprobante'])->whereNumber('id')->middleware('throttle:30,1');
+        Route::get('perfil', [PerfilController::class, 'ver']);
+        Route::put('perfil', [PerfilController::class, 'guardar'])->middleware('throttle:30,1');
     });
 
     // Plantilla «Solicitud de reembolso»

@@ -3,12 +3,15 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { leerRangoPaginas, textoRango } from "../../../../shared/rangoPaginas";
 import { crearZip, gruposCada, leerGrupos, nombreSalida } from "../../../../shared/pdfHerramientas";
 import { CargaLogoPantalla } from "../../componentes/CargaLogo";
+import { BotonFavorito } from "../../componentes/favoritos";
 import { plataforma } from "../api";
-import { HERRAMIENTAS, IconoHerramienta, type IdHerramienta } from "./herramientas";
+import { EtiquetaNueva, HERRAMIENTAS, IconoHerramienta, type IdHerramienta } from "./herramientas";
 import {
   abrirPdf, armarPdf, descargar, fotosAPdf, hojasDe, nuevoId, MAX_BYTES,
   type ArchivoPdf, type Foto, type Hoja, type TamanoHoja, type VistaPdf,
 } from "./operaciones";
+import { aBlobUrl, cargarImagen, detectarBordes, distancia, enderezar, esToda, vistaPrevia, FILTROS, TODA, type Esquinas, type Filtro } from "./escaner";
+import { CamaraEscaner, EditorPagina, type Captura } from "./EscanerCamara";
 import "./herramientas-pdf.css";
 
 /**
@@ -27,15 +30,19 @@ export function HerramientasPdf() {
         </div>
         <nav className="hpCinta" aria-label="Herramientas de PDF">
           {HERRAMIENTAS.map((h) => (
-            <Link key={h.id} to={`/app/pdf/${h.id}`} className={`hpCintaBoton ${h.id === actual.id ? "activa" : ""}`} aria-current={h.id === actual.id ? "page" : undefined}>
-              <span className="hpIcono"><IconoHerramienta id={h.id} /></span><span>{h.nombre}</span>
-            </Link>
+            <div key={h.id} className="hpCintaCelda">
+              <Link to={`/app/pdf/${h.id}`} className={`hpCintaBoton ${h.id === actual.id ? "activa" : ""} ${h.especial ? "especial" : ""}`} aria-current={h.id === actual.id ? "page" : undefined}>
+                {h.especial && <span className="hpCintaNuevo"><EtiquetaNueva /></span>}
+                <span className="hpIcono"><IconoHerramienta id={h.id} /></span><span className={h.especial ? "hrNombreEspecial" : undefined}>{h.nombre}</span>
+              </Link>
+              <BotonFavorito acceso={`pdf:${h.id}`} className="hpCintaFavorito" />
+            </div>
           ))}
         </nav>
         <p className="hpPrivado">🔒 Tus archivos se procesan en este dispositivo: no se suben a ningún servidor. Solo si eliges «Preparar para firmar» el resultado se guarda en tus documentos.</p>
       </header>
       <section className="hpIntro">
-        <h2><span className="hpIcono"><IconoHerramienta id={actual.id} /></span>{actual.nombre}</h2>
+        <h2 className={actual.especial ? "especial" : undefined}><span className="hpIcono"><IconoHerramienta id={actual.id} /></span><span className={actual.especial ? "hrNombreEspecial" : undefined}>{actual.nombre}</span>{actual.especial && <EtiquetaNueva />}<BotonFavorito acceso={`pdf:${actual.id}`} conTexto className="hpIntroFavorito" /></h2>
         <p>{actual.resumen}</p>
       </section>
       {/* key: al cambiar de herramienta se empieza de cero. */}
@@ -504,52 +511,123 @@ function Ordenar() {
 
 // ================================================================ Escanear a PDF
 
+const liberar = (f: Foto) => { URL.revokeObjectURL(f.url); if (f.original !== f.url) URL.revokeObjectURL(f.original); };
+
+/** Miniatura de una página escaneada con su filtro ya aplicado (es lo que saldrá en el PDF). */
+function MiniFoto({ foto, alt }: { foto: Foto; alt: string }) {
+  const lienzo = useRef<HTMLCanvasElement>(null);
+  const [lista, setLista] = useState(false);
+  useEffect(() => {
+    let vivo = true;
+    setLista(false);
+    vistaPrevia(foto.url, foto.filtro).then((c) => {
+      const d = lienzo.current;
+      if (!vivo || !d) return;
+      d.width = c.width;
+      d.height = c.height;
+      d.getContext("2d")!.drawImage(c, 0, 0);
+      setLista(true);
+    }).catch(() => {});
+    return () => { vivo = false; };
+  }, [foto.url, foto.filtro]);
+  return (
+    <div className="hpMini">
+      <canvas ref={lienzo} role="img" aria-label={alt} className={lista ? "lista" : ""} style={{ transform: foto.giro ? `rotate(${foto.giro}deg)` : undefined }} />
+      {!lista && <span className="hpMiniCargando" aria-hidden />}
+    </div>
+  );
+}
+
 function Escanear() {
   const e = usarEntrega();
   const [fotos, setFotos] = useState<Foto[]>([]);
-  const [documento, setDocumento] = useState(true);
+  const [filtro, setFiltro] = useState<Filtro>("color");
   const [tamano, setTamano] = useState<TamanoHoja>("a4");
   const [margen, setMargen] = useState(true);
   const [error, setError] = useState("");
-  const camara = useRef<HTMLInputElement>(null);
+  const [camara, setCamara] = useState(false);
+  const [editando, setEditando] = useState<Foto | null>(null);
+  const [procesando, setProcesando] = useState(0);
   const galeria = useRef<HTMLInputElement>(null);
   const vivas = useRef<Foto[]>([]);
   vivas.current = fotos;
-  useEffect(() => () => vivas.current.forEach((f) => URL.revokeObjectURL(f.url)), []);
+  useEffect(() => () => vivas.current.forEach(liberar), []);
   const { props, sobre } = usarArrastre((d, h) => setFotos((fs) => mover(fs, d, h)));
-  function sumar(lista: File[]) {
+
+  const agregar = (c: Captura, nombre = `pagina-${vivas.current.length + 1}.jpg`) =>
+    setFotos((fs) => [...fs, { id: nuevoId("f"), nombre, giro: 0, filtro, ...c }]);
+  /** Imágenes de la galería: también se busca la hoja en cada una y se endereza (se puede corregir después). */
+  async function sumar(lista: File[]) {
     const validas = lista.filter((f) => f.type.startsWith("image/") && f.size <= MAX_BYTES);
     setError(validas.length < lista.length ? "Algunos archivos no son imágenes o pesan demasiado y no se agregaron." : "");
-    setFotos((fs) => [...fs, ...validas.map((f) => ({ id: nuevoId("f"), nombre: f.name, url: URL.createObjectURL(f), giro: 0 }))]);
+    setProcesando((n) => n + validas.length);
+    for (const f of validas) {
+      const original = URL.createObjectURL(f);
+      try {
+        const img = await cargarImagen(original);
+        const esquinas = detectarBordes(img, img.naturalWidth, img.naturalHeight) ?? TODA;
+        agregar({ original, esquinas, url: esToda(esquinas) ? original : await aBlobUrl(enderezar(img, esquinas)) }, f.name);
+      } catch {
+        URL.revokeObjectURL(original);
+        setError(`No se pudo leer «${f.name}».`);
+      } finally {
+        setProcesando((n) => n - 1);
+      }
+    }
   }
-  const quitarFoto = (i: number) => { URL.revokeObjectURL(fotos[i].url); setFotos((fs) => fs.filter((_, k) => k !== i)); };
+  async function aplicarEdicion(f: Foto, esquinas: Esquinas, nuevo: Filtro) {
+    setEditando(null);
+    if (distancia(esquinas, f.esquinas) < 1e-4) { setFotos((fs) => fs.map((x) => (x.id === f.id ? { ...x, filtro: nuevo } : x))); return; }
+    setProcesando((n) => n + 1);
+    try {
+      const url = esToda(esquinas) ? f.original : await aBlobUrl(enderezar(await cargarImagen(f.original), esquinas));
+      if (f.url !== f.original) URL.revokeObjectURL(f.url);
+      setFotos((fs) => fs.map((x) => (x.id === f.id ? { ...x, esquinas, url, filtro: nuevo } : x)));
+    } catch { setError("No se pudo recortar la página."); }
+    finally { setProcesando((n) => n - 1); }
+  }
+  const quitarFoto = (i: number) => { liberar(fotos[i]); setFotos((fs) => fs.filter((_, k) => k !== i)); };
+  const filtroTodas = (f: Filtro) => { setFiltro(f); setFotos((fs) => fs.map((x) => ({ ...x, filtro: f }))); };
   const fecha = new Date().toISOString().slice(0, 10);
   const nombre = `escaneo-${fecha}.pdf`;
-  const armar = () => e.hacer("Creando el PDF…", (av) => fotosAPdf(fotos, { tamano, documento, margen }, av));
-  const botones = <>
-    <button type="button" className={fotos.length ? "" : "primary"} onClick={() => camara.current?.click()}>📷 Tomar foto</button>
-    <button type="button" onClick={() => galeria.current?.click()}>🖼️ Elegir imágenes</button>
-    <input ref={camara} type="file" accept="image/*" capture="environment" hidden onChange={(ev) => { sumar([...(ev.target.files ?? [])]); ev.target.value = ""; }} />
+  const armar = () => e.hacer("Creando el PDF…", (av) => fotosAPdf(fotos, { tamano, margen }, av));
+
+  const capas = <>
     <input ref={galeria} type="file" accept="image/*" multiple hidden onChange={(ev) => { sumar([...(ev.target.files ?? [])]); ev.target.value = ""; }} />
+    {camara && <CamaraEscaner paginas={fotos.length} ultima={fotos.at(-1)?.url} alCapturar={(c) => agregar(c)} alGaleria={sumar} alTerminar={() => setCamara(false)} />}
+    {editando && <EditorPagina original={editando.original} esquinas={editando.esquinas} filtro={editando.filtro} carnet={editando.carnet}
+      alAplicar={(esq, f) => aplicarEdicion(editando, esq, f)} alCancelar={() => setEditando(null)} />}
   </>;
   if (!fotos.length) return <>
     <div className="card hpZona hpZonaEscaner" onDragOver={(ev) => ev.preventDefault()} onDrop={(ev) => { ev.preventDefault(); sumar([...ev.dataTransfer.files]); }}>
       <span className="hpZonaIcono" aria-hidden>📷</span>
-      <strong>Fotografía tus documentos o elige imágenes</strong>
-      <span className="small">Apoya la hoja sobre una superficie oscura y con buena luz. Puedes tomar varias fotos: cada una será una página.</span>
-      <span className="hpBarraBotones">{botones}</span>
+      <strong>{procesando ? "Procesando imágenes…" : "Escanea tus documentos con la cámara o elige imágenes"}</strong>
+      <span className="small">La hoja se detecta y se endereza sola. Para mejores resultados apóyala sobre una superficie oscura y con buena luz. Cada foto será una página.</span>
+      <span className="hpBarraBotones">
+        <button type="button" className="primary" onClick={() => setCamara(true)}>📷 Escanear con la cámara</button>
+        <button type="button" onClick={() => galeria.current?.click()}>🖼️ Elegir imágenes</button>
+      </span>
     </div>
     <Avisos errores={[error]} proceso={null} />
+    {capas}
   </>;
+  const todasIguales = fotos.every((f) => f.filtro === fotos[0].filtro) ? fotos[0].filtro : null;
   return (
     <section className="card hpTrabajo">
       <div className="hpBarra">
-        <strong>{fotos.length} página{fotos.length === 1 ? "" : "s"}</strong>
-        <span className="small">Arrastra para ordenar; gira con ⟲ ⟳.</span>
-        <span className="hpBarraBotones">{botones}<button type="button" onClick={() => { fotos.forEach((f) => URL.revokeObjectURL(f.url)); setFotos([]); }}>Empezar de nuevo</button></span>
+        <strong>{fotos.length} página{fotos.length === 1 ? "" : "s"}{procesando ? " · procesando…" : ""}</strong>
+        <span className="small">Toca una página para recortarla o cambiar su filtro. Arrastra para ordenar.</span>
+        <span className="hpBarraBotones">
+          <button type="button" className="primary" onClick={() => setCamara(true)}>📷 Escanear más</button>
+          <button type="button" onClick={() => galeria.current?.click()}>🖼️ Agregar imágenes</button>
+          <button type="button" onClick={() => { fotos.forEach(liberar); setFotos([]); }}>Empezar de nuevo</button>
+        </span>
       </div>
       <div className="hpOpcionesFila">
-        <label className="hpCheck"><input type="checkbox" checked={documento} onChange={(ev) => setDocumento(ev.target.checked)} /> ✨ Mejorar como documento <small>(blanco y negro, más nítido, fondo blanco)</small></label>
+        <span className="hpFiltros" role="radiogroup" aria-label="Filtro para todas las páginas">
+          <span className="small">Filtro:</span>
+          {FILTROS.map((f) => <button key={f.id} type="button" role="radio" aria-checked={todasIguales === f.id} className={todasIguales === f.id ? "activo" : ""} onClick={() => filtroTodas(f.id)}>{f.nombre}</button>)}
+        </span>
         <label className="hpCampoCorto">Tamaño de hoja
           <select value={tamano} onChange={(ev) => setTamano(ev.target.value as TamanoHoja)}><option value="a4">A4</option><option value="carta">Carta</option><option value="imagen">Igual a la foto</option></select>
         </label>
@@ -558,7 +636,10 @@ function Escanear() {
       <ol className="hpCuadricula">
         {fotos.map((f, i) => (
           <li key={f.id} className={`hpHoja movible ${sobre === i ? "hpSobre" : ""}`} {...props(i)}>
-            <div className={`hpHojaVista hpMini ${documento ? "hpComoDocumento" : ""}`}><img src={f.url} alt={`Página ${i + 1}`} draggable={false} style={{ transform: f.giro ? `rotate(${f.giro}deg)` : undefined }} /></div>
+            <button type="button" className="hpHojaVista" onClick={() => setEditando(f)} aria-label={`Editar página ${i + 1}`}>
+              <MiniFoto foto={f} alt={`Página ${i + 1}`} />
+              {f.carnet && <span className="hpEtiqueta">Carnet</span>}
+            </button>
             <div className="hpHojaPie">
               <span className="hpNumero">{i + 1}</span>
               <span className="hpMiniBotones">
@@ -573,9 +654,10 @@ function Escanear() {
         ))}
       </ol>
       <Avisos errores={[error, e.error]} proceso={e.proceso} />
-      <Acciones listo={fotos.length > 0} motivo={`Resultado: un PDF de ${fotos.length} página${fotos.length === 1 ? "" : "s"}.`}
+      <Acciones listo={fotos.length > 0 && !procesando} motivo={procesando ? "Procesando páginas…" : `Resultado: un PDF de ${fotos.length} página${fotos.length === 1 ? "" : "s"}.`}
         textoDescargar="Crear PDF y descargar" alDescargar={async () => { const b = await armar(); if (b) descargar(b, nombre); }}
         alFirmar={async () => { const b = await armar(); if (b) e.firmar(b, nombre); }} />
+      {capas}
     </section>
   );
 }

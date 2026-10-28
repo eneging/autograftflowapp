@@ -5,7 +5,8 @@
  * estado: «beta» mientras se desarrolla (se avisa que puede fallar); «completa» cuando ya está lista.
  */
 export type EstadoApp = "beta" | "completa";
-export interface AppFlow { id: string; nombre: string; estado: EstadoApp; resumen: string; detalle: string; url?: string; icono: string; etiquetas: string[] }
+/** especial: se destaca con el degradado y su ícono propio (IconoApp); «icono» queda como respaldo. */
+export interface AppFlow { id: string; nombre: string; estado: EstadoApp; resumen: string; detalle: string; url?: string; icono: string; etiquetas: string[]; especial?: boolean }
 
 export const APPS_FLOW: AppFlow[] = [
   {
@@ -16,6 +17,7 @@ export const APPS_FLOW: AppFlow[] = [
     detalle: "Lee el texto de cualquier imagen (documentos, carteles, notas, boletas, facturas) en tu dispositivo, lo ordena línea por línea y lo envía a tus otros dispositivos con la misma cuenta.",
     icono: "🧾",
     etiquetas: ["Foto a texto", "Celular → ordenador", "Boletas y facturas"],
+    especial: true,
   },
 ];
 

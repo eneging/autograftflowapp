@@ -7,6 +7,7 @@ import { CargaLogo } from "../../componentes/CargaLogo";
 import { plataforma, type TextoExTrae } from "../api";
 import { usarSesion } from "../sesion";
 import { leerImagen } from "./ocr";
+import { CamaraEscaner, type Captura } from "../pdf/EscanerCamara";
 import "./ex-trae.css";
 
 /*
@@ -59,7 +60,7 @@ export default function ExTrae() {
   const [modo, setModo] = useState<"texto" | "comprobante">("texto");
   const [envio, setEnvio] = useState<"no" | "enviando" | "enviado">("no");
   const [aviso, setAviso] = useState<{ texto: string; tipo: "ok" | "error" } | null>(null);
-  const camara = useRef<HTMLInputElement>(null);
+  const [camara, setCamara] = useState(false);
   const galeria = useRef<HTMLInputElement>(null);
 
   useEffect(() => () => { if (imagen) URL.revokeObjectURL(imagen.url); }, [imagen]);
@@ -95,7 +96,20 @@ export default function ExTrae() {
 
   function limpiar(abrirCamara = false) {
     setImagen(null); setTexto(""); setDatos(null); setEnvio("no");
-    if (abrirCamara) camara.current?.click();
+    if (abrirCamara) setCamara(true);
+  }
+
+  /** La foto de la cámara llega ya recortada y enderezada (si encontró la hoja): mejor para leer el texto. */
+  async function alCapturar(c: Captura) {
+    setCamara(false);
+    try {
+      const blob = await (await fetch(c.url)).blob();
+      elegir(new File([blob], `foto-${Date.now()}.jpg`, { type: "image/jpeg" }));
+    } catch { avisar("No se pudo usar la foto. Inténtalo de nuevo.", "error"); }
+    finally {
+      URL.revokeObjectURL(c.url);
+      if (c.original !== c.url) URL.revokeObjectURL(c.original);
+    }
   }
 
   async function enviar() {
@@ -114,8 +128,8 @@ export default function ExTrae() {
   const hayResultado = !!texto.trim();
   const falta = datos ? faltantes(datos) : [];
   const entradas = <>
-    <input ref={camara} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { elegir(e.target.files?.[0]); e.target.value = ""; }} />
     <input ref={galeria} type="file" accept="image/*" hidden onChange={(e) => { elegir(e.target.files?.[0]); e.target.value = ""; }} />
+    {camara && <CamaraEscaner unaFoto alCapturar={alCapturar} alGaleria={(fs) => { setCamara(false); elegir(fs[0]); }} alTerminar={() => setCamara(false)} />}
   </>;
 
   return (
@@ -128,7 +142,7 @@ export default function ExTrae() {
           <div className="etPaso"><span>1</span><h2 id="etImagenTitulo">Tu imagen</h2></div>
           {entradas}
           {!imagen ? (
-            <div className="etZona" role="button" tabIndex={0} onClick={() => (celular ? camara : galeria).current?.click()}
+            <div className="etZona" role="button" tabIndex={0} onClick={() => (celular ? setCamara(true) : galeria.current?.click())}
               onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), galeria.current?.click())}
               onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); elegir(e.dataTransfer.files[0]); }}>
               <span className="etZonaIcono" aria-hidden>📷</span>
@@ -142,7 +156,7 @@ export default function ExTrae() {
             </div>
           )}
           <div className="etBotones">
-            <button type="button" className={!imagen ? "primary" : ""} onClick={() => camara.current?.click()} disabled={!!leyendo}>📷 Tomar foto</button>
+            <button type="button" className={!imagen ? "primary" : ""} onClick={() => setCamara(true)} disabled={!!leyendo}>📷 Tomar foto</button>
             <button type="button" onClick={() => galeria.current?.click()} disabled={!!leyendo}>🖼️ Elegir imagen</button>
             {imagen && <button type="button" onClick={() => limpiar()} disabled={!!leyendo}>🧹 Limpiar</button>}
           </div>

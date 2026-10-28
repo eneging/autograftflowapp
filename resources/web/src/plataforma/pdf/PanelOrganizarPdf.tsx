@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
-import { HERRAMIENTAS, IconoHerramienta } from "./herramientas";
+import { EtiquetaNueva, HERRAMIENTAS, IconoHerramienta } from "./herramientas";
+import { BotonFavorito } from "../../componentes/favoritos";
 import "./panel-organizar-pdf.css";
 
 /**
@@ -25,11 +26,14 @@ export function PanelOrganizarPdf({ alCerrar }: { alCerrar: () => void }) {
         </div>
         <nav className="opLista" aria-label="Herramientas de PDF">
           {HERRAMIENTAS.map((h, i) => (
-            <Link key={h.id} ref={i === 0 ? primero : undefined} to={`/app/pdf/${h.id}`} className="opHerramienta" onClick={alCerrar}>
-              <span className="opIcono"><IconoHerramienta id={h.id} tam={22} /></span>
-              <span><strong>{h.nombre}</strong><small>{h.resumen}</small></span>
-              <span className="opFlecha" aria-hidden>›</span>
-            </Link>
+            <div key={h.id} className="opFila">
+              <Link ref={i === 0 ? primero : undefined} to={`/app/pdf/${h.id}`} className={`opHerramienta ${h.especial ? "especial" : ""}`} onClick={alCerrar}>
+                <span className="opIcono"><IconoHerramienta id={h.id} tam={22} /></span>
+                <span><strong>{h.especial ? <><span className="hrNombreEspecial">{h.nombre}</span> <EtiquetaNueva /></> : h.nombre}</strong><small>{h.resumen}</small></span>
+                <span className="opFlecha" aria-hidden>›</span>
+              </Link>
+              <BotonFavorito acceso={`pdf:${h.id}`} />
+            </div>
           ))}
         </nav>
         <p className="opPie">🔒 Se procesan en tu dispositivo: tus archivos no se suben a ningún servidor.</p>

@@ -11,6 +11,21 @@
 .hpCintaBoton.activa { border-color: var(--accent); background: var(--accentSuave); color: var(--accent); }
 .hpIcono { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: var(--accentSuave); color: var(--accent); flex-shrink: 0; }
 .hpCintaBoton.activa .hpIcono { background: var(--accentRelleno, var(--accent)); color: var(--sobreAccent, #fff); }
+/* Herramienta especial (Escanear): borde en degradado, velo de color, brillo al pasar y la etiqueta «Nuevo». */
+.hpCintaBoton.especial { position: relative; border-color: transparent; background: linear-gradient(var(--fondo), var(--fondo)) padding-box, var(--hrBorde) border-box; transition: box-shadow .2s, transform .2s; }
+.hpCintaBoton.especial .hpIcono { background: var(--hrVelo); }
+.hpCintaBoton.especial:hover { background: var(--hrVelo) padding-box, linear-gradient(var(--fondo), var(--fondo)) padding-box, var(--hrBorde) border-box; box-shadow: 0 6px 22px var(--hrBrillo); transform: translateY(-1px); }
+.hpCintaBoton.especial.activa { border-width: 2px; padding: 11px 5px; background: var(--hrVelo) padding-box, linear-gradient(var(--fondo), var(--fondo)) padding-box, var(--hrBorde) border-box; box-shadow: 0 4px 18px var(--hrBrillo); }
+.hpCintaBoton.especial.activa .hpIcono { background: var(--fondo); color: inherit; box-shadow: 0 0 0 1px var(--line); }
+/* La estrella de favorito va en la esquina de cada botón (fuera del enlace: un botón no puede ir dentro de otro). */
+.hpCintaCelda { position: relative; display: grid; }
+.hpCintaFavorito.afFavorito { position: absolute; top: 3px; left: 3px; width: 26px; height: 26px; font-size: 15px; opacity: 0; }
+.hpCintaCelda:hover .hpCintaFavorito, .hpCintaFavorito:focus-visible, .hpCintaFavorito.marcado { opacity: 1; }
+@media (hover: none) { .hpCintaFavorito.afFavorito { opacity: .65; } }
+.hpIntro h2 .hpIntroFavorito { margin-left: auto; }
+.hpCintaNuevo { position: absolute; top: -9px; right: -4px; }
+.hpIntro h2.especial .hpIcono { background: var(--hrVelo); }
+.hpIntro h2.especial .hrNuevo { font-size: 11px; }
 .hpPrivado { margin: 0; padding: 8px 12px; border-radius: 8px; background: var(--verdeBg); color: var(--verdeInk); font-size: 12.5px; }
 .hpIntro h2 { display: flex; align-items: center; gap: 10px; margin: 6px 0 2px; }
 .hpIntro p { margin: 0; }
@@ -40,7 +55,10 @@ button.hpHojaVista { cursor: pointer; }
 .hpMini canvas.lista, .hpMini img { opacity: 1; }
 .hpMiniCargando { position: absolute; width: 22px; height: 22px; border-radius: 50%; border: 2.5px solid var(--lineFuerte); border-top-color: var(--accent); animation: hpGira .8s linear infinite; }
 @keyframes hpGira { to { transform: rotate(360deg); } }
-.hpComoDocumento img { filter: grayscale(1) contrast(1.6) brightness(1.08); }
+.hpEtiqueta { position: absolute; top: 6px; left: 6px; padding: 1px 7px; border-radius: 99px; background: var(--accentRelleno, var(--accent)); color: var(--sobreAccent, #fff); font-size: 11px; font-weight: 700; }
+.hpFiltros { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.hpFiltros button { min-height: 0; padding: 5px 12px; border-radius: 99px; font-size: 12.5px; }
+.hpFiltros button.activo { border-color: var(--accent); background: var(--accentSuave); color: var(--accent); font-weight: 650; }
 .hpHojaPie { display: flex; align-items: center; justify-content: space-between; gap: 4px; flex-wrap: wrap; }
 .hpNumero { font-size: 12.5px; font-weight: 650; color: var(--ink2); font-variant-numeric: tabular-nums; }
 .hpOrigen { margin-left: 4px; font-weight: 400; color: var(--muted); }

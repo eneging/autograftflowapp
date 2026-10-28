@@ -7,6 +7,16 @@
 .ftGrupoCabecera h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 2px; font-size: 18px; }
 .ftGrupoCabecera p { margin: 0 0 12px; font-size: 13.5px; }
 .ftLista { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+/* La estrella de favorito queda sobre la tarjeta (fuera del enlace), en un hueco a la derecha de la etiqueta Beta/Completa. */
+.ftCelda { position: relative; display: grid; }
+.ftCelda .ftTarjetaCabecera { padding-right: 34px; }
+.ftFavorito.afFavorito { position: absolute; top: 23px; right: 14px; z-index: 1; }
+/* App destacada (EX-Trae): borde en degradado, velo de color y la etiqueta «Nuevo», como Escanear a PDF (herramientas.css). */
+.ftTarjeta.especial { position: relative; border-color: transparent; background: var(--hrVelo) padding-box, linear-gradient(var(--fondo), var(--fondo)) padding-box, var(--hrBorde) border-box; }
+.ftTarjeta.especial:hover, .ftTarjeta.especial:focus-visible { border-color: transparent; box-shadow: 0 8px 26px var(--hrBrillo); }
+.ftTarjeta.especial .ftIcono, .ftIcono.especial { background: var(--fondo); box-shadow: 0 0 0 1px var(--line), 0 2px 8px var(--hrBrillo); }
+.ftTarjeta.especial .ftAbrir { background: var(--hrTexto); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.ftNuevo { position: absolute; top: -9px; left: 16px; z-index: 1; pointer-events: none; }
 .ftTarjeta { display: flex; flex-direction: column; gap: 10px; padding: 18px; border-radius: 12px; border: 1px solid var(--lineFuerte); background: var(--fondo); color: var(--ink); text-decoration: none; transition: border-color .15s, box-shadow .15s, transform .15s; }
 .ftTarjeta:hover, .ftTarjeta:focus-visible { border-color: var(--accent); box-shadow: 0 6px 20px rgba(0,0,0,.08); transform: translateY(-2px); }
 .ftTarjeta p { margin: 0; font-size: 13.5px; color: var(--ink2); line-height: 1.55; }

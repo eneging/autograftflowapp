@@ -23,6 +23,7 @@ const Asistente = lazy(() => import("./plataforma/Asistente").then(m => ({ defau
 const DocumentoPagina = lazy(() => import("./plataforma/Documento").then((m) => ({ default: m.DocumentoPagina })));
 const FlowTools = lazy(() => import("./plataforma/flow/FlowTools").then((m) => ({ default: m.FlowTools })));
 const HerramientasPdf = lazy(() => import("./plataforma/pdf/HerramientasPdf").then((m) => ({ default: m.HerramientasPdf })));
+const PerfilPagina = lazy(() => import("./plataforma/Perfil").then((m) => ({ default: m.PerfilPagina })));
 const Firmar = lazy(() => import("./plataforma/Firmar").then((m) => ({ default: m.Firmar })));
 const cargando = <div className="card"><p id="loading">Cargando…</p></div>;
 import "./estilos.css";
@@ -54,6 +55,7 @@ createRoot(document.getElementById("root")!).render(
             <Route path="/planes" element={<Inicio soloPlanes />} />
             <Route path="/verificar" element={<Verificar />} />
             <Route path="/app/cuenta" element={<ConSesion><MiPlan /></ConSesion>} />
+            <Route path="/app/perfil" element={<ConSesion><PerfilPagina /></ConSesion>} />
             <Route path="/app/referidos" element={<ConSesion><ReferidosPagina /></ConSesion>} />
             <Route path="/referidos" element={<ReferidosPagina publico />} />
             <Route path="/app/estadisticas" element={<ConSesion><Estadisticas /></ConSesion>} />

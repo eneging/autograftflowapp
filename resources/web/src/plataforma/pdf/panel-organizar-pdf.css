@@ -6,11 +6,18 @@
 .opCabecera h2 { margin: 0 0 2px; font-size: 20px; }
 .opCabecera p { margin: 0; font-size: 13px; }
 .opLista { display: grid; gap: 6px; }
+.opFila { display: flex; align-items: center; gap: 2px; }
+.opFila .opHerramienta { flex: 1; min-width: 0; }
 .opHerramienta { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 10px; border: 1px solid transparent; color: var(--ink); text-decoration: none; transition: background .15s, border-color .15s; }
 .opHerramienta:hover, .opHerramienta:focus-visible { background: var(--hover); border-color: var(--line); }
 .opHerramienta strong { display: block; font-size: 14px; }
 .opHerramienta small { display: block; font-size: 12.5px; color: var(--muted); line-height: 1.4; }
 .opIcono { display: grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: 10px; background: var(--accentSuave); color: var(--accent); }
+/* Herramienta especial (Escanear): borde en degradado y velo de color (herramientas.css). */
+.opHerramienta.especial { border-color: transparent; background: var(--hrVelo) padding-box, linear-gradient(var(--fondoMenu), var(--fondoMenu)) padding-box, var(--hrBorde) border-box; }
+.opHerramienta.especial:hover, .opHerramienta.especial:focus-visible { border-color: transparent; box-shadow: 0 6px 20px var(--hrBrillo); }
+.opHerramienta.especial .opIcono { background: var(--fondoMenu); box-shadow: 0 0 0 1px var(--line); }
+.opHerramienta.especial strong .hrNuevo { margin-left: 4px; vertical-align: 1px; }
 .opFlecha { margin-left: auto; font-size: 20px; color: var(--muted); }
 .opPie { margin: auto 0 0; padding: 10px 12px; border-radius: 8px; background: var(--verdeBg); color: var(--verdeInk); font-size: 12.5px; }
 @media (prefers-reduced-motion: reduce) { .opPanel { animation: none; } .opHerramienta { transition: none; } }

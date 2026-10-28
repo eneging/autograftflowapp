@@ -4,12 +4,13 @@
  */
 
 /** Marca: una hoja con sombra sólida (bloque blanco con borde negro) y una «A» con serifa sobre un trazo de firma. */
-export function LogoMarca({ tam = 26 }: { tam?: number }) {
+/** «letra»: otra letra en lugar de la A (la inicial del usuario, cuando no eligió avatar). */
+export function LogoMarca({ tam = 26, letra = "A", className = "" }: { tam?: number; letra?: string; className?: string }) {
   return (
-    <svg className="logoF" viewBox="0 0 64 64" width={tam} height={tam} aria-hidden>
+    <svg className={`logoF ${className}`} viewBox="0 0 64 64" width={tam} height={tam} aria-hidden>
       <rect x="10" y="10" width="48" height="48" rx="10" className="logoTinta" />
       <rect x="5" y="5" width="48" height="48" rx="10" className="logoPapel" strokeWidth="3.6" />
-      <text x="29" y="38" textAnchor="middle" className="logoLetra" fontFamily="Georgia, 'Times New Roman', serif" fontWeight="700" fontSize="29">A</text>
+      <text x="29" y="38" textAnchor="middle" className="logoLetra" fontFamily="Georgia, 'Times New Roman', serif" fontWeight="700" fontSize={letra === "A" ? 29 : 27}>{letra}</text>
       <path d="M14.5 45.5c5-4.2 8.6 2.4 13.2-.8 4.2-3 7.6-4.6 12.3-.6" fill="none" className="logoTrazo" strokeWidth="2.6" strokeLinecap="round" />
     </svg>
   );

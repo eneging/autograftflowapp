@@ -1,6 +1,9 @@
 import { Suspense, lazy, type ComponentType, type LazyExoticComponent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { CargaLogo } from "../../componentes/CargaLogo";
+import { BotonFavorito } from "../../componentes/favoritos";
+import { EtiquetaNueva } from "../pdf/herramientas";
+import { IconoApp } from "./IconoApp";
 import { APPS_FLOW, ETIQUETA_ESTADO, type AppFlow, type EstadoApp } from "./apps";
 import "./flow-tools.css";
 
@@ -50,16 +53,20 @@ function Catalogo() {
 
 function Tarjeta({ app }: { app: AppFlow }) {
   return (
-    <Link to={`/app/flow-tools/${app.id}`} className="ftTarjeta">
-      <div className="ftTarjetaCabecera">
-        <span className="ftIcono" aria-hidden>{app.icono}</span>
-        <strong>{app.nombre}</strong>
-        <span className={`ftEstado ft-${app.estado}`}>{ETIQUETA_ESTADO[app.estado]}</span>
-      </div>
-      <p>{app.resumen}</p>
-      <div className="ftEtiquetas">{app.etiquetas.map((e) => <span key={e}>{e}</span>)}</div>
-      <span className="ftAbrir">Abrir {app.nombre} →</span>
-    </Link>
+    <div className={`ftCelda ${app.especial ? "especial" : ""}`}>
+      <Link to={`/app/flow-tools/${app.id}`} className={`ftTarjeta ${app.especial ? "especial" : ""}`}>
+        {app.especial && <span className="ftNuevo"><EtiquetaNueva /></span>}
+        <div className="ftTarjetaCabecera">
+          <span className="ftIcono" aria-hidden><IconoApp app={app} tam={24} /></span>
+          <strong className={app.especial ? "hrNombreEspecial" : undefined}>{app.nombre}</strong>
+          <span className={`ftEstado ft-${app.estado}`}>{ETIQUETA_ESTADO[app.estado]}</span>
+        </div>
+        <p>{app.resumen}</p>
+        <div className="ftEtiquetas">{app.etiquetas.map((e) => <span key={e}>{e}</span>)}</div>
+        <span className="ftAbrir">Abrir {app.nombre} →</span>
+      </Link>
+      <BotonFavorito acceso={`flow:${app.id}`} className="ftFavorito" />
+    </div>
   );
 }
 
@@ -70,10 +77,12 @@ function AppAbierta({ app }: { app: AppFlow }) {
     <div className="ftAbierta">
       <div className="ftBarra">
         <Link to="/app/flow-tools" className="boton botonChico">← Flow Tools</Link>
-        <span className="ftIcono ftIconoChico" aria-hidden>{app.icono}</span>
-        <strong>{app.nombre}</strong>
+        <span className={`ftIcono ftIconoChico ${app.especial ? "especial" : ""}`} aria-hidden><IconoApp app={app} tam={20} /></span>
+        <strong className={app.especial ? "hrNombreEspecial" : undefined}>{app.nombre}</strong>
+        {app.especial && <EtiquetaNueva />}
         <span className={`ftEstado ft-${app.estado}`}>{ETIQUETA_ESTADO[app.estado]}</span>
         <span className="ftFamilia">FlowApp</span>
+        <BotonFavorito acceso={`flow:${app.id}`} conTexto />
         {app.url && <a className="boton botonChico ftNueva" href={app.url} target="_blank" rel="noopener">Abrir en pestaña nueva ↗</a>}
       </div>
       {app.estado === "beta" && <p className="ftAvisoBeta">🧪 <strong>Herramienta en Beta.</strong> Ya funciona, pero la seguimos mejorando: revisa sus resultados antes de usarlos.</p>}

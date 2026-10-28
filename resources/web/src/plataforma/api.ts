@@ -43,7 +43,14 @@ const json = (metodo: string, datos?: unknown): RequestInit => ({ method: metodo
 
 /** invitado: entró «sin cuenta» (Gratis, 1 firmante); su email llega vacío. */
 export interface EstadoGuia { estado: "pendiente" | "activa" | "omitida" | "completa"; paso: number; documentoId: number | null }
-export interface Usuario { id: number; cuentaId: number; nombre: string; email: string; cuenta: string; plan: IdPlan; titular: boolean; invitado: boolean; guia?: EstadoGuia }
+export interface Usuario { id: number; cuentaId: number; nombre: string; email: string; cuenta: string; plan: IdPlan; titular: boolean; invitado: boolean; avatar?: string | null; guia?: EstadoGuia }
+/** Datos para la boleta (DNI, CE o pasaporte) o la factura (RUC, razón social y dirección fiscal). */
+export interface Facturacion { tipo: "boleta" | "factura"; documentoTipo: "DNI" | "CE" | "PASAPORTE" | "RUC"; documento: string; nombre: string; direccion: string; correo: string }
+export interface Perfil {
+  nombre: string; email: string; avatar: string | null; cuenta: string; facturacion: Facturacion | null;
+  /** Pagos aprobados; «comprobante»: su número si ya se emitió. */
+  pagos: (PagoFila & { comprobante: string | null })[];
+}
 /** Destinatario de «Enviar a varios» y su resultado (token: su enlace; error: por qué no se envió). */
 export interface Destinatario { nombre: string; telefono: string; email: string }
 export interface ResultadoEnvio extends Destinatario { documentoId: number | null; token: string | null; esperaTurno: boolean; error: string | null }
@@ -120,6 +127,18 @@ export const plataforma = {
   cuenta: () => pedir<{ estado: EstadoCuenta; pagos: PagoFila[] }>("/api/cuenta"),
   comprar: (producto: string) => pedir<{ pagoId: number; url: string }>("/api/pagos", json("POST", { producto })),
   verificarPago: (id: number) => pedir<PagoFila>(`/api/pagos/${id}/verificar`, json("POST", {})),
+
+  // «Mi perfil»: avatar, nombre, datos de facturación y comprobantes de pago.
+  perfil: () => pedir<Perfil>("/api/perfil"),
+  guardarPerfil: (d: { nombre: string; avatar: string | null; facturacion: Facturacion | null }) => pedir<Perfil>("/api/perfil", json("PUT", d)),
+  /** El PDF del comprobante (la primera vez se emite con los datos de facturación actuales). */
+  comprobante: async (pagoId: number) => {
+    let r: Response;
+    try { r = await fetch(`/api/pagos/${pagoId}/comprobante`, { credentials: "same-origin", headers: { "X-AutograFlow": "1" } }); }
+    catch { throw new ErrorApi("No hay conexión con el servidor. Revisa tu internet e inténtalo de nuevo.", 0); }
+    if (!r.ok) { const e = await r.json().catch(() => ({})); throw new ErrorApi(e.error || `Error ${r.status}`, r.status, e.campos); }
+    return r.blob();
+  },
 
   // EX-Trae (Flow Tools): textos que van de un dispositivo a los demás con la misma cuenta.
   textosRecibidos: (despues: number) => pedir<TextoExTrae[]>(`/api/flow/ex-trae/textos?despues=${despues}`),

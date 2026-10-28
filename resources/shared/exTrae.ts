@@ -23,14 +23,20 @@ const mediana = (xs: number[]) => {
 const legible = (s: string) => { const t = s.replace(/\s/g, ""); return t ? (t.match(/[\p{L}\p{N}]/gu)?.length ?? 0) / t.length : 0; };
 
 /**
- * Quita las líneas que el OCR leyó mal: poca confianza, casi sin letras ni números, o letras mucho más grandes que el
- * resto que no se leyeron con claridad (logos y dibujos). Un título grande y nítido se conserva.
+ * Con poca confianza, ¿igual parece texto de verdad? Casi todo letras o números y al menos dos palabras de 3+ letras.
+ * Con letra chica (foto de lejos o de webcam), muchas líneas bien leídas salen con 30-50 % de confianza.
+ */
+const pareceTexto = (s: string) => legible(s) >= 0.85 && s.split(" ").filter((p) => /[\p{L}\p{N}]{3,}/u.test(p)).length >= 2;
+
+/**
+ * Quita las líneas que el OCR leyó mal: poca confianza (salvo que parezcan texto), casi sin letras ni números, o letras
+ * mucho más grandes que el resto que no se leyeron con claridad (logos y dibujos). Un título grande y nítido se conserva.
  */
 export function limpiarLineas(lineas: LineaOcr[]): LineaOcr[] {
   const base = mediana(lineas.filter((l) => l.confianza >= 60).map((l) => l.alto)) || mediana(lineas.map((l) => l.alto));
   return lineas
     .map((l) => ({ ...l, texto: l.texto.replace(/\s+/g, " ").trim() }))
-    .filter((l) => l.texto.length >= 2 && l.confianza >= 50 && legible(l.texto) >= 0.6)
+    .filter((l) => l.texto.length >= 2 && legible(l.texto) >= 0.6 && (l.confianza >= 50 || (l.confianza >= 25 && pareceTexto(l.texto))))
     .filter((l) => !(base && l.alto > base * 2.2 && l.confianza < 85));
 }
 

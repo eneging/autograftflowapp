@@ -1,0 +1,68 @@
+/* «Mi perfil» (Perfil.tsx): avatar, datos personales, datos de facturación y comprobantes. */
+.pfPagina { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; max-width: 920px; margin: 0 auto; width: 100%; }
+.pfPagina > * { min-width: 0; }
+.pfPagina .card { margin: 0; }
+.pfCabecera { display: flex; align-items: center; gap: 18px; }
+.pfCabecera > div { min-width: 0; }
+.pfCabecera h1 { margin: 0 0 2px; overflow-wrap: anywhere; }
+.pfCabecera p { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
+.pfAvatarGrande { flex: 0 0 auto; }
+.avatarDibujo.pfAvatarGrande { box-shadow: 0 6px 18px rgba(0,0,0,.14); }
+
+.pfSeccion { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.pfSeccion h2 { margin: 0; font-size: 17px; }
+.pfSeccion p { margin: 2px 0 0; }
+.pfSeccionCabecera { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; }
+.pfBotones { display: flex; flex-wrap: wrap; gap: 6px; }
+.pfBotones button { font-size: 13px; }
+
+/* Personajes listos y el armado por piezas. */
+.pfPersonajes { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+.pfPersonajes button { display: flex; flex-direction: column; align-items: center; gap: 6px; min-height: 0; padding: 8px 4px; border: 2px solid transparent; border-radius: 12px; background: var(--suave); font-size: 12.5px; font-weight: 600; color: var(--ink2); cursor: pointer; transition: border-color .15s, transform .15s; }
+.pfPersonajes button:hover { transform: translateY(-2px); }
+.pfPersonajes button.activo { border-color: var(--accent); background: var(--accentSuave); color: var(--ink); }
+.pfArmar { display: grid; gap: 12px; padding-top: 4px; border-top: 1px solid var(--line); }
+.pfFila { display: grid; grid-template-columns: 110px minmax(0, 1fr); align-items: center; gap: 10px; padding-top: 10px; }
+.pfFilaTitulo { font-size: 13px; font-weight: 600; color: var(--muted); }
+.pfFilaOpciones { display: flex; flex-wrap: wrap; gap: 6px; }
+.pfMuestra { width: 32px; height: 32px; min-height: 0; padding: 0; border-radius: 50%; border: 2px solid rgba(0,0,0,.12); cursor: pointer; }
+.pfMuestra.activo { box-shadow: 0 0 0 2px var(--fondo), 0 0 0 4px var(--accent); }
+.pfOpcion { display: grid; place-items: center; width: 52px; height: 52px; min-height: 0; padding: 0; border: 2px solid transparent; border-radius: 12px; background: transparent; cursor: pointer; }
+.pfOpcion:hover { background: var(--hover); }
+.pfOpcion.activo { border-color: var(--accent); background: var(--accentSuave); }
+
+/* Formularios. */
+.pfRejilla { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+.pfCampo { display: grid; gap: 5px; align-content: start; font-size: 13px; font-weight: 600; color: var(--ink2); min-width: 0; }
+.pfCampo input, .pfCampo select { width: 100%; }
+.pfCampo small { font-weight: 400; color: var(--muted); }
+.pfCampo.conError input { border-color: var(--rojoInk); }
+.pfError, .pfCampo small.pfError { color: var(--rojoInk); }
+.pfOk { color: var(--verdeInk); font-weight: 600; }
+.pfCheck { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+.pfTipo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.pfTipo button { display: grid; justify-items: start; gap: 2px; min-height: 0; padding: 12px 14px; border: 1px solid var(--lineFuerte); border-radius: 10px; background: var(--fondo); text-align: left; color: var(--ink); cursor: pointer; }
+.pfTipo button.activo { border-color: var(--accent); background: var(--accentSuave); box-shadow: inset 0 0 0 1px var(--accent); }
+.pfTipo small { font-size: 12px; font-weight: 400; color: var(--muted); }
+
+/* Barra de guardar: queda a la vista al bajar. */
+.pfBarra { position: sticky; bottom: 8px; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; padding: 10px 12px; border: 1px solid var(--lineFuerte); border-radius: 10px; background: var(--fondoMenu); box-shadow: var(--sombraMenu); }
+.pfBarraNota { margin-right: auto; font-size: 13px; color: var(--ink2); }
+
+/* Comprobantes. */
+.pfPagos { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.pfPagos li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--suave); }
+.pfPagos li > span:first-child { display: grid; flex: 1 1 220px; min-width: 0; }
+.pfPagos small { color: var(--muted); font-size: 12.5px; }
+.pfPagos button { font-size: 13px; }
+.pfNumero { padding: 2px 8px; border-radius: 6px; background: var(--gris); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink2); }
+.pfNota { color: var(--muted); }
+
+@media (max-width: 640px) {
+  .pfRejilla, .pfTipo { grid-template-columns: minmax(0, 1fr); }
+  .pfFila { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .pfCabecera { gap: 14px; }
+  .pfBarra button { flex: 1 1 100%; }
+  .pfPagos li button { flex: 1 1 100%; }
+}
+@media (prefers-reduced-motion: reduce) { .pfPersonajes button { transition: none; } .pfPersonajes button:hover { transform: none; } }

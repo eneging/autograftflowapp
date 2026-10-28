@@ -1,0 +1,27 @@
+/* Herramientas «especiales» de Organizar PDF (herramientas.tsx): degradado celeste → violeta → rosa con estrellas. */
+:root {
+  --hrDeg1: #2fb4ff; --hrDeg2: #8b5cf6; --hrDeg3: #f04fc6;
+  /* Para texto: el mismo degradado, más oscuro, para que se lea sobre fondo claro. */
+  --hrTexto: linear-gradient(100deg, #0f86d1, #7034e0 55%, #c42d9b);
+  --hrBorde: linear-gradient(125deg, #2fb4ff, #8b5cf6 55%, #f04fc6);
+  --hrVelo: linear-gradient(125deg, rgba(47,180,255,.12), rgba(139,92,246,.14) 55%, rgba(240,79,198,.12));
+  --hrBrillo: rgba(139,92,246,.28);
+}
+[data-theme="dark"] {
+  --hrDeg1: #5cc6ff; --hrDeg2: #a98bff; --hrDeg3: #ff73d8;
+  --hrTexto: linear-gradient(100deg, #7fd3ff, #b9a0ff 55%, #ff8fdf);
+  --hrVelo: linear-gradient(125deg, rgba(92,198,255,.14), rgba(169,139,255,.18) 55%, rgba(255,115,216,.14));
+  --hrBrillo: rgba(169,139,255,.35);
+}
+
+.hrIconoEspecial { overflow: visible; }
+.hrTrazo * { stroke: var(--hrTrazo); }
+.hrChispa { transform-box: fill-box; transform-origin: center; animation: hrTitila 2.6s ease-in-out infinite; }
+.hrChispa.dos { animation-delay: .9s; }
+.hrChispa.tres { animation-delay: 1.7s; }
+@keyframes hrTitila { 0%, 100% { transform: scale(1) rotate(0); opacity: 1; } 50% { transform: scale(.55) rotate(45deg); opacity: .55; } }
+
+.hrNuevo { display: inline-block; padding: 2px 7px; border-radius: 99px; background: var(--hrBorde); color: #fff; font-size: 10.5px; font-weight: 700; letter-spacing: .02em; line-height: 1.4; white-space: nowrap; box-shadow: 0 2px 8px var(--hrBrillo); }
+.hrNombreEspecial { background: var(--hrTexto); -webkit-background-clip: text; background-clip: text; color: transparent; font-weight: 700; }
+
+@media (prefers-reduced-motion: reduce) { .hrChispa { animation: none; } }

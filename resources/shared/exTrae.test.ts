@@ -14,6 +14,10 @@ describe("limpiarLineas: logos fuera", () => {
     const l = limpiarLineas(ocr([["~%&@ ;;", 80, 14], ["xQz", 30, 14], ["Texto normal", 92, 14]]));
     expect(l.map((x) => x.texto)).toEqual(["Texto normal"]);
   });
+  it("con letra chica conserva lo que parece texto aunque tenga poca confianza; los símbolos sueltos no", () => {
+    const l = limpiarLineas(ocr([["situación pero almenos sabremos", 38, 14], ["€ | Mi O", 38, 14], ["ruido", 12, 14]]));
+    expect(l.map((x) => x.texto)).toEqual(["situación pero almenos sabremos"]);
+  });
   it("quita letras enormes mal leídas (logo) y conserva un título grande y nítido", () => {
     const l = limpiarLineas(ocr([["MARKETO", 70, 60], ["GRAN TÍTULO", 95, 60], ["línea uno", 90, 14], ["línea dos", 90, 15], ["línea tres", 90, 14]]));
     expect(l.map((x) => x.texto)).toEqual(["GRAN TÍTULO", "línea uno", "línea dos", "línea tres"]);

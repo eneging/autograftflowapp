@@ -10,6 +10,8 @@ import { CargaLogoPantalla, LogoMarca } from "./CargaLogo";
 import { cambiarApariencia, usarApariencia } from "./apariencia";
 import { BotonPaletas } from "./Paletas";
 import { PanelOrganizarPdf } from "../plataforma/pdf/PanelOrganizarPdf";
+import { BotonFavorito, usarFavoritos } from "./favoritos";
+import { Avatar } from "./Avatar";
 
 /*
  * Diseño AutograFlow (inspirado en Notion): lienzo blanco, barra lateral gris clara con el espacio de trabajo, la
@@ -132,6 +134,7 @@ function tituloRuta(pathname: string) {
   if (pathname === "/app") return "Mis documentos";
   if (pathname.startsWith("/app/d/")) return "Documento";
   if (pathname === "/app/cuenta") return "Mi Plan";
+  if (pathname === "/app/perfil") return "Mi perfil";
   if (pathname === "/app/referidos") return "Invita y gana";
   if (pathname === "/app/estadisticas") return "Estadísticas y directorio";
   if (pathname === "/app/equipo") return "Mi Equipo";
@@ -182,6 +185,7 @@ function Lateral({ alPlegar }: { alPlegar: () => void }) {
   const [reembolsoOculto, setReembolsoOculto] = usarReembolsoOculto();
   const [menuCuenta, setMenuCuenta] = useState(false);
   const [verOrganizar, setVerOrganizar] = useState(false);
+  const { accesos: favoritos } = usarFavoritos();
   const caja = useRef<HTMLDivElement>(null);
   // Los documentos recientes se actualizan al cambiar de página (p. ej. al crear o enviar uno).
   useEffect(() => {
@@ -190,6 +194,7 @@ function Lateral({ alPlegar }: { alPlegar: () => void }) {
       setPlantillas(d.filter((x) => x.esPlantilla));
     }).catch(() => {});
   }, [pathname]);
+  useEffect(() => setMenuCuenta(false), [pathname]);
   useEffect(() => {
     if (!menuCuenta) return;
     const fuera = (e: PointerEvent) => { if (!caja.current?.contains(e.target as Node)) setMenuCuenta(false); };
@@ -206,18 +211,24 @@ function Lateral({ alPlegar }: { alPlegar: () => void }) {
     <aside className="afLateral" aria-label="Navegación">
       <div className="espacio" ref={caja}>
         <button type="button" className="espacioBoton" aria-haspopup="true" aria-expanded={menuCuenta} onClick={() => setMenuCuenta(!menuCuenta)}>
-          <span className="avatar">{inicial}</span>
+          <Avatar codigo={usuario.avatar} inicial={inicial} tam={28} />
           <span className="espacioNombre">{usuario.invitado ? "Invitado (sin cuenta)" : `Espacio de ${usuario.nombre}`}</span>
           <span className="espacioFlecha" aria-hidden>⌄</span>
         </button>
         <button type="button" className="botonIcono soloEscritorio" title="Ocultar barra lateral" aria-label="Ocultar barra lateral" onClick={alPlegar}><Icono n="plegar" /></button>
         {menuCuenta && (
           <div className="menuDropdown" role="menu">
-            <div className="menuCabecera">
-              <span className="avatar grande">{inicial}</span>
-              <div><strong>{usuario.invitado ? "Invitado (sin cuenta)" : usuario.nombre}</strong><small>{usuario.invitado ? "1 firmante por documento" : usuario.email}</small></div>
-            </div>
+            {usuario.invitado
+              ? <div className="menuCabecera">
+                <Avatar inicial={inicial} tam={42} />
+                <div><strong>Invitado (sin cuenta)</strong><small>1 firmante por documento</small></div>
+              </div>
+              : <Link to="/app/perfil" className="menuCabecera" role="menuitem" title="Ver mi perfil">
+                <Avatar codigo={usuario.avatar} inicial={inicial} tam={42} />
+                <div><strong>{usuario.nombre}</strong><small>{usuario.email}</small></div>
+              </Link>}
             <div className="menuDivider" />
+            {!usuario.invitado && <Link to="/app/perfil" role="menuitem"><Icono n="usuario" />Mi perfil</Link>}
             <Link to="/app/cuenta" role="menuitem"><Icono n="plan" />Mi Plan · {PLANES[usuario.plan]?.nombre ?? "Gratis"}</Link>
             {usuario.invitado && <Link to="/registro" role="menuitem"><Icono n="usuario" />Crear mi cuenta</Link>}
             {reembolsoOculto && <button type="button" role="menuitem" onClick={() => { setReembolsoOculto(false); setMenuCuenta(false); }}><Icono n="recibo" />Mostrar «Plantilla de reembolso»</button>}
@@ -259,6 +270,18 @@ function Lateral({ alPlegar }: { alPlegar: () => void }) {
           ))}
         </nav>
       )}
+
+      <nav className="navGrupo" aria-label="Favoritos">
+        <div className="navTitulo">Favoritos</div>
+        {favoritos.length
+          ? favoritos.map((f) => (
+            <div key={f.id} className="navFavorito">
+              <Link to={f.ruta} className={`navItem ${pathname === f.ruta ? "activo" : ""}`} title={`${f.nombre} · ${f.grupo}`}>{f.icono}<span>{f.nombre}</span></Link>
+              <BotonFavorito acceso={f.id} />
+            </div>
+          ))
+          : <p className="navFavoritosVacio">Marca con ☆ una herramienta de Organizar PDF o de Flow Tools para tenerla aquí a un clic.</p>}
+      </nav>
 
       <nav className="navGrupo">
         <div className="navTitulo">Herramientas</div>

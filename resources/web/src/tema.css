@@ -113,6 +113,8 @@ main.mainPortada { max-width: none; margin: 0; padding: 0; }
 .espacioFlecha { color: var(--muted); font-size: 13px; }
 .avatar { width: 22px; height: 22px; border-radius: 5px; display: grid; place-items: center; flex: 0 0 auto; background: var(--oscuro); color: var(--sobreOscuro); font-size: 12px; font-weight: 700; }
 .avatar.grande { width: 34px; height: 34px; font-size: 16px; border-radius: 7px; }
+/* Avatar dibujado (Avatar.tsx): mismo tamaño y lugar que la inicial. */
+.avatarDibujo { display: block; flex: 0 0 auto; border-radius: 22%; }
 .navGrupo { display: flex; flex-direction: column; gap: 1px; }
 .navTitulo { padding: 4px 10px 2px; font-size: 12px; font-weight: 500; color: var(--muted); }
 .navItem {
@@ -125,6 +127,9 @@ main.mainPortada { max-width: none; margin: 0; padding: 0; }
 .navItem.activo .icono { color: var(--ink); }
 .navItem > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .navEmoji { width: 18px; text-align: center; font-size: 13px; flex: 0 0 auto; }
+/* Más específico que «.navItem > span { flex: 1 }»: si no, el emoji se queda con la mitad del ancho y empuja el texto. */
+.navItem > .navEmoji { flex: 0 0 18px; }
+.navItem > svg { flex: 0 0 auto; }
 .navItem.nuevoDoc, .navItem.nuevoDoc .icono { color: var(--accent); }
 .puntoEstado { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; background: var(--tenue); }
 .puntoEstado.e-en_firma { background: #e9a23b; }
@@ -176,6 +181,16 @@ main.mainPortada { max-width: none; margin: 0; padding: 0; }
 .menuDropdown .icono { color: var(--muted); }
 .menuDivider { height: 1px; margin: 4px 0; background: var(--line); }
 .menuTitle { display: none; }
+/* En la barra lateral (que recorta lo que se sale por su «overflow»), el menú de la cuenta mide lo mismo que ella. */
+.espacio .menuDropdown { right: 0; width: auto; }
+.espacio .menuDropdown a, .espacio .menuDropdown button { text-align: left; line-height: 1.3; white-space: normal; }
+.espacio .menuDropdown .icono { flex: 0 0 auto; }
+.menuCabecera > div { min-width: 0; }
+.menuDropdown a.menuCabecera { min-height: 0; padding: 8px 10px; gap: 10px; }
+.menuDropdown a.menuCabecera strong { font-weight: 600; }
+.menuCabecera strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* El correo completo, aunque baje a otra línea: cortado no se reconoce. */
+.menuCabecera small { white-space: normal; overflow-wrap: anywhere; line-height: 1.35; }
 
 /* ------------------------------------------------------------------ tarjetas y callouts */
 .card, .tarjeta {

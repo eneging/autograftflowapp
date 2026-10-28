@@ -23,7 +23,7 @@ class AuthController extends Controlador
         $c = DB::table('cuentas')->find($u->cuenta_id);
         $invitado = (bool) ($c->invitado ?? false);
         return ['id' => $u->id, 'cuentaId' => $u->cuenta_id, 'nombre' => $u->name, 'email' => $invitado ? '' : $u->email, 'cuenta' => $c->nombre,
-            'plan' => Planes::vigenteDe($c->id), 'titular' => Equipo::titularId($c->id) === $u->id, 'invitado' => $invitado,
+            'plan' => Planes::vigenteDe($c->id), 'titular' => Equipo::titularId($c->id) === $u->id, 'invitado' => $invitado, 'avatar' => $u->avatar,
             'guia' => ['estado' => $u->guia_estado ?? 'pendiente', 'paso' => (int) ($u->guia_paso ?? 1),
                 'documentoId' => $u->guia_documento_id ? (int) $u->guia_documento_id : null]];
     }

@@ -169,10 +169,10 @@ export function MiPlan() {
         {d.pagos.length === 0 ? <p>Todavía no tienes pagos.</p> : (
           <div className="tabla-envoltura">
             <table className="dataTable">
-              <thead><tr><th>Fecha</th><th>Concepto</th><th className="num">Monto</th><th>Estado</th></tr></thead>
+              <thead><tr><th>Fecha</th><th>Concepto</th><th className="num">Monto</th><th>Estado</th><th>Comprobante</th></tr></thead>
               <tbody>
                 {d.pagos.map((p) => (
-                  <tr key={p.id}><td>{fechaHora(p.creadoEn)}</td><td>{p.titulo}</td><td className="num">{formatoPrecio(p.monto, p.moneda)}</td><td><span className={`insignia pago-${p.estado}`}>{ESTADO_PAGO[p.estado]}</span></td></tr>
+                  <tr key={p.id}><td>{fechaHora(p.creadoEn)}</td><td>{p.titulo}</td><td className="num">{formatoPrecio(p.monto, p.moneda)}</td><td><span className={`insignia pago-${p.estado}`}>{ESTADO_PAGO[p.estado]}</span></td><td>{p.estado === "aprobado" && !e.invitado ? <Link to="/app/perfil#pfComprobantes">📄 Boleta / factura</Link> : "—"}</td></tr>
                 ))}
               </tbody>
             </table>
