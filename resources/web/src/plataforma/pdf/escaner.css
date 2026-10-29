@@ -13,7 +13,14 @@ span.esIcono { background: transparent; }
 /* La escena: video (o foto) y la capa SVG ocupan la misma caja y se ajustan igual («contain»), así el marco coincide. */
 .esEscena { position: relative; overflow: hidden; background: #000; touch-action: none; }
 .esEscena video, .esEscena img, .esCapa { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+/* Cámara en vivo: el video llena la pantalla (como la cámara del sistema), recortando lo que sobra de los lados. */
+.esEnVivo video { object-fit: cover; }
 .esCapa { pointer-events: none; overflow: visible; }
+.esFoco { position: absolute; width: 64px; height: 64px; margin: -32px 0 0 -32px; border: 2px solid var(--accentRelleno, #e2e800); border-radius: 50%; pointer-events: none; animation: esFoco .9s ease-out forwards; }
+@keyframes esFoco { 0% { transform: scale(1.5); opacity: 0; } 25% { transform: scale(1); opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; } }
+.esZoom { position: absolute; left: 50%; bottom: 66px; transform: translateX(-50%); display: flex; gap: 6px; padding: 4px; border-radius: 99px; background: rgba(20,20,20,.6); backdrop-filter: blur(6px); }
+.esZoom button { width: 40px; height: 40px; min-height: 0; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; }
+.esZoom button.activo { background: rgba(255,255,255,.18); color: var(--accentRelleno, #e2e800); }
 .esCapa.editable { pointer-events: auto; }
 .esMarco { fill: color-mix(in srgb, var(--accentRelleno, #e2e800) 18%, transparent); stroke: var(--accentRelleno, #e2e800); stroke-width: 3; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
 /* EX-Trae: la zona con texto, en línea punteada (no es el borde de una hoja). */
@@ -60,4 +67,4 @@ span.esIcono { background: transparent; }
 .esPie { justify-content: flex-end; padding: 12px 14px 14px; }
 .esPie button { min-width: 120px; }
 
-@media (prefers-reduced-motion: reduce) { .esDestello, .esDisparador.ocupado { animation: none; } .esDestello { display: none; } }
+@media (prefers-reduced-motion: reduce) { .esDestello, .esDisparador.ocupado, .esFoco { animation: none; } .esDestello { display: none; } }

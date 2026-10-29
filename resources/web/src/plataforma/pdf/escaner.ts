@@ -54,11 +54,215 @@ const convexo = (p: Esquinas) => {
 };
 
 /**
- * Busca la hoja: la imagen se reduce a ~240 px, se separa lo claro de lo oscuro (umbral de Otsu) y se toma la mancha
- * clara más grande; sus puntos extremos son las esquinas. Funciona con la hoja sobre un fondo más oscuro; si no la
- * encuentra devuelve null (y se usa la foto entera, que se puede recortar a mano).
+ * Busca la hoja en la foto: primero por sus bordes rectos (bordesPorLineas, como hacen las apps de escaneo) y, si no
+ * los encuentra, por la mancha clara más grande (bordesPorBrillo). Si tampoco, null: se usa la foto entera, que se
+ * puede recortar a mano.
  */
 export function detectarBordes(fuente: CanvasImageSource, ancho: number, alto: number): Esquinas | null {
+  if (!ancho || !alto) return null;
+  return bordesPorLineas(fuente, ancho, alto) ?? bordesPorBrillo(fuente, ancho, alto);
+}
+
+/**
+ * La hoja por sus 4 bordes rectos. La imagen se reduce a ~360 px y se calcula el borde en color (gradiente de Sobel en
+ * el canal que más cambia: una portada morada sobre una tela marrón tiene borde aunque el brillo sea parecido). Con la
+ * transformada de Hough salen las líneas rectas; cada punto vota solo por las líneas que siguen la dirección de su
+ * borde, así la textura de una tela o un teclado no forma líneas. Después se prueban pares de líneas «horizontales» y
+ * «verticales»: gana el cuadrilátero cuyos 4 lados están respaldados por borde real y, entre los casi tan buenos, el
+ * más grande (la hoja entera, no una foto o un recuadro que tenga adentro).
+ */
+function bordesPorLineas(fuente: CanvasImageSource, ancho: number, alto: number): Esquinas | null {
+  const e = 360 / Math.max(ancho, alto);
+  const w = Math.max(32, Math.round(ancho * e)), h = Math.max(32, Math.round(alto * e)), n = w * h;
+  const c = lienzo(w, h), ctx = ctx2d(c);
+  ctx.filter = "blur(1.2px)";
+  ctx.drawImage(fuente, 0, 0, w, h);
+  const px = ctx.getImageData(0, 0, w, h).data;
+
+  // Borde (magnitud) y su dirección (de 0 a π: la normal de la línea).
+  const mag = new Float32Array(n), dir = new Float32Array(n);
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      let mejor = 0, gxm = 0, gym = 0;
+      for (let k = 0; k < 3; k++) {
+        const p = (yy: number, xx: number) => px[(yy * w + xx) * 4 + k];
+        const gx = p(y - 1, x + 1) + 2 * p(y, x + 1) + p(y + 1, x + 1) - p(y - 1, x - 1) - 2 * p(y, x - 1) - p(y + 1, x - 1);
+        const gy = p(y + 1, x - 1) + 2 * p(y + 1, x) + p(y + 1, x + 1) - p(y - 1, x - 1) - 2 * p(y - 1, x) - p(y - 1, x + 1);
+        const m = gx * gx + gy * gy;
+        if (m > mejor) { mejor = m; gxm = gx; gym = gy; }
+      }
+      const i = y * w + x;
+      mag[i] = Math.sqrt(mejor);
+      let a = Math.atan2(gym, gxm);
+      if (a < 0) a += Math.PI;
+      dir[i] = a >= Math.PI ? 0 : a;
+    }
+  }
+  // Umbral bajo: el borde de una hoja oscura sobre un fondo oscuro de otro color es suave pero continuo; el ruido que
+  // pasa lo descartan la orientación (Hough) y el respaldo a lo largo de cada lado.
+  const muestra: number[] = [];
+  for (let i = 0; i < n; i += 7) muestra.push(mag[i]);
+  muestra.sort((a, b) => a - b);
+  const umbral = Math.max(32, (muestra[Math.floor(muestra.length * 0.9)] ?? 0) * 0.4);
+  const borde = new Uint8Array(n);
+  for (let i = 0; i < n; i++) if (mag[i] >= umbral) borde[i] = 1;
+
+  // Hough: θ en grados (normal de la línea), ρ en píxeles; x·cosθ + y·sinθ = ρ.
+  const T = 180, R = Math.ceil(Math.hypot(w, h)), filas = 2 * R + 1, votos = new Uint16Array(T * filas);
+  const cos = new Float32Array(T), sin = new Float32Array(T);
+  for (let t = 0; t < T; t++) { cos[t] = Math.cos((t * Math.PI) / 180); sin[t] = Math.sin((t * Math.PI) / 180); }
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x;
+      if (!borde[i]) continue;
+      const t0 = Math.round((dir[i] * 180) / Math.PI);
+      for (let d = -6; d <= 6; d++) {
+        const t = (t0 + d + T) % T;
+        votos[t * filas + Math.round(x * cos[t] + y * sin[t]) + R]++;
+      }
+    }
+  }
+  // Picos: máximos locales con votos suficientes para un lado de hoja; sin repetir líneas casi iguales.
+  const minimo = Math.max(12, Math.round(Math.min(w, h) * 0.12));
+  const picos: { t: number; r: number; v: number }[] = [];
+  for (let t = 0; t < T; t++) {
+    for (let r = 1; r < filas - 1; r++) {
+      const v = votos[t * filas + r];
+      if (v < minimo) continue;
+      let maximo = true;
+      for (let dt = -2; dt <= 2 && maximo; dt++) for (let dr = -2; dr <= 2; dr++) {
+        const tt = (t + dt + T) % T, rr = r + dr;
+        if ((dt || dr) && rr >= 0 && rr < filas && votos[tt * filas + rr] > v) { maximo = false; break; }
+      }
+      if (maximo) picos.push({ t, r: r - R, v });
+    }
+  }
+  picos.sort((a, b) => b.v - a.v);
+  const lineas: { t: number; r: number }[] = [];
+  for (const p of picos) {
+    if (lineas.length >= 60) break;
+    if (lineas.some((l) => { const dt = Math.min(Math.abs(l.t - p.t), T - Math.abs(l.t - p.t)); return dt < 6 && Math.abs(l.r - p.r) < 8; })) continue;
+    lineas.push(p);
+  }
+  const enX = (l: { t: number; r: number }, y: number) => (Math.abs(cos[l.t]) < 1e-6 ? Infinity : (l.r - y * sin[l.t]) / cos[l.t]);
+  const enY = (l: { t: number; r: number }, x: number) => (Math.abs(sin[l.t]) < 1e-6 ? Infinity : (l.r - x * cos[l.t]) / sin[l.t]);
+  /**
+   * Las líneas a probar: las 8 con más votos y, además, las 3 de cada extremo. Los bordes de la hoja suelen ser las
+   * líneas más de afuera, y en una portada a rayas las rayas acaparan los votos (sin esto, no entraban).
+   */
+  const elegir = (grupo: { t: number; r: number }[], posicion: (l: { t: number; r: number }) => number) => {
+    const orden = [...grupo].sort((a, b) => posicion(a) - posicion(b));
+    return [...new Set([...grupo.slice(0, 8), ...orden.slice(0, 3), ...orden.slice(-3)])];
+  };
+  // «Horizontales»: su normal apunta hacia arriba o abajo (θ cerca de 90°). Hasta ±35°: las diagonales (p. ej. las
+  // costuras de una tela acolchada, a 45°) no son lados de una hoja.
+  const horizontales = elegir(lineas.filter((l) => Math.abs(l.t - 90) < 35), (l) => enY(l, w / 2));
+  const verticales = elegir(lineas.filter((l) => Math.abs(l.t - 90) > 55), (l) => enX(l, h / 2));
+  if (horizontales.length < 2 || verticales.length < 2) return null;
+
+  const corte = (a: { t: number; r: number }, b: { t: number; r: number }): Punto | null => {
+    const det = cos[a.t] * sin[b.t] - sin[a.t] * cos[b.t];
+    if (Math.abs(det) < 1e-6) return null;
+    return { x: (a.r * sin[b.t] - b.r * sin[a.t]) / det, y: (b.r * cos[a.t] - a.r * cos[b.t]) / det };
+  };
+  /**
+   * Qué tan respaldado está el lado A→B por borde real (cerca y con la misma orientación): en todo el largo y en cada
+   * punta. Un lado que se pasa de la esquina de verdad (porque la línea de arriba es el marco de un cuadro o la veta
+   * de la mesa) tiene una punta sin borde: ahí está la diferencia entre la hoja y algo más grande que la contiene.
+   */
+  const respaldo = (a: Punto, b: Punto) => {
+    const largo = Math.hypot(b.x - a.x, b.y - a.y), pasos = Math.max(16, Math.round(largo / 2));
+    let normal = Math.atan2(b.y - a.y, b.x - a.x) + Math.PI / 2;
+    normal = ((normal % Math.PI) + Math.PI) % Math.PI;
+    const nx = Math.cos(normal), ny = Math.sin(normal), marcas: number[] = [];
+    for (let k = 0; k <= pasos; k++) {
+      const x = Math.round(a.x + ((b.x - a.x) * k) / pasos), y = Math.round(a.y + ((b.y - a.y) * k) / pasos);
+      if (x < 1 || y < 1 || x >= w - 1 || y >= h - 1) continue; // fuera de la foto: ni a favor ni en contra
+      // Se busca borde hasta 2 px a cada lado, en perpendicular: la línea de Hough va en pasos de 1° y, en una hoja un
+      // poco girada, se separa unos píxeles del borde real hacia las esquinas. Cuenta cuánto del borde cruza el lado
+      // (su componente perpendicular): en las esquinas de un estampado (rayas, cuadros) el borde va en diagonal.
+      let si = 0;
+      for (let o = -2; o <= 2; o++) {
+        const xx = Math.round(x + o * nx), yy = Math.round(y + o * ny);
+        if (xx < 1 || yy < 1 || xx >= w - 1 || yy >= h - 1) continue;
+        const i = yy * w + xx;
+        if (mag[i] * Math.abs(Math.cos(dir[i] - normal)) >= umbral) { si = 1; break; }
+      }
+      marcas.push(si);
+    }
+    if (marcas.length < 8) return { todo: 0, puntas: 0 };
+    const parte = (desde: number, hasta: number) => {
+      const s = marcas.slice(Math.floor(desde * marcas.length), Math.ceil(hasta * marcas.length));
+      return s.length ? s.reduce((x, y) => x + y, 0) / s.length : 0;
+    };
+    return { todo: parte(0, 1), puntas: Math.min(parte(0, 0.2), parte(0.8, 1)) };
+  };
+  // Un lado depende solo de su línea y de las dos que lo cortan: se calcula una vez y se reutiliza en todas las
+  // combinaciones que lo comparten (así probar más líneas no vuelve lenta la cámara).
+  const ids = new Map<object, number>();
+  [...horizontales, ...verticales].forEach((l, i) => ids.set(l, i));
+  const memo = new Map<string, number>();
+  /** Cada lado vale por su respaldo total y por el de su punta más floja (las esquinas tienen que ser de verdad). */
+  const lado = (linea: object, c1: object, c2: object, a: Punto, b: Punto) => {
+    const clave = `${ids.get(linea)}:${ids.get(c1)}:${ids.get(c2)}`;
+    let v = memo.get(clave);
+    // Una punta casi sin borde: ese lado se pasa de la esquina de verdad (no vale, por más grande que sea).
+    if (v === undefined) { const r = respaldo(a, b); v = r.puntas < 0.2 ? 0 : 0.5 * r.todo + 0.5 * r.puntas; memo.set(clave, v); }
+    return v;
+  };
+
+  let candidatos: { q: Esquinas; puntaje: number; area: number }[] = [];
+  for (let i = 0; i < horizontales.length; i++) for (let j = i + 1; j < horizontales.length; j++) {
+    let [arriba, abajo] = [horizontales[i], horizontales[j]];
+    if (enY(arriba, w / 2) > enY(abajo, w / 2)) [arriba, abajo] = [abajo, arriba];
+    if (enY(abajo, w / 2) - enY(arriba, w / 2) < h * 0.15) continue;
+    for (let k = 0; k < verticales.length; k++) for (let l = k + 1; l < verticales.length; l++) {
+      let [izq, der] = [verticales[k], verticales[l]];
+      if (enX(izq, h / 2) > enX(der, h / 2)) [izq, der] = [der, izq];
+      if (enX(der, h / 2) - enX(izq, h / 2) < w * 0.15) continue;
+      const q = [corte(arriba, izq), corte(arriba, der), corte(abajo, der), corte(abajo, izq)];
+      if (q.some((p) => !p || p.x < -0.06 * w || p.x > 1.06 * w || p.y < -0.06 * h || p.y > 1.06 * h)) continue;
+      const esq = q as Esquinas;
+      if (!convexo(esq)) continue;
+      // Ángulos razonables (una hoja vista en perspectiva, no un rombo).
+      const angulosOk = esq.every((p, m) => {
+        const a = esq[(m + 3) % 4], b = esq[(m + 1) % 4];
+        const v1 = Math.atan2(a.y - p.y, a.x - p.x), v2 = Math.atan2(b.y - p.y, b.x - p.x);
+        let d = Math.abs(v1 - v2); if (d > Math.PI) d = 2 * Math.PI - d;
+        return d > (50 * Math.PI) / 180 && d < (130 * Math.PI) / 180;
+      });
+      if (!angulosOk) continue;
+      const ar = area(esq) / (w * h);
+      if (ar < 0.12) continue;
+      // Lado por lado, y se abandona en cuanto uno no alcanza.
+      const lados: number[] = [];
+      for (const [linea, c1, c2, a, b] of [
+        [arriba, izq, der, esq[0], esq[1]], [der, arriba, abajo, esq[1], esq[2]], [abajo, izq, der, esq[3], esq[2]], [izq, arriba, abajo, esq[0], esq[3]],
+      ] as const) {
+        const v = lado(linea, c1, c2, a, b);
+        if (v < 0.3) break;
+        lados.push(v);
+      }
+      if (lados.length < 4) continue;
+      const peor = Math.min(...lados);
+      candidatos.push({ q: esq, puntaje: 0.5 * peor + 0.5 * (lados.reduce((s, x) => s + x, 0) / 4), area: ar });
+    }
+  }
+  if (!candidatos.length) return null;
+  const mejor = Math.max(...candidatos.map((x) => x.puntaje));
+  if (mejor < 0.5) return null;
+  // Entre los casi tan buenos, el más grande: la hoja entera y no la foto o el recuadro de su portada.
+  candidatos = candidatos.filter((x) => x.puntaje >= mejor * 0.75);
+  const elegido = candidatos.reduce((a, b) => (b.area > a.area ? b : a));
+  return elegido.q.map((p) => ({ x: Math.min(1, Math.max(0, p.x / w)), y: Math.min(1, Math.max(0, p.y / h)) })) as Esquinas;
+}
+
+/**
+ * La hoja como la mancha clara más grande (respaldo cuando no hay bordes rectos claros): la imagen se reduce a ~240 px,
+ * se separa lo claro de lo oscuro (umbral de Otsu) y los puntos extremos de la mancha son las esquinas. Funciona con
+ * la hoja sobre un fondo más oscuro.
+ */
+function bordesPorBrillo(fuente: CanvasImageSource, ancho: number, alto: number): Esquinas | null {
   if (!ancho || !alto) return null;
   const e = 240 / Math.max(ancho, alto);
   const w = Math.max(16, Math.round(ancho * e)), h = Math.max(16, Math.round(alto * e)), n = w * h;

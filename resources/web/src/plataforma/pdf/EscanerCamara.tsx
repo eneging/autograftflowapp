@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type PointerEvent as EventoPuntero, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import {
-  aBlobUrl, cargarImagen, componerCarnet, detectarBordes, detectarTexto, distancia, enderezar, esToda, lienzo, FILTROS, TODA,
+  aBlobUrl, cargarImagen, componerCarnet, detectarBordes, detectarTexto, distancia, enderezar, esToda, FILTROS, TODA,
   type Esquinas, type Filtro,
 } from "./escaner";
+import { abrirCamara, ajustar, enfocarEn, prepararPista, tomarFoto, zonaVisible, type Capacidades } from "./camara";
 import "./escaner.css";
 
 /** Lo que entrega la cámara: la foto tal cual y la hoja ya enderezada. */
@@ -47,12 +48,15 @@ export function CamaraEscaner({ paginas = 0, ultima, alCapturar, alGaleria, alTe
   const [destello, setDestello] = useState(false);
   const [ocupada, setOcupada] = useState(false);
   const [frente, setFrente] = useState<HTMLCanvasElement | null>(null);
+  const [capacidades, setCapacidades] = useState<Capacidades | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [foco, setFoco] = useState<{ x: number; y: number; n: number } | null>(null);
   usarPantallaCompleta(alTerminar);
 
   // Estado de la detección entre vueltas: cuántas seguidas quieta y si hay que esperar a que cambie la hoja.
   const ocupado = useRef(false);
   const anterior = useRef<Esquinas | null>(null);
-  const quietas = useRef(0);
+  const quietas = useRef(0); // desde cuándo (performance.now) la detección está quieta
   const espera = useRef<Esquinas | null>(null);
 
   useEffect(() => {
@@ -63,14 +67,16 @@ export function CamaraEscaner({ paginas = 0, ultima, alCapturar, alGaleria, alTe
         return;
       }
       try {
-        const s = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: "environment" }, width: { ideal: 3840 }, height: { ideal: 2160 } } });
+        const s = await abrirCamara();
         if (cancelado) { s.getTracks().forEach((t) => t.stop()); return; }
         flujo.current = s;
         const v = video.current!;
         v.srcObject = s;
         await v.play().catch(() => {});
-        const capacidades = s.getVideoTracks()[0]?.getCapabilities?.() as { torch?: boolean } | undefined;
-        setHayLinterna(!!capacidades?.torch);
+        const pista = s.getVideoTracks()[0];
+        const c = pista ? await prepararPista(pista) : { linterna: false, zoom: null, enfoqueTactil: false };
+        setHayLinterna(c.linterna);
+        setCapacidades(c);
         setLista(true);
       } catch (e) {
         const n = (e as DOMException)?.name;
@@ -91,13 +97,13 @@ export function CamaraEscaner({ paginas = 0, ultima, alCapturar, alGaleria, alTe
     setDestello(true);
     setTimeout(() => setDestello(false), 220);
     try {
-      const foto = lienzo(v.videoWidth, v.videoHeight);
-      foto.getContext("2d")!.drawImage(v, 0, 0);
+      // Foto del sensor (más nítida que el video); EX-Trae, solo lo que se veía en pantalla.
+      const foto = await tomarFoto(flujo.current?.getVideoTracks()[0], v, unaFoto);
       // EX-Trae lee la foto completa: recortar a una «hoja» puede dejar fuera el texto (p. ej. si toma una pared clara).
       const esquinas = unaFoto ? TODA : detectarBordes(foto, foto.width, foto.height) ?? TODA;
       // La automática no vuelve a disparar hasta que cambie la hoja (o, en EX-Trae, el texto a la vista).
       espera.current = unaFoto ? anterior.current ?? esquinas : esquinas;
-      quietas.current = 0;
+      quietas.current = performance.now();
       const hoja = enderezar(foto, esquinas);
       if (modo === "carnet") {
         if (!frente) { setFrente(hoja); return; }
@@ -118,22 +124,28 @@ export function CamaraEscaner({ paginas = 0, ultima, alCapturar, alGaleria, alTe
   const automatica = useRef(auto);
   automatica.current = auto;
 
-  // Busca la hoja unas 4 veces por segundo; con «Automática», dispara cuando lleva ~1 s quieta.
+  // Busca la hoja unas 4 veces por segundo (menos si el equipo tarda: espera al menos el doble de lo que tardó la
+  // última búsqueda, para no trabar un celular modesto); con «Automática», dispara cuando lleva ~1 s quieta.
   useEffect(() => {
     if (!lista) return;
-    const t = setInterval(() => {
-      const v = video.current;
-      if (!v?.videoWidth || ocupado.current) return;
-      // EX-Trae busca texto (renglones); el escáner, los bordes de la hoja.
-      const d = (unaFoto ? detectarTexto : detectarBordes)(v, v.videoWidth, v.videoHeight);
-      const prev = anterior.current;
-      anterior.current = d;
-      quietas.current = d && prev && distancia(d, prev) < (unaFoto ? 0.04 : 0.015) ? quietas.current + 1 : 0;
-      if (espera.current && (!d || distancia(d, espera.current) > 0.08)) espera.current = null;
-      setDeteccion((antes) => (d && antes ? d.map((p, i) => ({ x: antes[i].x * 0.4 + p.x * 0.6, y: antes[i].y * 0.4 + p.y * 0.6 })) as Esquinas : d));
-      if (automatica.current && d && quietas.current >= 4 && !espera.current) dispararAhora.current();
-    }, 240);
-    return () => clearInterval(t);
+    let t = 0, vivo = true;
+    const buscar = () => {
+      if (!vivo) return;
+      const v = video.current, inicio = performance.now();
+      if (v?.videoWidth && !ocupado.current) {
+        // EX-Trae busca texto (renglones); el escáner, los bordes de la hoja.
+        const d = (unaFoto ? detectarTexto : detectarBordes)(v, v.videoWidth, v.videoHeight);
+        const prev = anterior.current;
+        anterior.current = d;
+        if (!(d && prev && distancia(d, prev) < (unaFoto ? 0.04 : 0.015))) quietas.current = performance.now();
+        if (espera.current && (!d || distancia(d, espera.current) > 0.08)) espera.current = null;
+        setDeteccion((antes) => (d && antes ? d.map((p, i) => ({ x: antes[i].x * 0.4 + p.x * 0.6, y: antes[i].y * 0.4 + p.y * 0.6 })) as Esquinas : d));
+        if (automatica.current && d && performance.now() - quietas.current >= 950 && !espera.current) dispararAhora.current();
+      }
+      t = window.setTimeout(buscar, Math.max(240, (performance.now() - inicio) * 2));
+    };
+    buscar();
+    return () => { vivo = false; clearTimeout(t); };
   }, [lista]);
 
   async function alternarLinterna() {
@@ -143,6 +155,21 @@ export function CamaraEscaner({ paginas = 0, ultima, alCapturar, alGaleria, alTe
       await pista.applyConstraints({ advanced: [{ torch: !linterna } as unknown as MediaTrackConstraintSet] });
       setLinterna(!linterna);
     } catch { setHayLinterna(false); }
+  }
+
+  async function cambiarZoom(z: number) {
+    const pista = flujo.current?.getVideoTracks()[0];
+    if (!pista) return;
+    try { await ajustar(pista, { zoom: z }); setZoom(z); } catch { setCapacidades((c) => (c ? { ...c, zoom: null } : c)); }
+  }
+
+  /** Tocar el video enfoca ahí (si el equipo lo permite) y muestra un aro donde se tocó. */
+  function tocarEscena(ev: EventoPuntero<HTMLDivElement>) {
+    const v = video.current, pista = flujo.current?.getVideoTracks()[0];
+    if (!v || !pista || ev.target !== v) return;
+    const r = v.getBoundingClientRect(), px = ev.clientX - r.left, py = ev.clientY - r.top, z = zonaVisible(v);
+    if (capacidades?.enfoqueTactil) enfocarEn(pista, z.x + (px / r.width) * z.ancho, z.y + (py / r.height) * z.alto);
+    setFoco({ x: px, y: py, n: Date.now() });
   }
 
   const cambiarModo = (m: Modo) => { setModo(m); setFrente(null); espera.current = null; };
@@ -169,12 +196,19 @@ export function CamaraEscaner({ paginas = 0, ultima, alCapturar, alGaleria, alTe
           : <span className="esIcono" aria-hidden />}
       </div>
 
-      <div className="esEscena">
+      <div className="esEscena esEnVivo" onPointerDown={tocarEscena}>
         <video ref={video} playsInline muted autoPlay onLoadedMetadata={(e) => setDims({ w: e.currentTarget.videoWidth, h: e.currentTarget.videoHeight })}
           onResize={(e) => setDims({ w: e.currentTarget.videoWidth, h: e.currentTarget.videoHeight })} />
-        {dims && deteccion && <svg className="esCapa" viewBox={`0 0 ${dims.w} ${dims.h}`} preserveAspectRatio="xMidYMid meet" aria-hidden>
+        {/* «slice» recorta igual que «object-fit: cover» del video: el marco coincide con lo que se ve. */}
+        {dims && deteccion && <svg className="esCapa" viewBox={`0 0 ${dims.w} ${dims.h}`} preserveAspectRatio="xMidYMid slice" aria-hidden>
           <polygon className={`esMarco ${unaFoto ? "texto" : ""}`} points={deteccion.map((p) => `${p.x * dims.w},${p.y * dims.h}`).join(" ")} />
         </svg>}
+        {foco && <span key={foco.n} className="esFoco" style={{ left: foco.x, top: foco.y }} aria-hidden />}
+        {capacidades?.zoom && <div className="esZoom" role="radiogroup" aria-label="Zoom">
+          {[1, Math.min(2, capacidades.zoom.max)].map((z) => (
+            <button key={z} type="button" role="radio" aria-checked={zoom === z} className={zoom === z ? "activo" : ""} onClick={() => cambiarZoom(z)}>{z}×</button>
+          ))}
+        </div>}
         {pista && <div className="esPista" role="status">{pista}</div>}
         {destello && <div className="esDestello" aria-hidden />}
         {error && <div className="esError" role="alert">

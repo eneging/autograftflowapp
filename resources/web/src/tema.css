@@ -98,8 +98,11 @@ main.mainPortada { max-width: none; margin: 0; padding: 0; }
 /* ------------------------------------------------------------------ aplicación con barra lateral (Notion) */
 .afShell { display: grid; grid-template-columns: 248px minmax(0, 1fr); min-height: 100vh; }
 .afLateral {
-  position: sticky; top: 0; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; gap: 12px;
+  /* 100dvh: el alto que de verdad se ve. En el navegador del celular, 100vh incluye lo que tapa la barra de direcciones
+     y el final del menú (paletas, tema) quedaba fuera de la pantalla. 100vh queda de respaldo para navegadores viejos. */
+  position: sticky; top: 0; height: 100vh; height: 100dvh; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 12px;
   padding: 8px 6px 10px; background: var(--lateral); border-right: 1px solid var(--line);
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
 }
 .afContenido { min-width: 0; display: flex; flex-direction: column; }
 .afVelo { display: none; }
