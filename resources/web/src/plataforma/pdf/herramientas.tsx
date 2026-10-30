@@ -59,3 +59,5 @@ export function IconoDegradado({ tam = 20, children }: { tam?: number; children:
 
 /** Etiqueta «Nuevo» con el degradado, para las herramientas especiales. */
 export const EtiquetaNueva = () => <span className="hrNuevo">✦ Nuevo</span>;
+/** La misma etiqueta con otro texto. */
+export const EtiquetaEspecial = ({ texto }: { texto: string }) => <span className="hrNuevo">✦ {texto}</span>;

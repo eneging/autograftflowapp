@@ -1,7 +1,11 @@
+import { enfocar, filtrarPixeles, FILTROS, type Filtro } from "../../../../shared/filtrosEscaner";
+
 /*
  * Escáner de documentos en el navegador: encontrar la hoja en la foto, enderezarla (quitar la perspectiva) y limpiarla
  * con un filtro. Todo con canvas, sin librerías ni servidor.
  */
+
+export { FILTROS, type Filtro };
 
 export interface Punto { x: number; y: number }
 /** Las 4 esquinas de la hoja en fracciones de la imagen (0 a 1): sup. izq., sup. der., inf. der., inf. izq. */
@@ -11,14 +15,6 @@ export const esToda = (e: Esquinas) => e.every((p, i) => Math.abs(p.x - TODA[i].
 /** Cuánto se movió la esquina que más se movió (en fracciones de la imagen). */
 export const distancia = (a: Esquinas, b: Esquinas) => Math.max(...a.map((p, i) => Math.hypot(p.x - b[i].x, p.y - b[i].y)));
 
-export type Filtro = "color" | "documento" | "gris" | "original";
-export const FILTROS: { id: Filtro; nombre: string }[] = [
-  { id: "color", nombre: "Color mejorado" },
-  { id: "documento", nombre: "Blanco y negro" },
-  { id: "gris", nombre: "Escala de grises" },
-  { id: "original", nombre: "Original" },
-];
-
 export function lienzo(w: number, h: number) {
   const c = document.createElement("canvas");
   c.width = w;
@@ -26,7 +22,6 @@ export function lienzo(w: number, h: number) {
   return c;
 }
 const ctx2d = (c: HTMLCanvasElement) => c.getContext("2d", { willReadFrequently: true })!;
-const tope = (v: number) => (v < 0 ? 0 : v > 255 ? 255 : v);
 
 export const cargarImagen = (url: string) => new Promise<HTMLImageElement>((ok, mal) => {
   const img = new Image();
@@ -401,6 +396,24 @@ function homografia(de: Punto[], a: Punto[]): number[] {
 
 /** La hoja enderezada: el cuadrilátero de las esquinas pasa a ser un rectángulo (lado mayor hasta maxLado). */
 export function enderezar(img: HTMLImageElement | HTMLCanvasElement, esq: Esquinas, maxLado = 2200): HTMLCanvasElement {
+  const pasos = enderezarPorPartes(img, esq, maxLado);
+  let r = pasos.next();
+  while (!r.done) r = pasos.next();
+  return r.value;
+}
+
+/** Igual, pero cediendo el paso cada poco: el botón de la cámara responde aunque se esté procesando una foto grande. */
+export async function enderezarSuave(img: HTMLImageElement | HTMLCanvasElement, esq: Esquinas, maxLado = 2200): Promise<HTMLCanvasElement> {
+  const pasos = enderezarPorPartes(img, esq, maxLado);
+  let t = performance.now(), r = pasos.next();
+  while (!r.done) {
+    if (performance.now() - t > 12) { await new Promise((ok) => setTimeout(ok)); t = performance.now(); }
+    r = pasos.next();
+  }
+  return r.value;
+}
+
+function* enderezarPorPartes(img: HTMLImageElement | HTMLCanvasElement, esq: Esquinas, maxLado: number): Generator<void, HTMLCanvasElement, void> {
   const W0 = img instanceof HTMLImageElement ? img.naturalWidth : img.width;
   const H0 = img instanceof HTMLImageElement ? img.naturalHeight : img.height;
   if (esToda(esq)) {
@@ -422,6 +435,7 @@ export function enderezar(img: HTMLImageElement | HTMLCanvasElement, esq: Esquin
   const m = homografia([{ x: 0, y: 0 }, { x: W, y: 0 }, { x: W, y: H }, { x: 0, y: H }], q);
   const salida = lienzo(W, H), sctx = ctx2d(salida), od = sctx.createImageData(W, H), o = od.data;
   for (let y = 0; y < H; y++) {
+    if (y % 32 === 0) yield;
     const yc = y + 0.5;
     for (let x = 0; x < W; x++) {
       const xc = x + 0.5, z = m[6] * xc + m[7] * yc + 1;
@@ -440,78 +454,27 @@ export function enderezar(img: HTMLImageElement | HTMLCanvasElement, esq: Esquin
   return salida;
 }
 
-/**
- * Brillo del papel en cada zona de la imagen (una cuadrícula de ~48 celdas por lado): lo que hay que aclarar para que
- * el papel quede blanco aunque tenga sombras o la luz no sea pareja.
- */
-function brilloPapel(px: Uint8ClampedArray, w: number, h: number) {
-  const lado = Math.max(8, Math.round(Math.max(w, h) / 48)), gw = Math.ceil(w / lado), gh = Math.ceil(h / lado);
-  const celdas = new Float32Array(gw * gh), hist = new Uint32Array(64);
-  for (let cy = 0; cy < gh; cy++) {
-    for (let cx = 0; cx < gw; cx++) {
-      hist.fill(0);
-      let cuenta = 0;
-      for (let y = cy * lado; y < Math.min(h, (cy + 1) * lado); y += 2) {
-        for (let x = cx * lado; x < Math.min(w, (cx + 1) * lado); x += 2) {
-          const i = (y * w + x) * 4;
-          hist[(px[i] * 77 + px[i + 1] * 150 + px[i + 2] * 29) >> 10]++;
-          cuenta++;
-        }
-      }
-      // El 90 % más oscuro de la celda queda por debajo: lo que sobra es papel (el texto suele ocupar menos).
-      let acum = 0, b = 0;
-      for (; b < 63 && acum < cuenta * 0.9; b++) acum += hist[b];
-      celdas[cy * gw + cx] = b * 4 + 2;
-    }
-  }
-  // Se toma el máximo de las vecinas (una celda llena de texto no oscurece su zona) y luego el promedio (sin saltos).
-  const max = new Float32Array(gw * gh), suave = new Float32Array(gw * gh);
-  const vecinas = (g: Float32Array, cx: number, cy: number, f: (a: number, b: number) => number, ini: number) => {
-    let v = ini, n = 0;
-    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-      const x = cx + dx, y = cy + dy;
-      if (x >= 0 && y >= 0 && x < gw && y < gh) { v = f(v, g[y * gw + x]); n++; }
-    }
-    return [v, n];
-  };
-  for (let cy = 0; cy < gh; cy++) for (let cx = 0; cx < gw; cx++) max[cy * gw + cx] = vecinas(celdas, cx, cy, Math.max, 0)[0];
-  for (let cy = 0; cy < gh; cy++) for (let cx = 0; cx < gw; cx++) { const [s, n] = vecinas(max, cx, cy, (a, b) => a + b, 0); suave[cy * gw + cx] = s / n; }
-  /** Brillo del papel en el píxel (x, y), interpolado entre los centros de las celdas. */
-  return (x: number, y: number) => {
-    const gx = Math.min(gw - 1, Math.max(0, x / lado - 0.5)), gy = Math.min(gh - 1, Math.max(0, y / lado - 0.5));
-    const x0 = gx | 0, y0 = gy | 0, x1 = Math.min(gw - 1, x0 + 1), y1 = Math.min(gh - 1, y0 + 1), fx = gx - x0, fy = gy - y0;
-    return (suave[y0 * gw + x0] * (1 - fx) + suave[y0 * gw + x1] * fx) * (1 - fy) + (suave[y1 * gw + x0] * (1 - fx) + suave[y1 * gw + x1] * fx) * fy;
-  };
-}
-
-/** Aplica el filtro sobre el lienzo. Todos (menos «original») llevan el papel a blanco y quitan las sombras. */
+/** Aplica el filtro sobre el lienzo y da nitidez (también a «Color original»: es lo que se pierde al fotografiar). */
 export function aplicarFiltro(c: HTMLCanvasElement, filtro: Filtro) {
-  if (filtro === "original") return;
-  const ctx = ctx2d(c), w = c.width, h = c.height, datos = ctx.getImageData(0, 0, w, h), px = datos.data;
-  const papel = brilloPapel(px, w, h);
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const i = (y * w + x) * 4, k = 255 / Math.max(70, papel(x, y));
-      if (filtro === "color") {
-        // Blanco al papel y la tinta un poco más intensa (el tono se conserva).
-        for (let c2 = 0; c2 < 3; c2++) px[i + c2] = tope(255 - (255 - px[i + c2] * k) * 1.3);
-      } else {
-        const g = ((px[i] * 77 + px[i + 1] * 150 + px[i + 2] * 29) >> 8) * k;
-        // «documento»: lo claro a blanco puro y el texto a negro, como un escaneo; «gris»: solo más contraste.
-        const v = filtro === "documento" ? (g > 205 ? 255 : tope(((g - 70) * 255) / 135)) : tope(255 - (255 - g) * 1.25);
-        px[i] = px[i + 1] = px[i + 2] = v;
-      }
-    }
-  }
+  const ctx = ctx2d(c), datos = ctx.getImageData(0, 0, c.width, c.height);
+  enfocar(datos.data, c.width, c.height);
+  filtrarPixeles(datos.data, c.width, c.height, filtro);
   ctx.putImageData(datos, 0, 0);
 }
 
-/** Miniatura con el filtro ya aplicado (lado mayor «lado» px). */
-export async function vistaPrevia(url: string, filtro: Filtro, lado = 320) {
+/** La página tal como saldrá en el PDF: girada, con su filtro y con el lado mayor de «lado» px como mucho. */
+export async function vistaPrevia(url: string, filtro: Filtro, lado = 320, giro = 0) {
   const img = await cargarImagen(url);
   const e = Math.min(1, lado / Math.max(img.naturalWidth, img.naturalHeight));
-  const c = lienzo(Math.max(1, Math.round(img.naturalWidth * e)), Math.max(1, Math.round(img.naturalHeight * e)));
-  c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
+  const w = Math.max(1, Math.round(img.naturalWidth * e)), h = Math.max(1, Math.round(img.naturalHeight * e));
+  const de_lado = giro === 90 || giro === 270;
+  const c = lienzo(de_lado ? h : w, de_lado ? w : h);
+  const ctx = ctx2d(c);
+  ctx.imageSmoothingQuality = "high";
+  ctx.translate(c.width / 2, c.height / 2);
+  ctx.rotate((giro * Math.PI) / 180);
+  ctx.drawImage(img, -w / 2, -h / 2, w, h);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   aplicarFiltro(c, filtro);
   return c;
 }

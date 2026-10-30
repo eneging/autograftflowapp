@@ -9,9 +9,11 @@ import { BotonGuia } from "../plataforma/GuiaProceso";
 import { CargaLogoPantalla, LogoMarca } from "./CargaLogo";
 import { cambiarApariencia, usarApariencia } from "./apariencia";
 import { BotonPaletas } from "./Paletas";
+import { EtiquetaEspecial, EtiquetaNueva, IconoDegradado } from "../plataforma/pdf/herramientas";
 import { PanelOrganizarPdf } from "../plataforma/pdf/PanelOrganizarPdf";
 import { BotonFavorito, usarFavoritos } from "./favoritos";
 import { Avatar } from "./Avatar";
+import { enElDocumento, irAlDocumento, olvidarOrigen, volverDelDocumento } from "./irAlDocumento";
 
 /*
  * Diseño AutograFlow (inspirado en Notion): lienzo blanco, barra lateral gris clara con el espacio de trabajo, la
@@ -40,8 +42,6 @@ const ICONOS: Record<string, ReactNode> = {
   equipo: <><circle cx="7.5" cy="7.5" r="2.5" {...trazo} /><circle cx="13.5" cy="8.5" r="2" {...trazo} /><path d="M3 16c.6-2.8 2.4-4 4.5-4s3.9 1.2 4.5 4M12.5 12.3c2 .1 3.4 1.3 4 3.7" {...trazo} /></>,
   planes: <><path d="M10 3 12 7.5l5 .6-3.7 3.4 1 4.9L10 14l-4.3 2.4 1-4.9L3 8.1l5-.6z" {...trazo} /></>,
   verificar: <><circle cx="9" cy="9" r="5" {...trazo} /><path d="m13 13 4 4M7 9l1.5 1.5L11.5 7.5" {...trazo} /></>,
-  flow: <><rect x="3" y="3" width="6" height="6" rx="1.5" {...trazo} /><rect x="11" y="3" width="6" height="6" rx="1.5" {...trazo} /><rect x="3" y="11" width="6" height="6" rx="1.5" {...trazo} /><path d="M14 10.5v7M10.5 14h7" {...trazo} /></>,
-  organizar: <><rect x="3" y="3" width="6" height="7.5" rx="1.2" {...trazo} /><rect x="11" y="3" width="6" height="7.5" rx="1.2" {...trazo} /><path d="M3 14h14M3 17h9" {...trazo} /></>,
   recibo: <><path d="M5 3h10v14l-2-1.3-1.7 1.3-1.6-1.3-1.7 1.3L6.3 15.7 5 17z" {...trazo} /><path d="M7.5 7h5M7.5 10h5" {...trazo} /></>,
   mas: <path d="M10 4v12M4 10h12" {...trazo} />,
   salir: <><path d="M8 4H4.5v12H8" {...trazo} /><path d="M12 6.5 15.5 10 12 13.5M15.5 10H8" {...trazo} /></>,
@@ -144,6 +144,24 @@ function tituloRuta(pathname: string) {
   return "";
 }
 
+/**
+ * En el editor, en pantallas donde la vista previa queda debajo del menú: lleva al documento y, una vez ahí, de vuelta. El
+ * texto depende de dónde se está, así que sigue siendo correcto si se desplaza a mano o si otro botón llevó al documento.
+ */
+function BotonVerDocumento() {
+  const [enDocumento, setEnDocumento] = useState(false);
+  useEffect(() => {
+    let pendiente = 0;
+    const medir = () => { pendiente = 0; setEnDocumento(enElDocumento()); };
+    const alMoverse = () => { pendiente ||= requestAnimationFrame(medir); };
+    medir();
+    addEventListener("scroll", alMoverse, { passive: true });
+    addEventListener("resize", alMoverse);
+    return () => { cancelAnimationFrame(pendiente); removeEventListener("scroll", alMoverse); removeEventListener("resize", alMoverse); olvidarOrigen(); };
+  }, []);
+  return <button type="button" className="botonChico botonVerDocumento" onClick={() => (enDocumento ? volverDelDocumento() : irAlDocumento())}>{enDocumento ? "Volver al menú" : "Ver documento"}</button>;
+}
+
 function ConLateral({ ancho, children }: { ancho: boolean; children: ReactNode }) {
   const { usuario } = usarSesion();
   const { pathname } = useLocation();
@@ -165,6 +183,7 @@ function ConLateral({ ancho, children }: { ancho: boolean; children: ReactNode }
             {titulo && <><span className="migasSep">/</span><span className="migasActual">{titulo}</span></>}
           </nav>
           <div className="afTopbarDer">
+            {/^\/app\/d\/\d+$/.test(pathname) && <BotonVerDocumento />}
             <BotonGuia />
             {usuario && <Link className="chipPlan" to="/app/cuenta">{PLANES[usuario.plan]?.nombre ?? "Gratis"}</Link>}
           </div>
@@ -285,11 +304,17 @@ function Lateral({ alPlegar }: { alPlegar: () => void }) {
 
       <nav className="navGrupo">
         <div className="navTitulo">Herramientas</div>
-        <button type="button" className={`navItem ${pathname.startsWith("/app/pdf") ? "activo" : ""}`} aria-haspopup="dialog" onClick={() => setVerOrganizar(true)}>
-          <Icono n="organizar" /><span>Organizar PDF</span>
+        <button type="button" className={`navItem navEspecial ${pathname.startsWith("/app/pdf") ? "activo" : ""}`} aria-haspopup="dialog" onClick={() => setVerOrganizar(true)}>
+          {/* La hoja de la derecha va abierta arriba: ahí titilan las estrellas. */}
+          <IconoDegradado tam={18}><rect x="2.5" y="3" width="6" height="7.5" rx="1.2" {...trazo} /><path d="M11 6.5v2.8a1.2 1.2 0 0 0 1.2 1.2h3.6a1.2 1.2 0 0 0 1.2-1.2" {...trazo} /><path d="M2.5 14h15M2.5 17h9" {...trazo} /></IconoDegradado>
+          <span className="hrNombreEspecial">Organizar PDF</span><EtiquetaNueva />
         </button>
         {verOrganizar && <PanelOrganizarPdf alCerrar={() => setVerOrganizar(false)} />}
-        <Link to="/app/flow-tools" className={`navItem ${pathname.startsWith("/app/flow-tools") ? "activo" : ""}`}><Icono n="flow" /><span>Flow Tools</span></Link>
+        <Link to="/app/flow-tools" className={`navItem navEspecial ${pathname.startsWith("/app/flow-tools") ? "activo" : ""}`}>
+          {/* El cuadro de arriba a la derecha va abierto: ahí titilan las estrellas. */}
+          <IconoDegradado tam={18}><rect x="3" y="3" width="6" height="6" rx="1.5" {...trazo} /><path d="M11 5.5v2a1.5 1.5 0 0 0 1.5 1.5H16" {...trazo} /><rect x="3" y="11" width="6" height="6" rx="1.5" {...trazo} /><path d="M14 10.5v7M10.5 14h7" {...trazo} /></IconoDegradado>
+          <span className="hrNombreEspecial">Flow Tools</span><EtiquetaEspecial texto="Demos" />
+        </Link>
         {item("planes", "Planes", "/planes")}
         {item("verificar", "Verificar un PDF", "/verificar")}
         {!reembolsoOculto && item("recibo", "Plantilla de reembolso", "/reembolso")}

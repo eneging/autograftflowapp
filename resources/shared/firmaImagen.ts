@@ -27,7 +27,7 @@ export function moverRecorte(r: Recorte, asa: Asa, dx: number, dy: number, min =
 export const girarRecorte = (r: Recorte): Recorte => ({ x: 1 - r.y - r.h, y: r.x, w: r.h, h: r.w });
 
 /** Cuánto más oscuro que el papel de alrededor es cada punto (0 a 1): así no importa si la luz es desigual. */
-function oscuridad(img: ImagenRgba): Float32Array {
+export function oscuridad(img: ImagenRgba): Float32Array {
   const { data: px, width: w, height: h } = img, n = w * h, W = w + 1;
   const gris = new Float32Array(n);
   for (let i = 0; i < n; i++) {
@@ -66,7 +66,7 @@ function oscuridad(img: ImagenRgba): Float32Array {
 }
 
 /** Umbral de Otsu entre tinta y restos de papel, sin contar lo que es claramente papel. */
-function umbralTinta(d: Float32Array): number {
+export function umbralTinta(d: Float32Array): number {
   const hist = new Float64Array(256);
   let total = 0, suma = 0;
   for (let i = 0; i < d.length; i++) {

@@ -134,6 +134,13 @@ main.mainPortada { max-width: none; margin: 0; padding: 0; }
 .navItem > .navEmoji { flex: 0 0 18px; }
 .navItem > svg { flex: 0 0 auto; }
 .navItem.nuevoDoc, .navItem.nuevoDoc .icono { color: var(--accent); }
+/* Acceso destacado (Organizar PDF): borde en degradado y velo de color, como Escanear a PDF (herramientas.css). */
+.navItem.navEspecial { border: 1px solid transparent; background: var(--hrVelo) padding-box, linear-gradient(var(--lateral), var(--lateral)) padding-box, var(--hrBorde) border-box; }
+/* --hover2 es translúcido: debajo va el fondo opaco, para que no se vea el degradado del borde a través de él. */
+.navItem.navEspecial:hover, .navItem.navEspecial.activo { background: var(--hrVelo) padding-box, linear-gradient(var(--hover2), var(--hover2)) padding-box, linear-gradient(var(--lateral), var(--lateral)) padding-box, var(--hrBorde) border-box; box-shadow: 0 3px 12px var(--hrBrillo); }
+/* El nombre mide lo que su texto (si no, el degradado se estira y no se ve entero) y la etiqueta no se encoge. */
+.navItem > .hrNombreEspecial { flex: 0 1 auto; }
+.navItem > .hrNuevo { flex: 0 0 auto; margin-left: auto; }
 .puntoEstado { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; background: var(--tenue); }
 .puntoEstado.e-en_firma { background: #e9a23b; }
 .puntoEstado.e-completado { background: #4dab7a; }
@@ -148,7 +155,12 @@ main.mainPortada { max-width: none; margin: 0; padding: 0; }
 .migas a:hover { background: var(--hover); }
 .migasSep { color: var(--tenue); padding: 0 2px; }
 .migasActual { padding: 2px 6px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.afTopbarDer { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.afTopbarDer { margin-left: auto; display: flex; align-items: center; gap: 6px; flex: none; }
+/* «Ver documento»: solo cuando la vista previa queda debajo del menú (.editorGrid a una columna). */
+.botonVerDocumento { display: none !important; white-space: nowrap; }
+@media (max-width: 900px) { .botonVerDocumento { display: inline-flex !important; } }
+/* Al bajar hasta el documento, que no quede debajo de la barra superior. */
+.previewCard .preview, .previewCard .avisoColocar { scroll-margin-top: 56px; }
 .chipPlan { padding: 2px 8px; border-radius: 4px; background: var(--gris); color: var(--muted); font-size: 12px; font-weight: 500; text-decoration: none; }
 .chipPlan:hover { background: var(--hover2); color: var(--ink); }
 .soloMovil { display: none !important; }

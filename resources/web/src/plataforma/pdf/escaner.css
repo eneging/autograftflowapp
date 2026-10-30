@@ -6,6 +6,9 @@
 .esIcono { display: inline-grid; place-items: center; width: 42px; height: 42px; min-height: 0; padding: 0; border-radius: 50%; border: 0; background: rgba(255,255,255,.08); color: #fff; font-size: 18px; cursor: pointer; }
 span.esIcono { background: transparent; }
 .esIcono.activo { background: var(--accentRelleno, #e2e800); color: var(--sobreAccent, #141414); }
+/* Linterna apagada: tachada. */
+.esLuzApagada { position: relative; }
+.esLuzApagada::after { content: ""; position: absolute; left: 50%; top: 50%; width: 26px; height: 2px; background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.5); transform: translate(-50%, -50%) rotate(-45deg); }
 .esIcono.grande { width: 52px; height: 52px; font-size: 22px; }
 .esChip { min-height: 0; padding: 7px 14px; border-radius: 99px; border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.06); color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; }
 .esChip.activo { border-color: transparent; background: var(--accentRelleno, #e2e800); color: var(--sobreAccent, #141414); }
@@ -18,7 +21,7 @@ span.esIcono { background: transparent; }
 .esCapa { pointer-events: none; overflow: visible; }
 .esFoco { position: absolute; width: 64px; height: 64px; margin: -32px 0 0 -32px; border: 2px solid var(--accentRelleno, #e2e800); border-radius: 50%; pointer-events: none; animation: esFoco .9s ease-out forwards; }
 @keyframes esFoco { 0% { transform: scale(1.5); opacity: 0; } 25% { transform: scale(1); opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; } }
-.esZoom { position: absolute; left: 50%; bottom: 66px; transform: translateX(-50%); display: flex; gap: 6px; padding: 4px; border-radius: 99px; background: rgba(20,20,20,.6); backdrop-filter: blur(6px); }
+.esZoom { position: absolute; left: 50%; bottom: 86px; transform: translateX(-50%); display: flex; gap: 6px; padding: 4px; border-radius: 99px; background: rgba(20,20,20,.6); backdrop-filter: blur(6px); }
 .esZoom button { width: 40px; height: 40px; min-height: 0; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; }
 .esZoom button.activo { background: rgba(255,255,255,.18); color: var(--accentRelleno, #e2e800); }
 .esCapa.editable { pointer-events: auto; }
@@ -30,11 +33,17 @@ span.esIcono { background: transparent; }
 .esAsaZona { fill: transparent; cursor: grab; }
 .esAsaZona:active { cursor: grabbing; }
 .esPista { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); max-width: calc(100% - 32px); padding: 9px 16px; border-radius: 99px; background: rgba(20,20,20,.78); color: #fff; font-size: 14px; text-align: center; pointer-events: none; backdrop-filter: blur(6px); }
+.esDiagnostico { position: absolute; left: 8px; right: 8px; top: 8px; margin: 0; padding: 8px; border-radius: 8px; background: rgba(0,0,0,.75); color: #fff; font: 11px/1.4 ui-monospace, monospace; white-space: pre-wrap; pointer-events: none; }
 .esDestello { position: absolute; inset: 0; background: #fff; animation: esDestello .22s ease-out forwards; pointer-events: none; }
 @keyframes esDestello { from { opacity: .85; } to { opacity: 0; } }
 .esError { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 12px; padding: 24px; text-align: center; }
 .esError > span { font-size: 44px; }
 .esError p { max-width: 380px; margin: 0; line-height: 1.45; }
+.esSinLinterna { position: absolute; inset: 0; z-index: 2; overflow: auto; display: grid; place-content: center; justify-items: center; gap: 12px; padding: 24px; text-align: center; background: rgba(8,8,8,.92); }
+.esSinLinterna > span { font-size: 40px; }
+.esSinLinterna p { max-width: 380px; margin: 0; line-height: 1.45; }
+/* Datos técnicos para revisar por qué no hay linterna en ese equipo. */
+.esSinLinterna pre { max-width: 100%; margin: 6px 0 0; color: rgba(255,255,255,.55); font: 10.5px/1.45 ui-monospace, monospace; text-align: left; white-space: pre-wrap; word-break: break-word; }
 .esErrorBotones { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 
 .esModos { display: flex; justify-content: center; gap: 4px; padding: 12px 10px 4px; overflow-x: auto; }
@@ -57,13 +66,9 @@ span.esIcono { background: transparent; }
 .esPilaNumero { position: absolute; right: -9px; bottom: -9px; display: grid; place-items: center; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 99px; background: var(--accentRelleno, #e2e800); color: var(--sobreAccent, #141414); font-size: 13px; font-weight: 700; }
 
 /* Editor: herramientas, filtros y pie. */
-.esEditor { grid-template-rows: auto minmax(0, 1fr) auto auto auto; }
-.esHerramientas, .esFiltros, .esPie { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; padding: 10px 14px 0; }
-.esFiltros { flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; }
-@media (min-width: 640px) { .esFiltros { justify-content: center; } }
+.esEditor { grid-template-rows: auto minmax(0, 1fr) auto auto; }
+.esHerramientas, .esPie { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; padding: 10px 14px 0; }
 .esHerramientas button, .esPie button:not(.primary) { background: rgba(255,255,255,.08); color: #fff; border-color: rgba(255,255,255,.2); }
-.esFiltros button { flex-shrink: 0; min-height: 0; padding: 7px 14px; border-radius: 99px; border: 1px solid rgba(255,255,255,.22); background: transparent; color: #fff; font-size: 13px; cursor: pointer; }
-.esFiltros button.activo { border-color: transparent; background: var(--accentRelleno, #e2e800); color: var(--sobreAccent, #141414); font-weight: 600; }
 .esPie { justify-content: flex-end; padding: 12px 14px 14px; }
 .esPie button { min-width: 120px; }
 

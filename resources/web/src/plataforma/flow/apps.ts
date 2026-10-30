@@ -11,7 +11,7 @@ export interface AppFlow { id: string; nombre: string; estado: EstadoApp; resume
 export const APPS_FLOW: AppFlow[] = [
   {
     id: "ex-trae",
-    nombre: "EX-Trae",
+    nombre: "EX-Trae Texto",
     estado: "beta",
     resumen: "Toma una foto con tu celular y el texto llega al instante a tu ordenador, listo para copiar. Con boletas y facturas, además llena sus datos.",
     detalle: "Lee el texto de cualquier imagen (documentos, carteles, notas, boletas, facturas) en tu dispositivo, lo ordena línea por línea y lo envía a tus otros dispositivos con la misma cuenta.",

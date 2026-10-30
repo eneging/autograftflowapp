@@ -111,3 +111,5 @@ button.hpHojaVista { cursor: pointer; }
   .hpBarraBotones { margin-left: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .hpMiniCargando { animation-duration: 2s; } .hpCintaBoton, .hpHoja, .hpMini canvas { transition: none; } }
+/* Al bajar hasta el apartado de una herramienta, que no quede debajo de la barra superior. */
+.hpIntro { scroll-margin-top: 64px; }

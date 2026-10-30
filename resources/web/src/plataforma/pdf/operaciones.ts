@@ -1,10 +1,12 @@
-import { PDFDocument, degrees } from "pdf-lib";
+import { PDFDocument } from "pdf-lib";
+import { armarOptimizado, esArchivoIntacto } from "../../../../shared/pdfOptimizar";
 import { leerPdf } from "../VisorPdf";
-import { aplicarFiltro, cargarImagen, type Esquinas, type Filtro } from "./escaner";
+import { vistaPrevia, type Esquinas, type Filtro } from "./escaner";
 
 /*
  * «Organizar PDF» trabaja en el navegador: los archivos no se suben al servidor. pdf.js dibuja las miniaturas y
- * pdf-lib arma los PDF de salida copiando las páginas tal cual (sin volver a imprimirlas: no pierden calidad).
+ * pdf-lib arma los PDF de salida copiando las páginas tal cual (sin volver a imprimirlas: no pierden calidad y, con
+ * armarOptimizado, tampoco pesan de más).
  */
 export type VistaPdf = Awaited<ReturnType<typeof leerPdf>>;
 export interface ArchivoPdf { id: string; nombre: string; bytes: Uint8Array; paginas: number; vista: VistaPdf }
@@ -34,25 +36,22 @@ export const hojasDe = (a: ArchivoPdf): Hoja[] => Array.from({ length: a.paginas
 
 /** Un PDF nuevo con estas hojas, en este orden y con su giro. alAvance: de 0 a 1. */
 export async function armarPdf(hojas: Hoja[], archivos: ArchivoPdf[], alAvance: (f: number) => void = () => {}): Promise<Uint8Array> {
+  const piezas = hojas.map((h) => ({ fuente: h.archivo, pagina: h.pagina, giro: h.giro }));
   const fuentes = new Map<string, PDFDocument>();
-  const salida = await PDFDocument.create();
-  for (const [i, h] of hojas.entries()) {
-    let src = fuentes.get(h.archivo);
-    if (!src) {
-      const a = archivos.find((x) => x.id === h.archivo);
-      if (!a) throw new Error("Falta uno de los archivos.");
-      try { src = await PDFDocument.load(a.bytes, { updateMetadata: false }); }
-      catch { throw new Error(`No se pudo leer «${a.nombre}» para armar el resultado (¿está protegido?).`); }
-      fuentes.set(h.archivo, src);
+  let intacto: ArchivoPdf | null = null;
+  for (const id of new Set(hojas.map((h) => h.archivo))) {
+    const a = archivos.find((x) => x.id === id);
+    if (!a) throw new Error("Falta uno de los archivos.");
+    if (hojas.every((h) => h.archivo === id) && esArchivoIntacto(piezas, a.paginas)) intacto = a;
+    try { fuentes.set(id, await PDFDocument.load(a.bytes, { updateMetadata: false })); }
+    catch {
+      if (intacto) { alAvance(1); return intacto.bytes.slice(); }
+      throw new Error(`No se pudo leer «${a.nombre}» para armar el resultado (¿está protegido?).`);
     }
-    const [p] = await salida.copyPages(src, [h.pagina]);
-    if (h.giro) p.setRotation(degrees((((p.getRotation().angle + h.giro) % 360) + 360) % 360));
-    salida.addPage(p);
-    if (i % 10 === 0) alAvance(i / hojas.length);
   }
-  const bytes = await salida.save();
-  alAvance(1);
-  return bytes;
+  const bytes = await armarOptimizado(piezas, fuentes, alAvance);
+  // Sin cambios, se conserva el archivo tal cual (con sus marcadores y formularios), salvo que venga muy inflado.
+  return intacto && bytes.length > intacto.bytes.length * 0.9 ? intacto.bytes.slice() : bytes;
 }
 
 // ---------------------------------------------------------------- escanear
@@ -65,21 +64,10 @@ export interface Foto { id: string; nombre: string; original: string; url: strin
 export type TamanoHoja = "a4" | "carta" | "imagen";
 const TAMANOS: Record<Exclude<TamanoHoja, "imagen">, [number, number]> = { a4: [595.28, 841.89], carta: [612, 792] };
 
-/** La hoja girada, reducida (lado mayor hasta 2200 px) y con su filtro, como JPEG. */
+/** La hoja girada, con su filtro y nitidez (lado mayor hasta 2480 px: A4 a unos 210 ppp), como JPEG. */
 async function prepararFoto(f: Foto): Promise<{ jpg: Uint8Array; ancho: number; alto: number }> {
-  const img = await cargarImagen(f.url);
-  const escala = Math.min(1, 2200 / Math.max(img.naturalWidth, img.naturalHeight));
-  const w = Math.round(img.naturalWidth * escala), h = Math.round(img.naturalHeight * escala);
-  const girada = f.giro === 90 || f.giro === 270;
-  const c = document.createElement("canvas");
-  c.width = girada ? h : w;
-  c.height = girada ? w : h;
-  const ctx = c.getContext("2d")!;
-  ctx.translate(c.width / 2, c.height / 2);
-  ctx.rotate((f.giro * Math.PI) / 180);
-  ctx.drawImage(img, -w / 2, -h / 2, w, h);
-  aplicarFiltro(c, f.filtro);
-  const blob = await new Promise<Blob>((ok, mal) => c.toBlob((b) => (b ? ok(b) : mal(new Error("No se pudo convertir la imagen."))), "image/jpeg", 0.85));
+  const c = await vistaPrevia(f.url, f.filtro, 2480, f.giro);
+  const blob = await new Promise<Blob>((ok, mal) => c.toBlob((b) => (b ? ok(b) : mal(new Error("No se pudo convertir la imagen."))), "image/jpeg", 0.88));
   return { jpg: new Uint8Array(await blob.arrayBuffer()), ancho: c.width, alto: c.height };
 }
 

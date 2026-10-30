@@ -56,6 +56,8 @@ export default function ExTrae() {
   const [imagen, setImagen] = useState<{ archivo: File; url: string } | null>(null);
   const [leyendo, setLeyendo] = useState<{ avance: number; etapa: string } | null>(null);
   const [texto, setTexto] = useState("");
+  // Números que el lector no vio con seguridad: un número mal leído no se nota al leerlo, así que se avisa.
+  const [dudas, setDudas] = useState<string[]>([]);
   const [datos, setDatos] = useState<DatosComprobante | null>(null);
   const [modo, setModo] = useState<"texto" | "comprobante">("texto");
   const [envio, setEnvio] = useState<"no" | "enviando" | "enviado">("no");
@@ -71,6 +73,7 @@ export default function ExTrae() {
     const limpias = limpiarLineas(lineas);
     const ordenado = ordenarLineas(limpias).join("\n");
     setTexto(ordenado);
+    setDudas([...new Set(limpias.flatMap((l) => l.dudas ?? []))]);
     const comprobante = esComprobante(ordenado);
     setDatos(comprobante ? leerComprobante(limpias) : null);
     setModo(comprobante ? "comprobante" : "texto");
@@ -82,7 +85,7 @@ export default function ExTrae() {
     if (!archivo.type.startsWith("image/")) return avisar("Elige una imagen (JPG, PNG, WEBP…).", "error");
     if (archivo.size > 15 * 1024 * 1024) return avisar("La imagen pesa más de 15 MB. Prueba con una más liviana.", "error");
     setImagen({ archivo, url: URL.createObjectURL(archivo) });
-    setTexto(""); setDatos(null); setEnvio("no");
+    setTexto(""); setDudas([]); setDatos(null); setEnvio("no");
     setLeyendo({ avance: 0, etapa: "Preparando…" });
     try {
       const ordenado = interpretar(await leerImagen(archivo, (avance, etapa) => setLeyendo({ avance, etapa })));
@@ -95,11 +98,11 @@ export default function ExTrae() {
   }
 
   function limpiar(abrirCamara = false) {
-    setImagen(null); setTexto(""); setDatos(null); setEnvio("no");
+    setImagen(null); setTexto(""); setDudas([]); setDatos(null); setEnvio("no");
     if (abrirCamara) setCamara(true);
   }
 
-  /** La foto de la cámara llega ya recortada y enderezada (si encontró la hoja): mejor para leer el texto. */
+  /** La foto de la cámara, recortada a lo que se veía en pantalla. */
   async function alCapturar(c: Captura) {
     setCamara(false);
     try {
@@ -173,6 +176,9 @@ export default function ExTrae() {
           </div>
 
           {/* Celular: apenas termina la lectura se pregunta si se envía al ordenador. */}
+          {hayResultado && !leyendo && dudas.some((d) => texto.includes(d)) && (
+            <p className="etRevisar" role="status">🔎 Revisa estos números con la imagen, no se leyeron con total seguridad: <strong>{dudas.filter((d) => texto.includes(d)).join(" · ")}</strong></p>
+          )}
           {hayResultado && !leyendo && (
             <div className={`etEnviar ${envio === "enviado" ? "enviado" : ""}`}>
               {envio === "enviado" ? <>
@@ -294,7 +300,7 @@ function Bandeja({ celular = false }: { celular?: boolean }) {
           <strong>Así pasas el texto de una foto a este ordenador:</strong>
           <ol>
             <li>En tu celular, entra a AutograFlow con <b>esta misma cuenta</b>.</li>
-            <li>Ve a <b>Herramientas → Flow Tools → EX-Trae</b> y toma la foto.</li>
+            <li>Ve a <b>Herramientas → Flow Tools → EX-Trae Texto</b> y toma la foto.</li>
             <li>Pulsa <b>«📤 Enviar texto al ordenador»</b>: aparecerá aquí al instante, listo para copiar.</li>
           </ol>
         </div>

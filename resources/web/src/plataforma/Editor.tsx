@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FocusEvent, type PointerEvent as EventoPuntero } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FocusEvent, type PointerEvent as EventoPuntero, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   COLORES_FIRMANTE, DEDOS, ETIQUETA_TIPO, LIMITES_PLATAFORMA, PREPARADOR, TAMANO_CAMPO, TIPOS_DATO, etiquetaDedo, leerDedo,
@@ -15,6 +15,7 @@ import { leerRangoPaginas, textoRango } from "../../../shared/rangoPaginas";
 import { usarSesion } from "./sesion";
 import { PaginaPdf, posicion, usarPdf } from "./VisorPdf";
 import { GuiaProceso, usarGuia } from "./GuiaProceso";
+import { irAlDocumentoSiEstaDebajo } from "../componentes/irAlDocumento";
 import { enfatizar, usarPasivo } from "./asistido";
 
 type CampoLocal = CampoEditor & { k: string };
@@ -44,6 +45,20 @@ const WA_SVG =<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden className
  * Editor de un documento en borrador (diseño del prototipo v43): panel «Preparar documento» y vista previa con zoom.
  * alCambiarPdf recibe el documento después de quitarle una página (el PDF cambió y el editor se vuelve a armar).
  */
+/** Flechas y número para moverse entre las páginas. */
+export function NavPaginas({ idCampo, pagina, total, alCambiar, children }: { idCampo: string; pagina: number; total: number; alCambiar: (n: number) => void; children?: ReactNode }) {
+  return (
+    <div className="pdfPageNav">
+      <button type="button" aria-label="Página anterior" disabled={pagina <= 1} onClick={() => alCambiar(pagina - 1)}>←</button>
+      <label htmlFor={idCampo}>Página</label>
+      <input id={idCampo} type="number" min={1} max={total} value={pagina} onChange={(e) => { const n = Number(e.target.value); if (n >= 1 && n <= total) alCambiar(n); }} />
+      <span>/</span><strong>{total}</strong>
+      <button type="button" aria-label="Página siguiente" disabled={pagina >= total} onClick={() => alCambiar(pagina + 1)}>→</button>
+      {children}
+    </div>
+  );
+}
+
 export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
   inicial: DocumentoDetalle; alEnviar: (d: DocumentoDetalle) => void; alCambiarPdf: (d: DocumentoDetalle, aviso: string) => void; avisoInicial?: string;
 }) {
@@ -116,6 +131,7 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
   const [contactos, setContactos] = useState<Contacto[]>([]);
   const [zoom, setZoom] = useState(zoomGuardado);
   const [editandoContacto, setEditandoContacto] = useState(false);
+  const senalados = useRef(new Set<string>());
   // Sello y huella pedidos por firmante (se marcan aunque todavía no tengan su campo en el documento).
   const [pide, setPide] = useState<Record<string, { sello: boolean; huella: boolean }>>(() => Object.fromEntries(
     inicial.firmantes.map((f) => [f.clave, { sello: inicial.campos.some((c) => c.firmante === f.clave && c.tipo === "sello"), huella: inicial.campos.some((c) => c.firmante === f.clave && c.tipo === "huella") }])));
@@ -127,6 +143,8 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
     plataforma.contactos().then(setContactos).catch(() => {});
   }, []);
   useEffect(() => { try { localStorage.setItem("autograflow_zoom", String(zoom)); } catch { /* sin almacenamiento */ } }, [zoom]);
+  // Hay un campo por colocar, y se coloca tocando el documento: en el celular, que queda abajo, la vista va hasta él.
+  useEffect(() => { if (herramienta) irAlDocumentoSiEstaDebajo(); }, [herramienta]);
   useEffect(() => { try { localStorage.setItem("autograflow_avanzadas", avanzadas ? "1" : "0"); } catch { /* sin almacenamiento */ } }, [avanzadas]);
   useEffect(() => { try { localStorage.setItem("autograflow_ver_paginas", verPaginas ? "1" : "0"); } catch { /* sin almacenamiento */ } }, [verPaginas]);
   // Sin firma, sello ni huella en el documento no hay nada que certificar: la opción se desmarca (prototipo).
@@ -241,6 +259,7 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
       const nuevos = Array.from({ length: final - firmantes.length }, (_, i) => ({ clave: nuevaClave("f"), nombre: `Firmante ${firmantes.length + i + 1}`, telefono: "", email: "", pedirDni: false, modoTexto: "solo" as ModoTexto }));
       setFirmantes((fs) => [...fs, ...nuevos]);
       setActivo(nuevos[0].clave);
+      senalarSiguiente(nuevos[0]);
     } else if (final < firmantes.length) {
       const sobran = firmantes.slice(final), conCampos = campos.filter((c) => sobran.some((f) => f.clave === c.firmante)).length;
       if (conCampos && !confirm(`Se quitarán ${sobran.length} firmante(s) y sus ${conCampos} campo(s). ¿Continuar?`)) return;
@@ -338,6 +357,7 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
    */
   function elegirQuien(q: Quien) {
     if (preguntarQuien) empezarPasivo();
+    else if (q !== "yo" && fActivo) senalarSiguiente(fActivo);
     setPreguntarQuien(false);
     setQuien(q);
     guardarQuien(inicial.id, q);
@@ -685,13 +705,30 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
     : firmantes.length > 0 && firmantes.every(listo);
   useEffect(() => { if (firmantesCompletos) pasarA("orden"); }, [firmantesCompletos]);
 
+  /**
+   * Señala con un parpadeo el siguiente paso de quien prepara el documento: primero «Apodo y envío» y, ya con sus datos,
+   * «Marcar dónde irá la firma». Cada botón, una vez por firmante, y solo si falta hacerlo. Devuelve si señaló algo.
+   * Respeta el modo asistido apagado en «Cómo funciona» (salvo que la guía esté acompañando este documento).
+   */
+  function senalarSiguiente(f: Pick<FirmanteEditor, "clave" | "nombre" | "telefono" | "email">, espera = 250) {
+    if ((!pasivo && !guiaAqui) || camposDe(f.clave, "firma")) return false;
+    const sinDatos = /^Firmante \d+$/.test(f.nombre) && !f.telefono && !f.email;
+    const [boton, clave] = sinDatos ? [".botonApodo", `apodo:${f.clave}`] : [".placeFirma", `firma:${f.clave}`];
+    if (senalados.current.has(clave)) return false;
+    senalados.current.add(clave);
+    // Se busca al final: «Apodo y envío» no existe si firmas solo tú, y mientras tanto pudo cerrarse una ventana.
+    setTimeout(() => enfatizar(document.querySelector(boton), 3), espera);
+    return true;
+  }
   /** Avanza al paso p (nunca hacia atrás). Con parpadeo baja la vista hasta él; sin él solo recuerda dónde vas. */
   function pasarA(p: PasoPasivo, conParpadeo = true) {
     if (p === "orden" && soloYo) p = "enviar"; // si firmas solo tú no hay paso de orden y mensaje
     const actual = pasoPasivo.current;
     if (!asistir || !actual || PASOS_PASIVO.indexOf(p) <= PASOS_PASIVO.indexOf(actual)) return;
     pasoPasivo.current = p;
-    if (conParpadeo) setTimeout(() => enfatizar(document.querySelector(`[data-paso="${p}"]`)), 150);
+    if (!conParpadeo) return;
+    if (p === "firmantes" && !soloYo && fActivo && senalarSiguiente(fActivo, 150)) return;
+    setTimeout(() => enfatizar(document.querySelector(`[data-paso="${p}"]`)), 150);
   }
   /** Al salir de un paso: si vas a otro paso, avanza en silencio (no mueve la vista bajo tu clic); si no, va al siguiente. */
   const alSalirDe = (p: PasoPasivo) => (e: FocusEvent<HTMLElement>) => {
@@ -705,7 +742,11 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
   function empezarPasivo() {
     // Con la guía, su paso es el de los firmantes: se muestra desde su título (mientras «¿Quién firma?» estuvo abierta,
     // la guía no movió la vista).
-    if (guiaAqui) { setTimeout(() => enfatizar(document.querySelector('[data-paso="firmantes"]'), 0), 300); return; }
+    if (guiaAqui) {
+      setTimeout(() => enfatizar(document.querySelector('[data-paso="firmantes"]'), 0), 300);
+      if (fActivo) senalarSiguiente(fActivo, 1000);
+      return;
+    }
     if (!asistir || pasoPasivo.current) return;
     pasoPasivo.current = "nombre";
     setTimeout(() => enfatizar(document.querySelector('[data-paso="nombre"]')), 300);
@@ -779,7 +820,8 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
             {soloYo && fActivo && (
               <label className="participantSelectLabel">Tu nombre (aparece junto a tu firma y en el certificado)
                 <input value={/^Firmante \d+$/.test(fActivo.nombre) ? "" : fActivo.nombre} maxLength={120} placeholder="Ej. Juan Pérez"
-                  onChange={(e) => setFirmantes((fs) => fs.map((f) => (f.clave === fActivo.clave ? { ...f, nombre: e.target.value } : f)))} />
+                  onChange={(e) => setFirmantes((fs) => fs.map((f) => (f.clave === fActivo.clave ? { ...f, nombre: e.target.value } : f)))}
+                  onBlur={(e) => { if (e.target.value.trim() && !(e.relatedTarget as HTMLElement | null)?.closest?.(".placeFirma")) senalarSiguiente({ ...fActivo, nombre: e.target.value.trim() }); }} />
               </label>
             )}
             {!soloYo && <>
@@ -798,7 +840,7 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
               </div>
             )}
             <label htmlFor="participanteActivo" className="participantSelectLabel">Configurar participante</label>
-            <select id="participanteActivo" value={activo} onChange={(e) => { setActivo(e.target.value); setHerramienta(null); }}>
+            <select id="participanteActivo" value={activo} onChange={(e) => { setActivo(e.target.value); setHerramienta(null); const elegido = firmantes.find((x) => x.clave === e.target.value); if (elegido) senalarSiguiente(elegido); }}>
               {firmantes.map((f, i) => <option key={f.clave} value={f.clave}>Firmante {i + 1}{f.nombre && !/^Firmante \d+$/.test(f.nombre) ? ` · ${f.nombre}` : ""}{f.clave === miClave ? " (tú)" : ""}{listo(f) ? " · ✓" : ""}</option>)}
             </select>
             </>}
@@ -810,7 +852,7 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
                   {!soloYo && (fActivo.telefono || fActivo.email) && ` · ${[fActivo.telefono, fActivo.email].filter(Boolean).join(" · ")}`}
                 </div>
                 {!soloYo && <div className="filaBotones">
-                  <button type="button" className="crece" onClick={() => setEditandoContacto(true)}>✉️ Apodo y envío para el Firmante {iActivo + 1}</button>
+                  <button type="button" className="crece botonApodo" onClick={() => setEditandoContacto(true)}>✉️ Apodo y envío para el Firmante {iActivo + 1}</button>
                   {firmantes.length > 1 && <>
                     <button type="button" title="Firma antes" disabled={iActivo === 0} onClick={() => moverFirmante(-1)}>↑</button>
                     <button type="button" title="Firma después" disabled={iActivo === firmantes.length - 1} onClick={() => moverFirmante(1)}>↓</button>
@@ -1116,14 +1158,9 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
             <span className="afAvanzadasFlecha" aria-hidden>{verPaginas ? "▲ Minimizar" : "▼ Maximizar"}</span>
           </button>
           {verPaginas && <div id="afPaginasCuerpo">
-          <div className="pdfPageNav">
-            <button type="button" aria-label="Página anterior" disabled={pagina <= 1} onClick={() => { setPagina(pagina - 1); setSel(null); }}>←</button>
-            <label htmlFor="numPagina">Página</label>
-            <input id="numPagina" type="number" min={1} max={inicial.paginas.length} value={pagina} onChange={(e) => { const n = Number(e.target.value); if (n >= 1 && n <= inicial.paginas.length) { setPagina(n); setSel(null); } }} />
-            <span>/</span><strong>{inicial.paginas.length}</strong>
-            <button type="button" aria-label="Página siguiente" disabled={pagina >= inicial.paginas.length} onClick={() => { setPagina(pagina + 1); setSel(null); }}>→</button>
+          <NavPaginas idCampo="numPagina" pagina={pagina} total={inicial.paginas.length} alCambiar={(n) => { setPagina(n); setSel(null); }}>
             <button type="button" className="danger" title="Quitar esta página del documento que se enviará" onClick={quitarPagina}>🗑️ Eliminar esta página</button>
-          </div>
+          </NavPaginas>
         {inicial.paginas.length > 2 && (
           <form className="pdfQuitarRango" onSubmit={(e) => { e.preventDefault(); quitarRango(); }}>
             <label htmlFor="rangoQuitar">🗑️ Quitar varias páginas</label>
@@ -1189,6 +1226,10 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
             </PaginaPdf>
           </div>
         </div>
+        {/* Las mismas flechas debajo del documento (sin «Eliminar»): para no tener que volver arriba a cambiar de página. */}
+        {verPaginas && inicial.paginas.length > 1 && (
+          <NavPaginas idCampo="numPaginaAbajo" pagina={pagina} total={inicial.paginas.length} alCambiar={(n) => { setPagina(n); setSel(null); }} />
+        )}
         <div className="legend">
           {camposMios.length > 0 && <span><i className="dot" style={{ background: COLOR_PREPARADOR }} /> Lo llenas tú</span>}
           {firmantes.map((f, i) => <span key={f.clave}><i className="dot" style={{ background: color(f.clave) }} /> Firmante {i + 1}{f.clave === miClave ? " (tú)" : ""}</span>)}
@@ -1214,7 +1255,7 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
       {editandoContacto && fActivo && (
         <EditorContacto
           numero={iActivo + 1} firmante={fActivo} contactos={contactos}
-          alGuardar={(c) => { setFirmantes((fs) => fs.map((f) => (f.clave === fActivo.clave ? { ...f, ...c } : f))); setEditandoContacto(false); }}
+          alGuardar={(c) => { setFirmantes((fs) => fs.map((f) => (f.clave === fActivo.clave ? { ...f, ...c } : f))); setEditandoContacto(false); senalarSiguiente({ clave: fActivo.clave, ...c }); }}
           alCerrar={() => setEditandoContacto(false)}
         />
       )}

@@ -1,0 +1,81 @@
+/* Revisar lo escaneado (RevisionEscaneo.tsx): pantalla completa y siempre oscura, como la cámara. */
+.rvPantalla { position: fixed; inset: 0; z-index: 900; display: flex; flex-direction: column; height: 100dvh; background: #0b0b0b; color: #f2f2f2; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+.rvPantalla button { font: inherit; min-height: 0; color: inherit; cursor: pointer; }
+.rvPantalla button:disabled { opacity: .35; cursor: default; }
+.rvIcono { display: inline-grid; place-items: center; flex: none; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: transparent; }
+button.rvIcono:hover:not(:disabled) { background: rgba(255,255,255,.1); }
+
+/* Con «.rvPantalla» delante: los estilos generales de la app para <header> e <input> son claros. */
+.rvPantalla .rvArriba { display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: transparent; color: #f2f2f2; border: 0; }
+.rvPantalla .rvTitulo { flex: 1; width: auto; min-width: 0; min-height: 0; padding: 6px 4px; border: 0 !important; border-bottom: 2px dotted rgba(255,255,255,.55) !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; color: #fff !important; font-size: 17px; font-weight: 600; text-align: center; }
+.rvPantalla .rvTitulo:focus { outline: none; border-bottom-color: var(--accentRelleno, #e2e800) !important; }
+
+/* La página ocupa todo lo que sobra. touch-action: el gesto de deslizar lo maneja la página. */
+.rvEscena { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 10px 14px; background: #2b2b2b; touch-action: pan-y; }
+.rvEscena canvas { display: block; max-width: 100%; max-height: 100%; box-shadow: 0 2px 14px rgba(0,0,0,.5); background: #fff; opacity: 0; transition: opacity .15s; }
+.rvEscena canvas.lista { opacity: 1; }
+.rvEtiqueta { position: absolute; top: 16px; left: 20px; padding: 3px 9px; border-radius: 99px; background: rgba(0,0,0,.7); font-size: 12px; }
+
+.rvNavegar { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 6px 12px; }
+.rvNavegar .rvIcono { border: 1.5px solid rgba(255,255,255,.28); width: 40px; height: 40px; }
+.rvPaginas { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; border: 1.5px solid rgba(255,255,255,.28); border-radius: 99px; background: transparent; font-size: 15px; font-weight: 500; }
+.rvAviso { margin: 0; padding: 3px 14px; text-align: center; font-size: 13px; color: rgba(255,255,255,.7); }
+.rvError { color: #ff9b9b; }
+
+.rvMiniaturas { display: flex; align-items: center; gap: 10px; margin: 0; padding: 8px 14px; list-style: none; overflow-x: auto; background: #111; }
+.rvMiniaturas li { position: relative; flex: none; border-radius: 4px; outline: 3px solid transparent; outline-offset: 1px; }
+.rvMiniaturas li.activa { outline-color: var(--accentRelleno, #e2e800); }
+.rvMiniaturas li.sobre { outline-color: rgba(255,255,255,.6); }
+.rvMiniaturas li > button { display: grid; place-items: center; position: relative; width: 66px; height: 88px; padding: 0; border: 0; background: #2b2b2b; overflow: hidden; border-radius: 3px; }
+.rvMiniaturas canvas { display: block; max-width: 100%; max-height: 100%; opacity: 0; }
+.rvMiniaturas canvas.lista { opacity: 1; }
+.rvNumero { position: absolute; left: 50%; bottom: 5px; transform: translateX(-50%); min-width: 22px; padding: 1px 6px; border-radius: 4px; background: rgba(40,40,40,.85); color: #fff; font-size: 13px; font-weight: 600; text-align: center; }
+.rvMiniaturaMas > button { border: 1.5px dashed rgba(255,255,255,.3) !important; background: transparent !important; }
+
+.rvHerramientas { display: flex; gap: 2px; padding: 8px 6px; overflow-x: auto; scrollbar-width: none; }
+.rvHerramientas::-webkit-scrollbar { display: none; }
+.rvHerramienta { flex: 1 0 auto; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 66px; padding: 6px 8px; border: 0; border-radius: 10px; background: transparent; font-size: 12.5px; color: rgba(255,255,255,.88) !important; white-space: nowrap; }
+.rvHerramienta:hover:not(:disabled) { background: rgba(255,255,255,.08); }
+.rvHerramienta.activa { background: var(--accentRelleno, #e2e800); color: var(--sobreAccent, #141414) !important; }
+
+.rvFiltros { padding: 8px 0 4px; background: #111; }
+.rvFiltrosLista { display: flex; gap: 10px; padding: 2px 14px 8px; overflow-x: auto; }
+.rvFiltrosLista > button { flex: none; display: flex; flex-direction: column; align-items: center; gap: 6px; width: 92px; padding: 0; border: 0; background: transparent; font-size: 12.5px; color: rgba(255,255,255,.8) !important; }
+.rvFiltrosLista > button.activo { color: #fff !important; font-weight: 600; }
+.rvFiltroVista { display: grid; place-items: center; width: 92px; height: 108px; overflow: hidden; border-radius: 4px; background: #2b2b2b; outline: 3px solid transparent; outline-offset: 1px; }
+.rvFiltrosLista > button.activo .rvFiltroVista { outline-color: var(--accentRelleno, #e2e800); }
+.rvFiltroVista canvas { display: block; max-width: 100%; max-height: 100%; opacity: 0; transition: opacity .15s; }
+.rvFiltroVista canvas.lista { opacity: 1; }
+.rvFiltrosPie { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; padding: 2px 14px 6px; }
+.rvFiltrosPie button { padding: 8px 14px; border: 1px solid rgba(255,255,255,.25); border-radius: 99px; background: transparent; font-size: 13.5px; }
+.rvFiltrosPie .rvListo { border-color: transparent; background: var(--accentRelleno, #e2e800); color: var(--sobreAccent, #141414) !important; font-weight: 600; }
+
+.rvPantalla .rvPie { background: transparent; color: #f2f2f2; border: 0; margin: 0; }
+.rvPie { display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 8px 14px 12px; }
+.rvRedondo { display: inline-grid; place-items: center; flex: none; width: 50px; height: 50px; padding: 0; border: 2px solid rgba(255,255,255,.85); border-radius: 50%; background: transparent; }
+.rvGuardar { display: flex; flex: 1; max-width: 340px; min-width: 0; height: 50px; border-radius: 99px; overflow: hidden; background: var(--accentRelleno, #e2e800); }
+.rvGuardar button { border: 0; background: transparent; color: var(--sobreAccent, #141414) !important; font-weight: 700; }
+.rvGuardar button:first-child { flex: 1; min-width: 0; padding: 0 10px; font-size: 16px; }
+.rvGuardar button:last-child { display: inline-grid; place-items: center; width: 50px; padding: 0; border-left: 1px solid color-mix(in srgb, var(--sobreAccent, #141414) 30%, transparent); }
+
+.rvFondo { position: absolute; inset: 0; z-index: 2; display: flex; align-items: flex-end; justify-content: center; background: rgba(0,0,0,.55); }
+.rvCentro { align-items: center; }
+.rvHoja { display: flex; flex-direction: column; gap: 10px; width: min(460px, 100%); padding: 18px 16px calc(16px + env(safe-area-inset-bottom)); border-radius: 16px 16px 0 0; background: #1e1e1e; }
+.rvHoja p { margin: 0; color: rgba(255,255,255,.75); font-size: 14px; }
+.rvHoja label { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 14.5px; color: #f2f2f2; }
+.rvHoja select { width: auto; background: #2b2b2b; color: #fff; border-color: rgba(255,255,255,.2); }
+.rvHoja .rvCheck { justify-content: flex-start; }
+.rvHoja > button { padding: 12px 14px; border: 1px solid rgba(255,255,255,.18); border-radius: 10px; background: rgba(255,255,255,.05); font-size: 14.5px; text-align: left; }
+.rvHojaBotones { display: flex; justify-content: flex-end; gap: 8px; }
+.rvHojaBotones button { padding: 10px 16px; border: 1px solid rgba(255,255,255,.2); border-radius: 10px; background: transparent; }
+.rvHojaBotones .rvPeligro { border-color: transparent; background: #d93a3a; color: #fff !important; font-weight: 600; }
+.rvProceso { display: flex; flex-direction: column; gap: 10px; width: min(320px, 86%); padding: 18px; border-radius: 14px; background: #1e1e1e; text-align: center; }
+.rvProceso progress { width: 100%; accent-color: var(--accentRelleno, #e2e800); }
+
+@media (min-width: 900px) {
+  .rvHerramientas { justify-content: center; }
+  .rvHerramienta { flex: 0 0 auto; min-width: 84px; }
+  .rvMiniaturas { justify-content: center; }
+  .rvFiltrosLista { justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) { .rvEscena canvas, .rvFiltroVista canvas { transition: none; } }

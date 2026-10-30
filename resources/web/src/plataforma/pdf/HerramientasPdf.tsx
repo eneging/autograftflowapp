@@ -10,8 +10,9 @@ import {
   abrirPdf, armarPdf, descargar, fotosAPdf, hojasDe, nuevoId, MAX_BYTES,
   type ArchivoPdf, type Foto, type Hoja, type TamanoHoja, type VistaPdf,
 } from "./operaciones";
-import { aBlobUrl, cargarImagen, detectarBordes, distancia, enderezar, esToda, vistaPrevia, FILTROS, TODA, type Esquinas, type Filtro } from "./escaner";
+import { aBlobUrl, cargarImagen, detectarBordes, distancia, enderezar, esToda, TODA, type Esquinas, type Filtro } from "./escaner";
 import { CamaraEscaner, EditorPagina, type Captura } from "./EscanerCamara";
+import { RevisionEscaneo } from "./RevisionEscaneo";
 import "./herramientas-pdf.css";
 
 /**
@@ -21,6 +22,14 @@ import "./herramientas-pdf.css";
 export function HerramientasPdf() {
   const { herramienta } = useParams();
   const actual = HERRAMIENTAS.find((h) => h.id === herramienta) ?? HERRAMIENTAS[0];
+  // Al elegir una herramienta (aquí, en el panel o en favoritos) se baja hasta su apartado: la cinta sigue arriba, a la mano.
+  const seccion = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!herramienta) return;
+    const quieto = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const t = setTimeout(() => seccion.current?.scrollIntoView({ behavior: quieto ? "auto" : "smooth", block: "start" }), 80);
+    return () => clearTimeout(t);
+  }, [herramienta]);
   return (
     <div className="hpPagina">
       <header className="card hpCabecera">
@@ -41,7 +50,7 @@ export function HerramientasPdf() {
         </nav>
         <p className="hpPrivado">🔒 Tus archivos se procesan en este dispositivo: no se suben a ningún servidor. Solo si eliges «Preparar para firmar» el resultado se guarda en tus documentos.</p>
       </header>
-      <section className="hpIntro">
+      <section ref={seccion} className="hpIntro">
         <h2 className={actual.especial ? "especial" : undefined}><span className="hpIcono"><IconoHerramienta id={actual.id} /></span><span className={actual.especial ? "hrNombreEspecial" : undefined}>{actual.nombre}</span>{actual.especial && <EtiquetaNueva />}<BotonFavorito acceso={`pdf:${actual.id}`} conTexto className="hpIntroFavorito" /></h2>
         <p>{actual.resumen}</p>
       </section>
@@ -513,30 +522,8 @@ function Ordenar() {
 
 const liberar = (f: Foto) => { URL.revokeObjectURL(f.url); if (f.original !== f.url) URL.revokeObjectURL(f.original); };
 
-/** Miniatura de una página escaneada con su filtro ya aplicado (es lo que saldrá en el PDF). */
-function MiniFoto({ foto, alt }: { foto: Foto; alt: string }) {
-  const lienzo = useRef<HTMLCanvasElement>(null);
-  const [lista, setLista] = useState(false);
-  useEffect(() => {
-    let vivo = true;
-    setLista(false);
-    vistaPrevia(foto.url, foto.filtro).then((c) => {
-      const d = lienzo.current;
-      if (!vivo || !d) return;
-      d.width = c.width;
-      d.height = c.height;
-      d.getContext("2d")!.drawImage(c, 0, 0);
-      setLista(true);
-    }).catch(() => {});
-    return () => { vivo = false; };
-  }, [foto.url, foto.filtro]);
-  return (
-    <div className="hpMini">
-      <canvas ref={lienzo} role="img" aria-label={alt} className={lista ? "lista" : ""} style={{ transform: foto.giro ? `rotate(${foto.giro}deg)` : undefined }} />
-      {!lista && <span className="hpMiniCargando" aria-hidden />}
-    </div>
-  );
-}
+/** «Escaneo 30 oct 2026», como nombre inicial del PDF. */
+const nombreEscaneo = () => `Escaneo ${new Intl.DateTimeFormat("es", { day: "numeric", month: "short", year: "numeric" }).format(new Date()).replace(/\./g, "").replace(/ de /g, " ")}`;
 
 function Escanear() {
   const e = usarEntrega();
@@ -544,10 +531,13 @@ function Escanear() {
   const [filtro, setFiltro] = useState<Filtro>("color");
   const [tamano, setTamano] = useState<TamanoHoja>("a4");
   const [margen, setMargen] = useState(true);
+  const [titulo, setTitulo] = useState(nombreEscaneo);
   const [error, setError] = useState("");
   const [camara, setCamara] = useState(false);
   const [editando, setEditando] = useState<Foto | null>(null);
   const [procesando, setProcesando] = useState(0);
+  // «Repetir»: la próxima foto reemplaza a esta página.
+  const repetir = useRef<string | null>(null);
   const galeria = useRef<HTMLInputElement>(null);
   const vivas = useRef<Foto[]>([]);
   vivas.current = fotos;
@@ -556,6 +546,15 @@ function Escanear() {
 
   const agregar = (c: Captura, nombre = `pagina-${vivas.current.length + 1}.jpg`) =>
     setFotos((fs) => [...fs, { id: nuevoId("f"), nombre, giro: 0, filtro, ...c }]);
+  function alCapturar(c: Captura) {
+    const id = repetir.current;
+    if (!id) { agregar(c); return; }
+    repetir.current = null;
+    setCamara(false);
+    const vieja = vivas.current.find((f) => f.id === id);
+    if (vieja) liberar(vieja);
+    setFotos((fs) => fs.map((f) => (f.id === id ? { ...f, ...c, giro: 0, carnet: c.carnet } : f)));
+  }
   /** Imágenes de la galería: también se busca la hoja en cada una y se endereza (se puede corregir después). */
   async function sumar(lista: File[]) {
     const validas = lista.filter((f) => f.type.startsWith("image/") && f.size <= MAX_BYTES);
@@ -575,28 +574,33 @@ function Escanear() {
       }
     }
   }
-  async function aplicarEdicion(f: Foto, esquinas: Esquinas, nuevo: Filtro) {
+  async function aplicarEdicion(f: Foto, esquinas: Esquinas) {
     setEditando(null);
-    if (distancia(esquinas, f.esquinas) < 1e-4) { setFotos((fs) => fs.map((x) => (x.id === f.id ? { ...x, filtro: nuevo } : x))); return; }
+    if (distancia(esquinas, f.esquinas) < 1e-4) return;
     setProcesando((n) => n + 1);
     try {
       const url = esToda(esquinas) ? f.original : await aBlobUrl(enderezar(await cargarImagen(f.original), esquinas));
       if (f.url !== f.original) URL.revokeObjectURL(f.url);
-      setFotos((fs) => fs.map((x) => (x.id === f.id ? { ...x, esquinas, url, filtro: nuevo } : x)));
+      setFotos((fs) => fs.map((x) => (x.id === f.id ? { ...x, esquinas, url } : x)));
     } catch { setError("No se pudo recortar la página."); }
     finally { setProcesando((n) => n - 1); }
   }
   const quitarFoto = (i: number) => { liberar(fotos[i]); setFotos((fs) => fs.filter((_, k) => k !== i)); };
-  const filtroTodas = (f: Filtro) => { setFiltro(f); setFotos((fs) => fs.map((x) => ({ ...x, filtro: f }))); };
-  const fecha = new Date().toISOString().slice(0, 10);
-  const nombre = `escaneo-${fecha}.pdf`;
+  const nombre = `${titulo.replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim() || "Escaneo"}.pdf`;
   const armar = () => e.hacer("Creando el PDF…", (av) => fotosAPdf(fotos, { tamano, margen }, av));
+  /** Compartir el PDF con otra app (correo, WhatsApp…), donde el navegador lo permite. */
+  const puedeCompartir = typeof navigator.canShare === "function" && navigator.canShare({ files: [new File([], "a.pdf", { type: "application/pdf" })] });
+  async function compartir() {
+    const b = await armar();
+    if (!b) return;
+    try { await navigator.share({ files: [new File([b as BlobPart], nombre, { type: "application/pdf" })], title: nombre }); }
+    catch (x) { if ((x as Error)?.name !== "AbortError") setError("No se pudo compartir. Usa «Guardar PDF»."); }
+  }
 
   const capas = <>
     <input ref={galeria} type="file" accept="image/*" multiple hidden onChange={(ev) => { sumar([...(ev.target.files ?? [])]); ev.target.value = ""; }} />
-    {camara && <CamaraEscaner paginas={fotos.length} ultima={fotos.at(-1)?.url} alCapturar={(c) => agregar(c)} alGaleria={sumar} alTerminar={() => setCamara(false)} />}
-    {editando && <EditorPagina original={editando.original} esquinas={editando.esquinas} filtro={editando.filtro} carnet={editando.carnet}
-      alAplicar={(esq, f) => aplicarEdicion(editando, esq, f)} alCancelar={() => setEditando(null)} />}
+    {camara && <CamaraEscaner paginas={fotos.length} ultima={fotos.at(-1)?.url} alCapturar={alCapturar} alGaleria={sumar} alTerminar={() => { repetir.current = null; setCamara(false); }} alPendientes={(d) => setProcesando((n) => n + d)} />}
+    {editando && <EditorPagina original={editando.original} esquinas={editando.esquinas} alAplicar={(esq) => aplicarEdicion(editando, esq)} alCancelar={() => setEditando(null)} />}
   </>;
   if (!fotos.length) return <>
     <div className="card hpZona hpZonaEscaner" onDragOver={(ev) => ev.preventDefault()} onDrop={(ev) => { ev.preventDefault(); sumar([...ev.dataTransfer.files]); }}>
@@ -611,53 +615,21 @@ function Escanear() {
     <Avisos errores={[error]} proceso={null} />
     {capas}
   </>;
-  const todasIguales = fotos.every((f) => f.filtro === fotos[0].filtro) ? fotos[0].filtro : null;
-  return (
-    <section className="card hpTrabajo">
-      <div className="hpBarra">
-        <strong>{fotos.length} página{fotos.length === 1 ? "" : "s"}{procesando ? " · procesando…" : ""}</strong>
-        <span className="small">Toca una página para recortarla o cambiar su filtro. Arrastra para ordenar.</span>
-        <span className="hpBarraBotones">
-          <button type="button" className="primary" onClick={() => setCamara(true)}>📷 Escanear más</button>
-          <button type="button" onClick={() => galeria.current?.click()}>🖼️ Agregar imágenes</button>
-          <button type="button" onClick={() => { fotos.forEach(liberar); setFotos([]); }}>Empezar de nuevo</button>
-        </span>
-      </div>
-      <div className="hpOpcionesFila">
-        <span className="hpFiltros" role="radiogroup" aria-label="Filtro para todas las páginas">
-          <span className="small">Filtro:</span>
-          {FILTROS.map((f) => <button key={f.id} type="button" role="radio" aria-checked={todasIguales === f.id} className={todasIguales === f.id ? "activo" : ""} onClick={() => filtroTodas(f.id)}>{f.nombre}</button>)}
-        </span>
-        <label className="hpCampoCorto">Tamaño de hoja
-          <select value={tamano} onChange={(ev) => setTamano(ev.target.value as TamanoHoja)}><option value="a4">A4</option><option value="carta">Carta</option><option value="imagen">Igual a la foto</option></select>
-        </label>
-        {tamano !== "imagen" && <label className="hpCheck"><input type="checkbox" checked={margen} onChange={(ev) => setMargen(ev.target.checked)} /> Margen</label>}
-      </div>
-      <ol className="hpCuadricula">
-        {fotos.map((f, i) => (
-          <li key={f.id} className={`hpHoja movible ${sobre === i ? "hpSobre" : ""}`} {...props(i)}>
-            <button type="button" className="hpHojaVista" onClick={() => setEditando(f)} aria-label={`Editar página ${i + 1}`}>
-              <MiniFoto foto={f} alt={`Página ${i + 1}`} />
-              {f.carnet && <span className="hpEtiqueta">Carnet</span>}
-            </button>
-            <div className="hpHojaPie">
-              <span className="hpNumero">{i + 1}</span>
-              <span className="hpMiniBotones">
-                <button type="button" aria-label="Mover antes" disabled={i === 0} onClick={() => setFotos((fs) => mover(fs, i, i - 1))}>←</button>
-                <button type="button" aria-label="Girar a la izquierda" onClick={() => setFotos((fs) => fs.map((x, k) => (k === i ? { ...x, giro: (x.giro + 270) % 360 } : x)))}>⟲</button>
-                <button type="button" aria-label="Girar a la derecha" onClick={() => setFotos((fs) => fs.map((x, k) => (k === i ? { ...x, giro: (x.giro + 90) % 360 } : x)))}>⟳</button>
-                <button type="button" aria-label="Mover después" disabled={i === fotos.length - 1} onClick={() => setFotos((fs) => mover(fs, i, i + 1))}>→</button>
-                <button type="button" aria-label="Quitar" onClick={() => quitarFoto(i)}>✕</button>
-              </span>
-            </div>
-          </li>
-        ))}
-      </ol>
-      <Avisos errores={[error, e.error]} proceso={e.proceso} />
-      <Acciones listo={fotos.length > 0 && !procesando} motivo={procesando ? "Procesando páginas…" : `Resultado: un PDF de ${fotos.length} página${fotos.length === 1 ? "" : "s"}.`}
-        textoDescargar="Crear PDF y descargar" alDescargar={async () => { const b = await armar(); if (b) descargar(b, nombre); }}
-        alFirmar={async () => { const b = await armar(); if (b) e.firmar(b, nombre); }} />
-      {capas}
-    </section>
-  );
+  return <>
+    <RevisionEscaneo
+      fotos={fotos} procesando={procesando} nombre={titulo} tamano={tamano} margen={margen} proceso={e.proceso} error={error || e.error} tapada={camara || !!editando}
+      arrastre={props} sobre={sobre} alNombre={setTitulo} alTamano={setTamano} alMargen={setMargen}
+      alFiltro={(i, f) => { setFiltro(f); setFotos((fs) => fs.map((x, k) => (k === i ? { ...x, filtro: f } : x))); }}
+      alFiltroTodas={(f) => { setFiltro(f); setFotos((fs) => fs.map((x) => ({ ...x, filtro: f }))); }}
+      alRotar={(i) => setFotos((fs) => fs.map((x, k) => (k === i ? { ...x, giro: (x.giro + 90) % 360 } : x)))}
+      alMover={(d, h) => setFotos((fs) => mover(fs, d, h))} alEliminar={quitarFoto}
+      alRepetir={(i) => { repetir.current = fotos[i].id; setCamara(true); }} alRecortar={(i) => setEditando(fotos[i])}
+      alEscanearMas={() => setCamara(true)} alGaleria={() => galeria.current?.click()}
+      alGuardar={async () => { const b = await armar(); if (b) descargar(b, nombre); }}
+      alFirmar={async () => { const b = await armar(); if (b) e.firmar(b, nombre); }}
+      alCompartir={puedeCompartir ? compartir : undefined}
+      alDescartar={() => { fotos.forEach(liberar); setFotos([]); setTitulo(nombreEscaneo()); }}
+    />
+    {capas}
+  </>;
 }
