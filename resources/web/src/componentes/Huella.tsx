@@ -92,7 +92,7 @@ export function ConsejosHuella({ dedo, alEmpezar }: { dedo: { mano: Mano; dedo: 
 
 const OVALO = 1.3; // alto / ancho de la guía
 
-const cargarImagen = (archivo: File) => new Promise<HTMLImageElement>((ok, mal) => {
+export const cargarImagen = (archivo: File) => new Promise<HTMLImageElement>((ok, mal) => {
   const url = URL.createObjectURL(archivo), i = new Image();
   i.onload = () => { URL.revokeObjectURL(url); ok(i); };
   i.onerror = () => { URL.revokeObjectURL(url); mal(new Error("No se pudo abrir la imagen.")); };
@@ -119,7 +119,7 @@ function enGris(im: HTMLImageElement | HTMLCanvasElement) {
   return c;
 }
 
-function girar(src: HTMLCanvasElement) {
+export function girar(src: HTMLCanvasElement) {
   const c = document.createElement("canvas");
   c.width = src.height; c.height = src.width;
   const x = c.getContext("2d")!;

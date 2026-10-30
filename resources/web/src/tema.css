@@ -716,6 +716,32 @@ header.authHeader { background: transparent; border: 0; padding: 0; justify-cont
 .fpFitOptRow input[type=range] { accent-color: var(--accent); }
 .fpFitActions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .fpFitActions button { min-height: 38px; }
+/* Recorte de la foto de una firma o un sello */
+.rfPantalla { position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column; background: #14161c; }
+.rfAviso { padding: 10px 16px; text-align: center; font-size: 13.5px; background: var(--fondo); color: var(--ink); }
+/* El margen deja sitio para agarrar las asas cuando el marco llega al borde de la foto. */
+.rfEscena { flex: 1; min-height: 0; margin: 24px; display: flex; align-items: center; justify-content: center; }
+.rfFoto { position: relative; flex: none; }
+.rfFoto img { display: block; width: 100%; height: 100%; user-select: none; -webkit-user-select: none; }
+.rfSombra { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.rfSombra div { position: absolute; box-shadow: 0 0 0 9999px rgba(8,10,18,.62); }
+.rfMarco { position: absolute; box-sizing: border-box; border: 2px solid #fff; outline: 1px solid rgba(0,0,0,.45); cursor: move; touch-action: none; }
+/* Cada asa es una zona amplia para el dedo; lo visible es su ::after. */
+.rfAsa { position: absolute; touch-action: none; }
+.rfAsa::after { content: ""; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: #fff; border: 1.5px solid var(--accent); border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.5); }
+.rfAsa-n, .rfAsa-s { left: 18px; right: 18px; height: 36px; cursor: ns-resize; }
+.rfAsa-e, .rfAsa-o { top: 18px; bottom: 18px; width: 36px; cursor: ew-resize; }
+.rfAsa-n { top: -18px; } .rfAsa-s { bottom: -18px; } .rfAsa-e { right: -18px; } .rfAsa-o { left: -18px; }
+.rfAsa-n::after, .rfAsa-s::after { width: 30px; height: 9px; }
+.rfAsa-e::after, .rfAsa-o::after { width: 9px; height: 30px; }
+.rfAsa-no, .rfAsa-ne, .rfAsa-so, .rfAsa-se { width: 44px; height: 44px; z-index: 1; }
+.rfAsa-no::after, .rfAsa-ne::after, .rfAsa-so::after, .rfAsa-se::after { width: 17px; height: 17px; border-radius: 50%; }
+.rfAsa-no { left: -22px; top: -22px; cursor: nwse-resize; } .rfAsa-se { right: -22px; bottom: -22px; cursor: nwse-resize; }
+.rfAsa-ne { right: -22px; top: -22px; cursor: nesw-resize; } .rfAsa-so { left: -22px; bottom: -22px; cursor: nesw-resize; }
+.rfHerramientas, .rfPie { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; padding: 10px 16px; background: var(--fondo); border-top: 1px solid var(--line); }
+.rfHerramientas button { flex: 1; min-width: 0; font-size: 13px; padding: 10px 6px; }
+.rfPie button { min-height: 44px; }
+.rfPie .primary { flex: 1; max-width: 340px; }
 .fpTipsCard h2 { font-size: 19px; }
 .fpTipsCard ol { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; font-size: 14.5px; line-height: 1.5; }
 .fpTipsNote { font-size: 13.5px; line-height: 1.5; background: var(--azulBg); color: var(--azulInk); border: 0; border-radius: 6px; padding: 10px 12px; }

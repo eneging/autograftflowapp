@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import SignaturePad from "signature_pad";
 import type { Dedo, Mano } from "../../../shared/plataforma";
-import { ConsejosHuella, EncajarHuella } from "./Huella";
+import { girarRecorte, type Recorte } from "../../../shared/firmaImagen";
+import { ConsejosHuella, EncajarHuella, girar } from "./Huella";
 import { textoDedoEn, usarIdioma, usarT } from "./idioma";
+import { cargarFoto, pngSinRetoques, recortar, RecortarFirma } from "./RecortarFirma";
 
 export type TipoImagen = "firma" | "sello" | "huella";
 const TEXTOS: Record<TipoImagen, { nombre: string; marca: string; aviso: string }> = {
@@ -27,6 +29,8 @@ interface Props {
   dedo?: { mano: Mano; dedo: Dedo } | null;
 }
 
+interface FotoRecortable { lienzo: HTMLCanvasElement; recorte: Recorte | null }
+
 /** Pantalla completa de firma: dibujar, subir una imagen o fotografiar la firma en papel. */
 export function PantallaFirma({ titulo, tipo = "firma", inicial, alTerminar, alCerrar, bloquearDibujo = false, bloquearSello = false, dedo = null }: Props) {
   const t = usarT(), idioma = usarIdioma();
@@ -40,6 +44,9 @@ export function PantallaFirma({ titulo, tipo = "firma", inicial, alTerminar, alC
   const lienzo = useRef<HTMLCanvasElement>(null);
   const pad = useRef<SignaturePad | null>(null);
   const [imagen, setImagen] = useState<string | null>(null); // firma subida o fotografiada
+  // Foto original de la imagen actual (para volver a ajustar el recorte) y foto abierta en el recorte.
+  const [foto, setFoto] = useState<FotoRecortable | null>(null);
+  const [recortando, setRecortando] = useState<FotoRecortable | null>(null);
   const [hayTrazo, setHayTrazo] = useState(false);
   const [aviso, setAviso] = useState(
     sinDibujo ? t("Este documento requiere tu firma real: fírmala en papel y tómale una foto, o sube una imagen de tu firma.")
@@ -84,7 +91,22 @@ export function PantallaFirma({ titulo, tipo = "firma", inicial, alTerminar, alC
     pad.current?.clear();
     setHayTrazo(false);
     setImagen(null);
+    setFoto(null);
   };
+
+  function ponerImagen(png: string, deFoto: FotoRecortable | null) {
+    setImagen(png);
+    setFoto(deFoto);
+    pad.current?.clear();
+    setHayTrazo(false);
+    setConfeccionando(false);
+  }
+
+  /** Gira la imagen y, si viene de una foto, también la foto y su recorte: al volver a ajustarla sigue igual. */
+  async function girarTodo() {
+    setImagen(await girarImagen(imagen!));
+    if (foto) setFoto({ lienzo: girar(foto.lienzo), recorte: foto.recorte && girarRecorte(foto.recorte) });
+  }
 
   async function alElegirArchivo(archivo?: File) {
     if (!archivo) return;
@@ -92,11 +114,14 @@ export function PantallaFirma({ titulo, tipo = "firma", inicial, alTerminar, alC
     if (tipo === "huella") { setFotoHuella(archivo); return; }
     setAviso(t("Procesando la imagen…"));
     try {
-      setImagen(await limpiarImagenFirma(archivo));
-      pad.current?.clear();
-      setHayTrazo(false);
-      setConfeccionando(false);
-      setAviso(t(tipo === "firma" ? "Listo: se recortó la imagen y se quitó el fondo. Si no se ve bien, prueba con otra foto o dibújala." : "Listo: se recortó la imagen y se quitó el fondo. Si no se ve bien, prueba con otra foto."));
+      // Un PNG ya viene preparado: se usa tal cual. Una foto pasa por el recorte y la limpieza.
+      if (archivo.type === "image/png") {
+        ponerImagen(await pngSinRetoques(archivo), null);
+        setAviso(t("Imagen PNG lista: se usa tal cual, sin retoques."));
+      } else {
+        setRecortando({ lienzo: await cargarFoto(archivo), recorte: null });
+        setAviso(t(txt.aviso));
+      }
     } catch {
       setAviso(t("No se pudo leer la imagen. Prueba con otra."));
     }
@@ -131,17 +156,18 @@ export function PantallaFirma({ titulo, tipo = "firma", inicial, alTerminar, alC
             <div className="smLabel">{t("Vista previa")}</div>
             <div className="smPreviewWrap">{textoSello.trim() ? <img src={dibujarSello(textoSello)} alt={t("Vista previa del sello")} /> : <span className="afExtraHint">{t("Escribe para ver tu sello")}</span>}</div>
             <div className="row smActions">
-              <button type="button" className="success" disabled={!textoSello.trim()} onClick={() => { setImagen(dibujarSello(textoSello)); setConfeccionando(false); setAviso(t("Sello listo.")); }}>{t("✓ Usar este sello")}</button>
+              <button type="button" className="success" disabled={!textoSello.trim()} onClick={() => { ponerImagen(dibujarSello(textoSello), null); setAviso(t("Sello listo.")); }}>{t("✓ Usar este sello")}</button>
             </div>
           </div>
         )}
       </div>
       <div className="methods">
-        {tipo === "firma" && !sinDibujo && <button type="button" className={!imagen ? "primary" : ""} onClick={() => setImagen(null)}>{t("✍️ Dibujar")}</button>}
+        {tipo === "firma" && !sinDibujo && <button type="button" className={!imagen ? "primary" : ""} onClick={() => { setImagen(null); setFoto(null); }}>{t("✍️ Dibujar")}</button>}
         {conConfeccion && <button type="button" className={confeccionando ? "primary" : ""} onClick={() => setConfeccionando(true)}>{t("✍️ Confeccionar sello")}</button>}
         <button type="button" onClick={() => subir.current?.click()}>{t(`🖼️ Subir ${tipo === "firma" ? "firma PNG" : txt.nombre}`)}</button>
         <button type="button" onClick={() => camara.current?.click()}>{t(`📷 Fotografiar ${txt.nombre}`)}</button>
-        {imagen && tipo !== "huella" && <button type="button" title={t("Si la foto salió de lado o de cabeza")} onClick={async () => setImagen(await girarImagen(imagen))}>{t("↻ Girar 90°")}</button>}
+        {imagen && foto && <button type="button" onClick={() => setRecortando(foto)}>{t("✂️ Ajustar recorte")}</button>}
+        {imagen && tipo !== "huella" && <button type="button" title={t("Si la foto salió de lado o de cabeza")} onClick={girarTodo}>{t("↻ Girar 90°")}</button>}
         <input ref={subir} type="file" accept="image/png,image/jpeg" hidden onChange={(e) => { alElegirArchivo(e.target.files?.[0]); e.target.value = ""; }} />
         <input ref={camara} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { alElegirArchivo(e.target.files?.[0]); e.target.value = ""; }} />
       </div>
@@ -150,6 +176,14 @@ export function PantallaFirma({ titulo, tipo = "firma", inicial, alTerminar, alC
         <button type="button" onClick={borrar} disabled={!hayTrazo && !imagen}>{t(`Borrar ${txt.nombre}`)}</button>
         <button type="button" className="primary" onClick={continuar}>{t("✓ Continuar")}</button>
       </div>
+      {recortando && tipo !== "huella" && (
+        <RecortarFirma foto={recortando.lienzo} recorte={recortando.recorte} tipo={tipo} alCancelar={() => setRecortando(null)}
+          alUsar={(png, lienzo, recorte) => {
+            ponerImagen(png, { lienzo, recorte });
+            setRecortando(null);
+            setAviso(t(tipo === "firma" ? "Listo: se recortó la imagen y se quitó el fondo. Si no se ve bien, ajusta el recorte, prueba con otra foto o dibújala." : "Listo: se recortó la imagen y se quitó el fondo. Si no se ve bien, ajusta el recorte o prueba con otra foto."));
+          }} />
+      )}
       {consejos && <ConsejosHuella dedo={dedo} alEmpezar={() => setConsejos(false)} />}
       {fotoHuella && (
         <EncajarHuella archivo={fotoHuella} alCancelar={() => setFotoHuella(null)}
@@ -157,82 +191,6 @@ export function PantallaFirma({ titulo, tipo = "firma", inicial, alTerminar, alC
       )}
     </div>
   );
-}
-
-/** Recorta el espacio vacío alrededor de lo dibujado y limita el tamaño del PNG. */
-function recortar(origen: HTMLCanvasElement, margen = 6): string {
-  const ctx = origen.getContext("2d")!;
-  const { width: w, height: h } = origen;
-  const px = ctx.getImageData(0, 0, w, h).data;
-  let x1 = w, y1 = h, x2 = -1, y2 = -1;
-  for (let y = 0; y < h; y++)
-    for (let x = 0; x < w; x++)
-      if (px[(y * w + x) * 4 + 3] > 10) {
-        if (x < x1) x1 = x; if (x > x2) x2 = x; if (y < y1) y1 = y; if (y > y2) y2 = y;
-      }
-  if (x2 < 0) return origen.toDataURL("image/png");
-  x1 = Math.max(0, x1 - margen); y1 = Math.max(0, y1 - margen); x2 = Math.min(w - 1, x2 + margen); y2 = Math.min(h - 1, y2 + margen);
-  const k = Math.min(1, 900 / (x2 - x1 + 1));
-  const out = document.createElement("canvas");
-  out.width = Math.max(1, Math.round((x2 - x1 + 1) * k));
-  out.height = Math.max(1, Math.round((y2 - y1 + 1) * k));
-  out.getContext("2d")!.drawImage(origen, x1, y1, x2 - x1 + 1, y2 - y1 + 1, 0, 0, out.width, out.height);
-  return out.toDataURL("image/png");
-}
-
-/**
- * Convierte la foto de una firma en papel en tinta sobre fondo transparente:
- * separa tinta y papel con el umbral de Otsu, quita el fondo y recorta.
- */
-async function limpiarImagenFirma(archivo: File): Promise<string> {
-  const url = URL.createObjectURL(archivo);
-  try {
-    const img = await new Promise<HTMLImageElement>((ok, mal) => {
-      const i = new Image();
-      i.onload = () => ok(i);
-      i.onerror = mal;
-      i.src = url;
-    });
-    const k = Math.min(1, 1400 / Math.max(img.naturalWidth, img.naturalHeight));
-    const c = document.createElement("canvas");
-    c.width = Math.round(img.naturalWidth * k);
-    c.height = Math.round(img.naturalHeight * k);
-    const ctx = c.getContext("2d", { willReadFrequently: true })!;
-    ctx.drawImage(img, 0, 0, c.width, c.height);
-    const datos = ctx.getImageData(0, 0, c.width, c.height);
-    const px = datos.data, n = c.width * c.height;
-    const gris = new Uint8Array(n), hist = new Array(256).fill(0);
-    for (let i = 0; i < n; i++) {
-      const a = px[i * 4 + 3] / 255;
-      // Lo transparente cuenta como papel blanco.
-      const g = Math.round((0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2]) * a + 255 * (1 - a));
-      gris[i] = g;
-      hist[g]++;
-    }
-    let suma = 0, sumaB = 0, pesoB = 0, mejor = 0, umbral = 160;
-    for (let t = 0; t < 256; t++) suma += t * hist[t];
-    for (let t = 0; t < 256; t++) {
-      pesoB += hist[t];
-      if (!pesoB) continue;
-      const pesoF = n - pesoB;
-      if (!pesoF) break;
-      sumaB += t * hist[t];
-      const mB = sumaB / pesoB, mF = (suma - sumaB) / pesoF, v = pesoB * pesoF * (mB - mF) ** 2;
-      if (v > mejor) { mejor = v; umbral = t; }
-    }
-    for (let i = 0; i < n; i++) {
-      const g = gris[i];
-      // Suaviza el borde: cuanto más oscuro respecto al umbral, más opaca la tinta.
-      const alfa = g >= umbral ? 0 : Math.min(255, Math.round(((umbral - g) / Math.max(umbral, 1)) * 255 * 2.2));
-      // Se conserva el color de la tinta (azul, rojo, morado…), algo más intenso.
-      px[i * 4] = Math.round(px[i * 4] * 0.8); px[i * 4 + 1] = Math.round(px[i * 4 + 1] * 0.8); px[i * 4 + 2] = Math.round(px[i * 4 + 2] * 0.8);
-      px[i * 4 + 3] = alfa;
-    }
-    ctx.putImageData(datos, 0, 0);
-    return recortar(c, 8);
-  } finally {
-    URL.revokeObjectURL(url);
-  }
 }
 
 /** Gira una imagen 90° en el sentido del reloj (firma o sello fotografiados de lado). */
