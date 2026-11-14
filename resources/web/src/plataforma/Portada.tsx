@@ -19,7 +19,7 @@ export function PortadaMarco({ children, despues, titular, angosta = false, inic
     <div className={`landing ${inicio ? "landingInicio" : ""}`}>
       <a className="saltarContenido" href="#contenidoPortada">Saltar al contenido</a>
       <nav className="landingNav" aria-label="Navegación principal">
-        <Logo />
+        <Logo animar={30_000} />
         <div className="landingNavDer">
           {inicio && <Link className="navLink soloEscritorio" to="/como-funciona">Cómo funciona</Link>}
           <Link className="navLink soloEscritorio" to="/planes">Planes</Link>

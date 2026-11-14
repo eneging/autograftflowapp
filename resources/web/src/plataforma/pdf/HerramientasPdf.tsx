@@ -588,6 +588,20 @@ function Escanear() {
   const quitarFoto = (i: number) => { liberar(fotos[i]); setFotos((fs) => fs.filter((_, k) => k !== i)); };
   const nombre = `${titulo.replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim() || "Escaneo"}.pdf`;
   const armar = () => e.hacer("Creando el PDF…", (av) => fotosAPdf(fotos, { tamano, margen }, av));
+  /** Un PDF por página, con el mismo título y numerados («Título - 01.pdf»…), juntos en un .zip. */
+  async function guardarSeparadas() {
+    const base = nombre.replace(/\.pdf$/i, "");
+    const cifras = Math.max(2, String(fotos.length).length);
+    const zip = await e.hacer(`Creando ${fotos.length} PDF…`, async (av) => {
+      const partes: { nombre: string; datos: Uint8Array }[] = [];
+      for (const [i, f] of fotos.entries()) {
+        partes.push({ nombre: `${base} - ${String(i + 1).padStart(cifras, "0")}.pdf`, datos: await fotosAPdf([f], { tamano, margen }) });
+        av((i + 1) / fotos.length);
+      }
+      return crearZip(partes);
+    });
+    if (zip) descargar(zip, `${base}.zip`);
+  }
   /** Compartir el PDF con otra app (correo, WhatsApp…), donde el navegador lo permite. */
   const puedeCompartir = typeof navigator.canShare === "function" && navigator.canShare({ files: [new File([], "a.pdf", { type: "application/pdf" })] });
   async function compartir() {
@@ -626,6 +640,7 @@ function Escanear() {
       alRepetir={(i) => { repetir.current = fotos[i].id; setCamara(true); }} alRecortar={(i) => setEditando(fotos[i])}
       alEscanearMas={() => setCamara(true)} alGaleria={() => galeria.current?.click()}
       alGuardar={async () => { const b = await armar(); if (b) descargar(b, nombre); }}
+      alGuardarSeparadas={fotos.length > 1 ? guardarSeparadas : undefined}
       alFirmar={async () => { const b = await armar(); if (b) e.firmar(b, nombre); }}
       alCompartir={puedeCompartir ? compartir : undefined}
       alDescartar={() => { fotos.forEach(liberar); setFotos([]); setTitulo(nombreEscaneo()); }}

@@ -4,6 +4,7 @@ import { formatoFecha } from "../../../shared/calculos";
 import { ETIQUETA_TIPO, TIPOS_IMAGEN, leerDedo, type Evidencias, type Idioma, type Momento, type VistaFirmante } from "../../../shared/plataforma";
 import { enlaceWhatsApp } from "../api";
 import { EncuadrarDni } from "../componentes/Dni";
+import { CamaraEnVivo } from "../componentes/CamaraEnVivo";
 import { EncajarHuella } from "../componentes/Huella";
 import { AvisoPrivacidad } from "../componentes/Marco";
 import { VentanaLegal, VERSION_LEGAL, type TipoLegal } from "../componentes/Legal";
@@ -193,9 +194,12 @@ function Llenar({ v, token, alTerminar }: { v: VistaFirmante; token: string; alT
   const [dni, setDni] = useState<{ frente?: string; reverso?: string }>({});
   const [encuadre, setEncuadre] = useState<{ archivo: File; lado: "frente" | "reverso" } | null>(null);
   const [huellaDni, setHuellaDni] = useState<File | null>(null);
-  const ladoFoto = useRef<"frente" | "reverso">("frente");
-  const fotoCamara = useRef<HTMLInputElement>(null);
-  const fotoSubir = useRef<HTMLInputElement>(null);
+  // Con DNI, las fotos solo se toman con la cámara en vivo (no se pueden subir imágenes guardadas).
+  const [camaraDni, setCamaraDni] = useState<"frente" | "reverso" | null>(null);
+  // Foto del rostro (cámara frontal, en el momento) para la hoja de evidencias.
+  const pedirRostro = v.yo.pedirRostro;
+  const [rostro, setRostro] = useState<string | null>(null);
+  const [camaraRostro, setCamaraRostro] = useState(false);
   const datos = mios.filter((c) => TIPOS_DATO.includes(c.tipo));
   // «Convertir en Flujo» (como el prototipo): primero ve el documento, luego llena sus datos en un formulario guiado y al
   // final firma. Mientras no termine el formulario no aparecen los botones de firma ni los pasos del DNI.
@@ -239,10 +243,6 @@ function Llenar({ v, token, alTerminar }: { v: VistaFirmante; token: string; alT
   const firmaDni = imagenes.find((c) => c.tipo === "firma");
   const huellasDni = imagenes.filter((c) => c.tipo === "huella");
   const dniCompleto = !pedirDni || (!!dni.frente && !!dni.reverso && huellasDni.every(lleno) && (!firmaDni || lleno(firmaDni)));
-  function elegirFoto(lado: "frente" | "reverso", camara: boolean) {
-    ladoFoto.current = lado;
-    (camara ? fotoCamara : fotoSubir).current?.click();
-  }
   const irA = (c: Campo) => { setPagina(c.pagina); setTimeout(() => document.querySelector(`[data-campo="${c.id}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" }), 120); };
   const abrir = (c: Campo) => {
     irA(c);
@@ -257,6 +257,11 @@ function Llenar({ v, token, alTerminar }: { v: VistaFirmante; token: string; alT
   };
 
   function revisar() {
+    if (pedirRostro && !rostro) {
+      alert(t("Falta la foto de tu rostro: tómala con la cámara antes de continuar."));
+      document.querySelector(".pasosRostro")?.scrollIntoView({ block: "start", behavior: "smooth" });
+      return;
+    }
     if (!dniCompleto) {
       const falta = !dni.frente ? "el frente del DNI" : firmaDni && !lleno(firmaDni) ? "la foto de tu firma" : !dni.reverso ? "el reverso del DNI" : "el ajuste de la huella";
       alert(t("Completa los pasos del DNI: falta {falta}.", { falta: t(falta) }));
@@ -281,6 +286,7 @@ function Llenar({ v, token, alTerminar }: { v: VistaFirmante; token: string; alT
     try {
       const evidencias: Evidencias = { momentos: momentos.current };
       if (pedirDni && dni.frente && dni.reverso) evidencias.dni = { frente: dni.frente, reverso: dni.reverso };
+      if (pedirRostro && rostro) evidencias.rostro = rostro;
       if (v.documento.certificado) evidencias.ubicacion = await pedirUbicacion();
       // Último cálculo con los datos definitivos (si el entorno del PDF no carga, se envía sin cálculos).
       const calculos = await calcular().catch(() => calculo);
@@ -374,8 +380,8 @@ function Llenar({ v, token, alTerminar }: { v: VistaFirmante; token: string; alT
                 datos: [t("mi firma"), imagenes.some((c) => c.tipo === "sello") && t("mi sello"), t("los datos que llené"), t("la fecha y hora"), t("mi IP y mi dispositivo")].filter(Boolean).join(", ")
                   + (v.documento.certificado ? `,${t(" y mi ubicación solo si la autorizo en mi navegador")}` : ""),
               })}
-              {(pedirDni || imagenes.some((c) => c.tipo === "huella")) && <> {t("Doy mi")} <b>{t("consentimiento expreso")}</b> {t("para el tratamiento de mis datos sensibles: {datos}, solo como imagen dentro de este documento.", {
-                datos: [imagenes.some((c) => c.tipo === "huella") && t("mi huella dactilar"), pedirDni && t("las fotos de mi documento de identidad")].filter(Boolean).join(t(" y ")),
+              {(pedirDni || pedirRostro || imagenes.some((c) => c.tipo === "huella")) && <> {t("Doy mi")} <b>{t("consentimiento expreso")}</b> {t("para el tratamiento de mis datos sensibles: {datos}, solo como imagen dentro de este documento.", {
+                datos: [imagenes.some((c) => c.tipo === "huella") && t("mi huella dactilar"), pedirDni && t("las fotos de mi documento de identidad"), pedirRostro && t("la foto de mi rostro")].filter(Boolean).join(t(" y ")),
               })}</>}
             </p>
             <div className="small">{t("Léelos aquí:")} <a href="#" onClick={(e) => { e.preventDefault(); setLegal("firmantes"); }}>{t("Términos para firmantes")}</a> · <a href="#" onClick={(e) => { e.preventDefault(); setLegal("privacidad"); }}>{t("Política de Privacidad")}</a></div>
@@ -464,37 +470,50 @@ function Llenar({ v, token, alTerminar }: { v: VistaFirmante; token: string; alT
 
         {etapa === "inicio" && (
           <>
-            <div className="notice">{t(pedirDni ? "Revisa el documento. Después completarás tus datos en un formulario guiado y, al terminar, capturarás tu DNI y firmarás." : "Revisa el documento. Después completarás tus datos en un formulario guiado y, al terminar, firmarás.")}</div>
+            <div className="notice">{t(pedirRostro && pedirDni ? "Revisa el documento. Después completarás tus datos en un formulario guiado y, al terminar, te tomarás una foto del rostro, capturarás tu DNI y firmarás."
+              : pedirRostro ? "Revisa el documento. Después completarás tus datos en un formulario guiado y, al terminar, te tomarás una foto del rostro y firmarás."
+              : pedirDni ? "Revisa el documento. Después completarás tus datos en un formulario guiado y, al terminar, capturarás tu DNI y firmarás." : "Revisa el documento. Después completarás tus datos en un formulario guiado y, al terminar, firmarás.")}</div>
             <div className="readyBar">
               <button type="button" className="primary" onClick={() => { setEtapa("formulario"); window.scrollTo({ top: 0 }); }}>{t("✍️ Empezar a llenar el documento")}</button>
             </div>
           </>
         )}
 
+        {etapa === "documento" && pedirRostro && (
+          <section className="dniCaptureSteps pasosRostro">
+            <div className="notice dniAviso"><strong>{t("🤳 Verificación de identidad con foto del rostro")}</strong><br />
+              {t(pedirDni
+                ? "Primero tómate una foto del rostro; después capturarás tu DNI. Las dos fotos van juntas en la hoja de evidencias del PDF para compararlas."
+                : "Tómate una foto del rostro, de frente y con buena luz. Va en la hoja de evidencias del PDF.")}
+              <br /><strong>{t("📷 Se toma en este momento con la cámara: no se puede subir una foto guardada.")}</strong></div>
+            <PasoDni n={1} titulo={t("Foto de tu rostro")} texto={t("Mira a la cámara, sin lentes oscuros ni gorra, con el rostro completo dentro del óvalo.")} listo={rostro ?? undefined}>
+              <button type="button" className="primary" onClick={() => setCamaraRostro(true)}>{t(rostro ? "📷 Repetir foto" : "📷 Tomar foto del rostro")}</button>
+            </PasoDni>
+          </section>
+        )}
+
         {etapa === "documento" && pedirDni && (
           <section className="dniCaptureSteps">
             <div className="notice dniAviso"><strong>{t("🪪 Firma manuscrita y evidencia del DNI")}</strong><br />
-              {t("Captura el frente de tu DNI, fotografía o sube tu firma hecha en papel, captura el reverso y ajusta la huella. Las fotos no validan tu identidad ante RENIEC ni son una firma digital certificada.")}</div>
+              {t("Ten tu DNI físico a la mano y una hoja con tu firma. Captura el frente de tu DNI, fotografía tu firma hecha en papel, captura el reverso y ajusta la huella.")}
+              <br /><strong>{t("📷 Todas las fotos se toman en este momento con la cámara: no se pueden subir imágenes guardadas.")}</strong>
+              <br />{t("Las fotos no validan tu identidad ante RENIEC ni son una firma digital certificada.")}</div>
             <PasoDni n={1} titulo={t("Captura el frente del DNI")} texto={t("Encuadra la tarjeta completa: esta foto va a la hoja de evidencias del PDF.")} listo={dni.frente}>
-              <button type="button" className="primary" onClick={() => elegirFoto("frente", true)}>{t("📷 Capturar frente")}</button>
-              <button type="button" onClick={() => elegirFoto("frente", false)}>{t("🖼️ Subir frente")}</button>
+              <button type="button" className="primary" onClick={() => setCamaraDni("frente")}>{t("📷 Capturar frente")}</button>
             </PasoDni>
             {firmaDni && (
-              <PasoDni n={2} titulo={t("Sube o toma una foto de tu firma")} texto={t("Firma en una hoja blanca y tómale una foto, o sube una foto de tu firma. Se recorta y se le quita el fondo.")} listo={lleno(firmaDni) ? (valores[firmaDni.id] as string) : undefined} bloqueado={!dni.frente}>
-                <button type="button" className="primary" disabled={!dni.frente} onClick={() => abrir(firmaDni)}>{t("✍️ Fotografiar o subir mi firma")}</button>
+              <PasoDni n={2} titulo={t("Toma una foto de tu firma")} texto={t("Firma en una hoja blanca y tómale una foto con la cámara. Se recorta y se le quita el fondo.")} listo={lleno(firmaDni) ? (valores[firmaDni.id] as string) : undefined} bloqueado={!dni.frente}>
+                <button type="button" className="primary" disabled={!dni.frente} onClick={() => abrir(firmaDni)}>{t("📷 Fotografiar mi firma")}</button>
               </PasoDni>
             )}
             <PasoDni n={firmaDni ? 3 : 2} titulo={t("Captura el reverso del DNI")} texto={t("Encuadra la tarjeta completa; después ajustarás el área de la huella.")} listo={dni.reverso} bloqueado={!dni.frente || (!!firmaDni && !lleno(firmaDni))}>
-              <button type="button" className="primary" disabled={!dni.frente || (!!firmaDni && !lleno(firmaDni))} onClick={() => elegirFoto("reverso", true)}>{t("📷 Capturar reverso")}</button>
-              <button type="button" disabled={!dni.frente || (!!firmaDni && !lleno(firmaDni))} onClick={() => elegirFoto("reverso", false)}>{t("🖼️ Subir reverso")}</button>
+              <button type="button" className="primary" disabled={!dni.frente || (!!firmaDni && !lleno(firmaDni))} onClick={() => setCamaraDni("reverso")}>{t("📷 Capturar reverso")}</button>
             </PasoDni>
             {huellasDni.length > 0 && (
               <PasoDni n={firmaDni ? 4 : 3} titulo={t("Ajusta la huella del DNI")} texto={t("Encuadra la huella impresa en el reverso: amplía, mueve y gira poco a poco.")} listo={lleno(huellasDni[0]) ? (valores[huellasDni[0].id] as string) : undefined} bloqueado={!dni.reverso}>
                 <button type="button" className="primary" disabled={!dni.reverso} onClick={async () => setHuellaDni(await aArchivo(dni.reverso!, "dni-reverso.jpg"))}>{t("🔍 Ajustar huella del reverso")}</button>
               </PasoDni>
             )}
-            <input ref={fotoCamara} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) setEncuadre({ archivo: f, lado: ladoFoto.current }); e.target.value = ""; }} />
-            <input ref={fotoSubir} type="file" accept="image/png,image/jpeg" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) setEncuadre({ archivo: f, lado: ladoFoto.current }); e.target.value = ""; }} />
           </section>
         )}
 
@@ -538,6 +557,7 @@ function Llenar({ v, token, alTerminar }: { v: VistaFirmante; token: string; alT
           titulo={t("{tipo} — Firmante {n}", { tipo: t(imagenDe.tipo === "firma" ? "Firma manuscrita" : imagenDe.tipo === "sello" ? "Sello" : "Huella"), n: v.yo.orden })}
           inicial={typeof valores[imagenDe.id] === "string" ? (valores[imagenDe.id] as string) : null}
           bloquearDibujo={v.documento.bloquearDibujo} bloquearSello={v.documento.bloquearSello}
+          soloCamara={pedirDni && imagenDe.tipo === "firma"}
           dedo={imagenDe.tipo === "huella" ? leerDedo(imagenDe.etiqueta) : null}
           alTerminar={(png) => {
             if (png) ponerImagen(imagenDe, png);
@@ -545,6 +565,21 @@ function Llenar({ v, token, alTerminar }: { v: VistaFirmante; token: string; alT
           }}
           alCerrar={() => setImagenDe(null)}
         />
+      )}
+      {camaraRostro && (
+        <CamaraEnVivo frontal titulo={t("Foto de tu rostro")} pista="Centra tu rostro dentro del óvalo y toma la foto"
+          alCerrar={() => setCamaraRostro(false)}
+          alCapturar={async (f) => {
+            setCamaraRostro(false);
+            try { setRostro(await fotoReducida(f)); marcar("rostro"); }
+            catch { alert(t("No se pudo procesar la foto. Inténtalo de nuevo.")); }
+          }} />
+      )}
+      {camaraDni && (
+        <CamaraEnVivo titulo={t(camaraDni === "frente" ? "Frente del DNI" : "Reverso del DNI")}
+          pista={camaraDni === "frente" ? "Encuadra el frente de tu DNI dentro del marco" : "Encuadra el reverso de tu DNI dentro del marco"}
+          alCerrar={() => setCamaraDni(null)}
+          alCapturar={(f) => { setEncuadre({ archivo: f, lado: camaraDni }); setCamaraDni(null); }} />
       )}
       {encuadre && (
         <EncuadrarDni archivo={encuadre.archivo} lado={encuadre.lado} alCancelar={() => setEncuadre(null)}
@@ -582,6 +617,18 @@ function Llenar({ v, token, alTerminar }: { v: VistaFirmante; token: string; alT
 }
 
 /** Un paso de la captura con DNI: su estado y la vista previa de lo ya capturado. */
+/** Foto del rostro en JPG de hasta 1080 px por lado (cabe en el límite de fotos de evidencia del servidor). */
+async function fotoReducida(archivo: File, lado = 1080): Promise<string> {
+  const bmp = await createImageBitmap(archivo);
+  const k = Math.min(1, lado / Math.max(bmp.width, bmp.height));
+  const c = document.createElement("canvas");
+  c.width = Math.round(bmp.width * k);
+  c.height = Math.round(bmp.height * k);
+  c.getContext("2d")!.drawImage(bmp, 0, 0, c.width, c.height);
+  bmp.close();
+  return c.toDataURL("image/jpeg", 0.85);
+}
+
 function PasoDni({ n, titulo, texto, listo, bloqueado = false, children }: { n: number; titulo: string; texto: string; listo?: string; bloqueado?: boolean; children: ReactNode }) {
   const t = usarT();
   return (

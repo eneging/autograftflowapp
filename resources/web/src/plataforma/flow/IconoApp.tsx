@@ -12,6 +12,13 @@ const DIBUJOS: Record<string, ReactNode> = {
     <path d="M5 6.6h3.8M5 9.4h3.8M5 12.2h2.4" {...t} />
     <path d="M13.4 11.2h4.8M13.4 14.2h3.2M13.4 17.2h4.8" {...t} />
   </>,
+  // Pizarra: un tablero con un trazo a mano alzada y un marcador.
+  "pizarra": <>
+    <rect x="2.2" y="4" width="13.6" height="10.4" rx="1.4" {...t} />
+    <path d="M4.8 11.2c1.4-2.6 2.6-3.4 3.4-1.6.7 1.6 1.8 1.4 3.2-1.2" {...t} />
+    <path d="M6.4 14.4 5 18M11.6 14.4l1.4 3.6" {...t} />
+    <path d="m14.2 11.4 4.2-4.2 1.4 1.4-4.2 4.2-2 .6Z" {...t} />
+  </>,
 };
 
 /** Ícono de una app de Flow Tools: el dibujo en degradado si es destacada; si no, su emoji. */

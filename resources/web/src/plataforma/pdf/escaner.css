@@ -31,6 +31,9 @@ span.esIcono { background: transparent; }
 .esFuera { fill: rgba(0,0,0,.5); }
 .esAsa { fill: #fff; stroke: var(--accentRelleno, #e2e800); stroke-width: 3; vector-effect: non-scaling-stroke; }
 .esAsaZona { fill: transparent; cursor: grab; }
+/* Asas de los lados: barra con el borde de la hoja; la zona invisible, más ancha, facilita agarrarla con el dedo. */
+.esAsaLado { stroke: #fff; stroke-linecap: round; filter: drop-shadow(0 0 1.5px var(--accentRelleno, #e2e800)) drop-shadow(0 0 1px rgba(0,0,0,.6)); pointer-events: none; }
+.esAsaLadoZona { stroke: transparent; stroke-linecap: round; }
 .esAsaZona:active { cursor: grabbing; }
 .esPista { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); max-width: calc(100% - 32px); padding: 9px 16px; border-radius: 99px; background: rgba(20,20,20,.78); color: #fff; font-size: 14px; text-align: center; pointer-events: none; backdrop-filter: blur(6px); }
 .esDiagnostico { position: absolute; left: 8px; right: 8px; top: 8px; margin: 0; padding: 8px; border-radius: 8px; background: rgba(0,0,0,.75); color: #fff; font: 11px/1.4 ui-monospace, monospace; white-space: pre-wrap; pointer-events: none; }

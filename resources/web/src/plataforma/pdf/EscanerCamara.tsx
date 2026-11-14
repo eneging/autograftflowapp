@@ -377,7 +377,10 @@ export function CamaraEscaner({ paginas = 0, ultima, alCapturar, alGaleria, alTe
   );
 }
 
-/** Ajustar las esquinas de la hoja, arrastrando cada una. */
+/**
+ * Ajustar el recorte de la hoja: arrastrando cada esquina o cada lado. Al jalar un lado se mueven sus dos esquinas
+ * en perpendicular a ese borde (como en las apps de escáner), así el borde no se tuerce.
+ */
 export function EditorPagina({ original, esquinas, alAplicar, alCancelar }: {
   original: string; esquinas: Esquinas; alAplicar: (esquinas: Esquinas) => void; alCancelar: () => void;
 }) {
@@ -385,18 +388,40 @@ export function EditorPagina({ original, esquinas, alAplicar, alCancelar }: {
   const [esq, setEsq] = useState<Esquinas>(esquinas);
   const [dims, setDims] = useState<{ w: number; h: number } | null>(null);
   const [aviso, setAviso] = useState("");
-  const arrastre = useRef<number | null>(null);
+  const arrastre = useRef<null | { tipo: "esquina"; i: number } | { tipo: "lado"; i: number; inicio: { x: number; y: number }; antes: Esquinas }>(null);
   usarPantallaCompleta(alCancelar);
 
-  function mover(ev: EventoPuntero<SVGSVGElement>) {
-    const i = arrastre.current, svg = capa.current;
-    if (i === null || !svg || !dims) return;
+  /** Punto del puntero en píxeles de la foto. */
+  function enFoto(ev: { clientX: number; clientY: number }) {
+    const svg = capa.current!;
     const pt = svg.createSVGPoint();
     pt.x = ev.clientX;
     pt.y = ev.clientY;
-    const p = pt.matrixTransform(svg.getScreenCTM()!.inverse());
-    const x = Math.min(1, Math.max(0, p.x / dims.w)), y = Math.min(1, Math.max(0, p.y / dims.h));
-    setEsq((e) => e.map((q, k) => (k === i ? { x, y } : q)) as Esquinas);
+    return pt.matrixTransform(svg.getScreenCTM()!.inverse());
+  }
+  const limitar = (v: number) => Math.min(1, Math.max(0, v));
+  function mover(ev: EventoPuntero<SVGSVGElement>) {
+    const a = arrastre.current;
+    if (!a || !capa.current || !dims) return;
+    const p = enFoto(ev);
+    if (a.tipo === "esquina") {
+      const x = limitar(p.x / dims.w), y = limitar(p.y / dims.h);
+      setEsq((e) => e.map((q, k) => (k === a.i ? { x, y } : q)) as Esquinas);
+      return;
+    }
+    // Lado i: de la esquina i a la i+1. Se proyecta el movimiento sobre la normal del borde (en píxeles, que la foto
+    // no es cuadrada) y se aplica igual a sus dos esquinas.
+    const j = (a.i + 1) % 4, A = a.antes[a.i], B = a.antes[j];
+    const bx = (B.x - A.x) * dims.w, by = (B.y - A.y) * dims.h, l = Math.hypot(bx, by) || 1;
+    const nx = -by / l, ny = bx / l;
+    const s = (p.x - a.inicio.x) * nx + (p.y - a.inicio.y) * ny;
+    const dx = (s * nx) / dims.w, dy = (s * ny) / dims.h;
+    setEsq(a.antes.map((q, k) => (k === a.i || k === j ? { x: limitar(q.x + dx), y: limitar(q.y + dy) } : q)) as Esquinas);
+  }
+  function agarrar(ev: EventoPuntero<SVGGElement>, a: NonNullable<typeof arrastre.current>) {
+    ev.preventDefault();
+    arrastre.current = a;
+    capa.current?.setPointerCapture(ev.pointerId);
   }
   async function detectar() {
     const img = await cargarImagen(original);
@@ -419,8 +444,21 @@ export function EditorPagina({ original, esquinas, alAplicar, alCancelar }: {
           onPointerMove={mover} onPointerUp={() => (arrastre.current = null)} onPointerCancel={() => (arrastre.current = null)}>
           <path className="esFuera" fillRule="evenodd" d={`M0 0H${dims.w}V${dims.h}H0Z M${puntos.replace(/ /g, " L")}Z`} />
           <polygon className="esMarco" points={puntos} />
+          {esq.map((p, i) => {
+            // Asa del lado i: una barra corta en el medio del borde, alineada con él.
+            const q = esq[(i + 1) % 4];
+            const mx = ((p.x + q.x) / 2) * dims.w, my = ((p.y + q.y) / 2) * dims.h;
+            const bx = (q.x - p.x) * dims.w, by = (q.y - p.y) * dims.h, l = Math.hypot(bx, by) || 1;
+            const ux = (bx / l) * r * 1.6, uy = (by / l) * r * 1.6;
+            return (
+              <g key={`lado${i}`} onPointerDown={(ev) => agarrar(ev, { tipo: "lado", i, inicio: enFoto(ev), antes: esq })}>
+                <line x1={mx - ux * 1.6} y1={my - uy * 1.6} x2={mx + ux * 1.6} y2={my + uy * 1.6} strokeWidth={r * 3.2} className="esAsaZona esAsaLadoZona" />
+                <line x1={mx - ux} y1={my - uy} x2={mx + ux} y2={my + uy} strokeWidth={r * 0.85} className="esAsaLado" />
+              </g>
+            );
+          })}
           {esq.map((p, i) => (
-            <g key={i} onPointerDown={(ev) => { ev.preventDefault(); arrastre.current = i; capa.current?.setPointerCapture(ev.pointerId); }}>
+            <g key={i} onPointerDown={(ev) => agarrar(ev, { tipo: "esquina", i })}>
               <circle cx={p.x * dims.w} cy={p.y * dims.h} r={r * 2.2} className="esAsaZona" />
               <circle cx={p.x * dims.w} cy={p.y * dims.h} r={r} className="esAsa" />
             </g>

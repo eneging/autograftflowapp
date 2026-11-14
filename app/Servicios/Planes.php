@@ -8,7 +8,9 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Planes y cupo de documentos. El catálogo está en resources/shared/planes.json (lo usa también la página).
- *  - Gratis y Ocasional: 2 documentos por día (en la zona horaria de ZONA_HORARIA). Ocasional suma 10 créditos y no vence.
+ *  - Gratis: 2 documentos por día (en la zona horaria de ZONA_HORARIA).
+ *  - Básico: suscripción mensual (ver Suscripciones): 2 documentos por día + 10 por mes, con 7 días de prueba la primera vez.
+ *  - Ocasional (paquete de 10 créditos) ya no se vende; se conserva para las cuentas que todavía tienen esos créditos.
  *  - Profesional: 180 documentos por mes durante 30 días. Empresarial: ilimitado durante 365 días, hasta 5 usuarios.
  *  - Los créditos (documentos comprados) no vencen y se usan cuando se acaba el cupo del periodo.
  */
@@ -30,7 +32,7 @@ class Planes
     public static function producto(string $id): ?array
     {
         $p = self::catalogo()['planes'][$id] ?? null;
-        if (! $p || $p['precio'] <= 0) {
+        if (! $p || $p['precio'] <= 0 || ! empty($p['oculto'])) {
             return null;
         }
         $titulo = $p['dias'] ? "AutograFlow {$p['nombre']} — {$p['dias']} días" : "AutograFlow {$p['nombre']} — {$p['creditos']} documentos";
@@ -82,7 +84,11 @@ class Planes
         $plan = self::vigente($c->plan, $vence, (int) $c->creditos);
         $usados = DB::table('consumos')->where('cuenta_id', $cuentaId)->where('origen', 'plan')
             ->where('creado_en', '>=', self::inicioPeriodo(self::plan($plan)['periodo']))->count();
+        // Cupo mensual que se suma al diario (Básico): se cuenta aparte, con origen «mensual».
+        $usadosMes = isset(self::plan($plan)['documentosMes']) ? DB::table('consumos')->where('cuenta_id', $cuentaId)
+            ->where('origen', 'mensual')->where('creado_en', '>=', self::inicioMes())->count() : 0;
         return [
+            'usadosMes' => $usadosMes,
             'plan' => $plan, 'contratado' => isset(self::catalogo()['planes'][$c->plan]) ? $c->plan : 'gratis',
             'vence' => $vence, 'creditos' => (int) $c->creditos, 'usados' => $usados, 'invitado' => (bool) ($c->invitado ?? false),
         ];
@@ -102,13 +108,17 @@ class Planes
         $bonos = Referidos::saldo($cuentaId);
         $p = self::plan($d['plan']);
         $limite = $p['documentos'];
+        $limiteMes = $p['documentosMes'] ?? null;
+        $restanMes = $limiteMes === null ? 0 : max(0, $limiteMes - $d['usadosMes']);
         return [
+            'usadosMes' => $d['usadosMes'], 'limiteMes' => $limiteMes,
+            'suscripcion' => Suscripciones::vigenteDe($cuentaId), 'pruebaDisponible' => Suscripciones::pruebaDisponible($cuentaId),
             'plan' => $d['plan'], 'planContratado' => $d['contratado'],
             'vence' => self::plan($d['plan'])['dias'] ? $d['vence']?->toIso8601ZuluString() : null,
             'creditosReferidos' => $bonos,
             'usados' => $d['usados'], 'limite' => $limite, 'periodo' => $p['periodo'], 'creditos' => $d['creditos'],
             'firmantesPorDocumento' => self::maxFirmantes($p, $d['invitado']), 'invitado' => $d['invitado'], 'selloHuella' => $p['selloHuella'],
-            'disponibles' => $limite === null ? null : max(0, $limite - $d['usados']) + $d['creditos'] + $bonos,
+            'disponibles' => $limite === null ? null : max(0, $limite - $d['usados']) + $restanMes + $d['creditos'] + $bonos,
             'usuarios' => $p['usuarios'], 'moneda' => config('autograflow.moneda'), 'pagosActivos' => MercadoPago::activo(),
         ];
     }
@@ -135,15 +145,23 @@ class Planes
             throw new ErrorUso("En el plan {$p['nombre']} puedes llenar los campos que ya trae el PDF. Para agregar cuadros de texto nuevos o permitir texto libre, elige un plan de pago.", 402);
         }
         $origen = self::origen($d['usados'], $p['documentos'], $d['creditos']);
+        // Básico: acabado el cupo del día, se usa el del mes antes que bonos y créditos.
+        if ($origen !== 'plan' && isset($p['documentosMes']) && $d['usadosMes'] < $p['documentosMes']) {
+            $origen = 'mensual';
+        }
         $bonoId = null;
         // Los bonos vencen: se usan después del cupo del plan y antes de créditos comprados que no vencen.
-        if ($origen !== 'plan' && ($bonoId = Referidos::consumir($cuentaId)) !== null) {
+        if (! in_array($origen, ['plan', 'mensual'], true) && ($bonoId = Referidos::consumir($cuentaId)) !== null) {
             $origen = 'referido';
         }
         if (! $origen) {
             $cuando = $p['periodo'] === 'dia' ? 'hoy' : 'este mes';
-            throw new ErrorUso("Ya usaste los {$p['documentos']} documentos de {$cuando} de tu plan {$p['nombre']}. ".
-                ($p['periodo'] === 'dia' ? 'Mañana recibirás más, o compra el plan Ocasional (10 documentos) o un plan mensual.' : 'Recarga 10 documentos o cambia de plan para seguir enviando.'), 402);
+            $mas = match (true) {
+                isset($p['documentosMes']) => "También usaste los {$p['documentosMes']} del mes. Mañana recibirás más, o cambia a Profesional.",
+                $p['periodo'] === 'dia' => 'Mañana recibirás más, o prueba gratis el plan Básico (10 documentos al mes).',
+                default => 'Cambia de plan para seguir enviando.',
+            };
+            throw new ErrorUso("Ya usaste los {$p['documentos']} documentos de {$cuando} de tu plan {$p['nombre']}. {$mas}", 402);
         }
         if ($origen === 'credito') {
             DB::table('cuentas')->where('id', $cuentaId)->where('creditos', '>', 0)->decrement('creditos');

@@ -23,6 +23,28 @@ class PlataformaTest extends TestCase
 
     private array $pagosMp = [];
 
+    /** Suscripciones (preapproval) y sus cobros mensuales (authorized_payments) simulados. */
+    private array $suscMp = [];
+
+    private array $cobrosMp = [];
+
+    /** Simula un cobro mensual de Mercado Pago para la suscripción y devuelve su id. */
+    private function cobrar(string $preapproval, float $monto = 4.9, string $estado = 'approved'): string
+    {
+        $id = (string) (5000 + count($this->cobrosMp));
+        $this->cobrosMp[$id] = ['id' => (int) $id, 'preapproval_id' => $preapproval, 'status' => 'processed', 'transaction_amount' => $monto,
+            'currency_id' => 'PEN', 'debit_date' => now()->toIso8601String(), 'payment' => ['id' => 70000 + (int) $id, 'status' => $estado]];
+        return $id;
+    }
+
+    private function avisoMp(string $tipo, string $dataId): \Illuminate\Testing\TestResponse
+    {
+        $ts = (string) time();
+        $v1 = hash_hmac('sha256', "id:{$dataId};request-id:req-s;ts:{$ts};", 'secreto-webhook');
+        return $this->postJson("/api/pagos/webhook?data.id={$dataId}&type={$tipo}", ['type' => $tipo, 'data' => ['id' => $dataId]],
+            ['x-signature' => "ts={$ts},v1={$v1}", 'x-request-id' => 'req-s']);
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -55,6 +77,26 @@ class PlataformaTest extends TestCase
             }
             if (preg_match('#/v1/payments/(\d+)#', $u, $m)) {
                 return Http::response($this->pagosMp[$m[1]] ?? [], isset($this->pagosMp[$m[1]]) ? 200 : 404);
+            }
+            // Suscripciones (preapproval): nacen «pending»; la prueba marca «authorized» como si el cliente ingresara su tarjeta.
+            if (str_ends_with(parse_url($u, PHP_URL_PATH), '/preapproval') && $r->method() === 'POST') {
+                $id = 'pre-'.(count($this->suscMp) + 1);
+                $this->suscMp[$id] = ['id' => $id, 'status' => 'pending', 'payer_id' => 777, 'external_reference' => $r->data()['external_reference'],
+                    'auto_recurring' => $r->data()['auto_recurring'], 'next_payment_date' => $r->data()['auto_recurring']['start_date'] ?? now()->toIso8601String()];
+                return Http::response(['id' => $id, 'init_point' => "https://mp.test/suscribir/{$id}"], 201);
+            }
+            if (preg_match('#/preapproval/(pre-\d+)$#', parse_url($u, PHP_URL_PATH), $m)) {
+                if ($r->method() === 'PUT') {
+                    $this->suscMp[$m[1]]['status'] = $r->data()['status'];
+                }
+                return Http::response($this->suscMp[$m[1]] ?? [], isset($this->suscMp[$m[1]]) ? 200 : 404);
+            }
+            if (str_contains($u, '/authorized_payments/search')) {
+                parse_str(parse_url($u, PHP_URL_QUERY), $q);
+                return Http::response(['results' => array_values(array_filter($this->cobrosMp, fn ($c) => $c['preapproval_id'] === $q['preapproval_id']))]);
+            }
+            if (preg_match('#/authorized_payments/(\d+)#', $u, $m)) {
+                return Http::response($this->cobrosMp[$m[1]] ?? [], isset($this->cobrosMp[$m[1]]) ? 200 : 404);
             }
             return Http::response([], 404);
         });
@@ -202,9 +244,10 @@ class PlataformaTest extends TestCase
         $this->getJson('/api/cuenta')->assertJson(['estado' => ['plan' => 'profesional', 'limite' => 180, 'periodo' => 'mes', 'selloHuella' => true]]);
         $this->postJson("/api/documentos/{$id}/enviar", [], self::H)->assertOk(); // el del sello
 
-        // Ocasional por webhook firmado: suma 10 documentos sin rebajar el plan; repetir el aviso no suma dos veces; firma falsa → 401
-        $ocasional = $this->postJson('/api/pagos', ['producto' => 'ocasional'], self::H)->json();
-        $mpId = (string) collect($this->pagosMp)->firstWhere('external_reference', "af-{$ocasional['pagoId']}")['id'];
+        // Renovación por webhook firmado: suma 30 días; repetir el aviso no los suma dos veces; firma falsa → 401
+        $venceAntes = \Illuminate\Support\Carbon::parse(DB::table('cuentas')->value('plan_vence'));
+        $renovacion = $this->postJson('/api/pagos', ['producto' => 'profesional'], self::H)->json();
+        $mpId = (string) collect($this->pagosMp)->firstWhere('external_reference', "af-{$renovacion['pagoId']}")['id'];
         $aviso = function (string $secreto) use ($mpId) {
             $ts = (string) time();
             $v1 = hash_hmac('sha256', "id:{$mpId};request-id:req-1;ts:{$ts};", $secreto);
@@ -213,7 +256,9 @@ class PlataformaTest extends TestCase
         $aviso('falso')->assertStatus(401);
         $aviso('secreto-webhook')->assertOk();
         $aviso('secreto-webhook')->assertOk();
-        $this->getJson('/api/cuenta')->assertJson(['estado' => ['plan' => 'profesional', 'creditos' => 10]]);
+        $this->assertEquals($venceAntes->addDays(30)->timestamp, \Illuminate\Support\Carbon::parse(DB::table('cuentas')->value('plan_vence'))->timestamp);
+        // Ocasional ya no se vende ni se puede activar a mano
+        $this->postJson('/api/pagos', ['producto' => 'ocasional'], self::H)->assertStatus(400);
 
         // Pago por un monto menor al precio: no se activa
         $trampa = $this->postJson('/api/pagos', ['producto' => 'empresarial'], self::H)->json();
@@ -222,17 +267,116 @@ class PlataformaTest extends TestCase
         $this->postJson("/api/pagos/{$trampa['pagoId']}/verificar", [], self::H)->assertJson(['estado' => 'pendiente']);
         $this->getJson('/api/cuenta')->assertJson(['estado' => ['plan' => 'profesional']]);
 
-        // Al vencer el Profesional, con créditos comprados sigue con las reglas de Ocasional
-        $this->travel(31)->days();
+        // Al vencer el Profesional, con créditos de un Ocasional antiguo sigue con las reglas de Ocasional
+        DB::table('cuentas')->update(['creditos' => 10]);
+        $this->travel(61)->days();
         $this->getJson('/api/cuenta')->assertJson(['estado' => ['plan' => 'ocasional', 'creditos' => 10, 'firmantesPorDocumento' => 20]]);
     }
 
-    public function test_ocasional_desde_gratis_y_equipo_empresarial(): void
+    public function test_suscripcion_basico_con_prueba_cobros_y_cancelacion(): void
+    {
+        $this->registrar()->assertCreated();
+        $this->getJson('/api/cuenta')->assertJson(['estado' => ['pruebaDisponible' => true, 'suscripcion' => null]]);
+
+        // Primera vez: el primer cobro se agenda a 7 días y, al ingresar la tarjeta, ya tiene el plan Básico
+        $r = $this->postJson('/api/pagos', ['producto' => 'basico'], self::H)->assertCreated()->assertJson(['conPrueba' => true])->json();
+        $this->assertStringStartsWith('https://mp.test/suscribir/', $r['url']);
+        $mp = 'pre-1';
+        $this->assertEqualsWithDelta(now()->addDays(7)->timestamp, \Illuminate\Support\Carbon::parse($this->suscMp[$mp]['auto_recurring']['start_date'])->timestamp, 5);
+        $this->postJson("/api/suscripciones/{$r['suscripcionId']}/verificar", [], self::H)->assertJson(['estado' => 'pendiente']);
+        $this->getJson('/api/cuenta')->assertJson(['estado' => ['plan' => 'gratis']]);
+        $this->suscMp[$mp]['status'] = 'authorized';
+        $this->avisoMp('subscription_preapproval', $mp)->assertOk();
+        $this->getJson('/api/cuenta')->assertJson(['estado' => ['plan' => 'basico', 'pruebaDisponible' => false,
+            'suscripcion' => ['estado' => 'activa', 'enPrueba' => true, 'conPrueba' => true]]]);
+        // No se puede abrir otra suscripción ni pagar Básico por Checkout Pro
+        $this->postJson('/api/pagos', ['producto' => 'basico'], self::H)->assertStatus(409);
+
+        // Termina la prueba: sin cobro aprobado el plan vence después de la gracia; con el cobro se extiende un mes
+        $this->travel(10)->days();
+        $this->getJson('/api/cuenta')->assertJson(['estado' => ['plan' => 'gratis', 'planContratado' => 'basico']]);
+        $this->avisoMp('subscription_authorized_payment', $this->cobrar($mp, 1.0))->assertOk(); // monto falso: se ignora
+        $this->getJson('/api/cuenta')->assertJson(['estado' => ['plan' => 'gratis']]);
+        $cobro = $this->cobrar($mp);
+        $this->avisoMp('subscription_authorized_payment', $cobro)->assertOk();
+        $this->avisoMp('subscription_authorized_payment', $cobro)->assertOk(); // repetido: un solo pago
+        $this->getJson('/api/cuenta')->assertJson(['estado' => ['plan' => 'basico'], 'pagos' => [['producto' => 'basico', 'estado' => 'aprobado', 'monto' => 4.9]]]);
+        $this->assertSame(1, DB::table('pagos')->where('medio', 'suscripcion')->count());
+        $this->travel(25)->days();
+        $this->getJson('/api/cuenta')->assertJson(['estado' => ['plan' => 'basico']]);
+
+        // Cancelar desde Mi Plan: se cancela en Mercado Pago y se corta al instante
+        $this->postJson('/api/suscripciones/cancelar', [], self::H)->assertOk()->assertJson(['estado' => 'cancelada', 'motivo' => 'cancelada_por_cliente']);
+        $this->assertSame('cancelled', $this->suscMp[$mp]['status']);
+        $this->getJson('/api/cuenta')->assertJson(['estado' => ['plan' => 'gratis', 'suscripcion' => null, 'pruebaDisponible' => false]]);
+        // Un cobro que llegue tarde queda registrado, pero no reactiva el plan
+        $this->avisoMp('subscription_authorized_payment', $this->cobrar($mp))->assertOk();
+        $this->getJson('/api/cuenta')->assertJson(['estado' => ['plan' => 'gratis']]);
+
+        // Segunda vez: sin prueba, el plan empieza con el primer cobro
+        $r2 = $this->postJson('/api/pagos', ['producto' => 'basico'], self::H)->assertCreated()->assertJson(['conPrueba' => false])->json();
+        $this->assertArrayNotHasKey('start_date', $this->suscMp['pre-2']['auto_recurring']);
+        $this->suscMp['pre-2']['status'] = 'authorized';
+        $this->postJson("/api/suscripciones/{$r2['suscripcionId']}/verificar", [], self::H)->assertJson(['estado' => 'activa']);
+        $this->getJson('/api/cuenta')->assertJson(['estado' => ['plan' => 'gratis']]);
+        $this->cobrar('pre-2');
+        $this->postJson("/api/suscripciones/{$r2['suscripcionId']}/verificar", [], self::H)->assertOk();
+        $this->getJson('/api/cuenta')->assertJson(['estado' => ['plan' => 'basico']]);
+
+        // Cancelada desde Mercado Pago: también se corta
+        $this->suscMp['pre-2']['status'] = 'cancelled';
+        $this->avisoMp('subscription_preapproval', 'pre-2')->assertOk();
+        $this->getJson('/api/cuenta')->assertJson(['estado' => ['plan' => 'gratis', 'suscripcion' => null]]);
+    }
+
+    public function test_prueba_basico_no_se_repite_con_otra_cuenta_y_profesional_reemplaza_suscripcion(): void
+    {
+        // Otra cuenta con una variante del mismo Gmail ya no tiene prueba
+        $this->registrar('ana.torres@gmail.com')->assertCreated();
+        $this->postJson('/api/pagos', ['producto' => 'basico'], self::H)->assertCreated();
+        $this->suscMp['pre-1']['status'] = 'authorized';
+        $this->avisoMp('subscription_preapproval', 'pre-1')->assertOk();
+        $this->registrar('anatorres+otra@gmail.com')->assertCreated();
+        $this->getJson('/api/cuenta')->assertJson(['estado' => ['pruebaDisponible' => false]]);
+
+        // Correo distinto, pero la misma cuenta de Mercado Pago (payer_id): se rechaza y se cancela sin cobrar
+        $this->registrar('luis@ejemplo.com')->assertCreated();
+        $r = $this->postJson('/api/pagos', ['producto' => 'basico'], self::H)->assertJson(['conPrueba' => true])->json();
+        $this->suscMp['pre-2']['status'] = 'authorized';
+        $this->postJson("/api/suscripciones/{$r['suscripcionId']}/verificar", [], self::H)->assertJson(['estado' => 'rechazada', 'motivo' => 'prueba_usada']);
+        $this->assertSame('cancelled', $this->suscMp['pre-2']['status']);
+        $this->getJson('/api/cuenta')->assertJson(['estado' => ['plan' => 'gratis']]);
+
+        // Con Básico activo, comprar Profesional cancela la suscripción para no seguir cobrándola
+        $this->postJson('/api/auth/ingresar', ['email' => 'ana.torres@gmail.com', 'clave' => 'clave-segura-1'], self::H)->assertOk();
+        $compra = $this->postJson('/api/pagos', ['producto' => 'profesional'], self::H)->assertCreated()->json();
+        $this->postJson("/api/pagos/{$compra['pagoId']}/verificar", [], self::H)->assertJson(['estado' => 'aprobado']);
+        $this->assertSame('cancelled', $this->suscMp['pre-1']['status']);
+        $this->getJson('/api/cuenta')->assertJson(['estado' => ['plan' => 'profesional', 'suscripcion' => null]]);
+    }
+
+    public function test_basico_manual_cupo_diario_y_mensual_y_equipo_empresarial(): void
     {
         $this->registrar()->assertCreated();
         $cuenta = DB::table('users')->where('email', 'ana@ejemplo.com')->value('cuenta_id');
-        MercadoPago::activarManual($cuenta, 'ocasional');
-        $this->getJson('/api/cuenta')->assertJson(['estado' => ['plan' => 'ocasional', 'vence' => null, 'creditos' => 10, 'limite' => 2, 'disponibles' => 12]]);
+        // Básico: 2 por día y, acabados esos, 10 por mes
+        MercadoPago::activarManual($cuenta, 'basico');
+        $this->getJson('/api/cuenta')->assertJson(['estado' => ['plan' => 'basico', 'limite' => 2, 'limiteMes' => 10, 'usadosMes' => 0, 'disponibles' => 12, 'firmantesPorDocumento' => 20]]);
+        foreach (range(1, 3) as $_) {
+            $d = $this->subir();
+            $this->preparar($d, 1);
+            $this->postJson("/api/documentos/{$d}/enviar", [], self::H)->assertOk();
+        }
+        $this->getJson('/api/cuenta')->assertJson(['estado' => ['usados' => 2, 'usadosMes' => 1, 'disponibles' => 9]]);
+        foreach (range(1, 9) as $_) {
+            $d = $this->subir();
+            $this->preparar($d, 1);
+            $this->postJson("/api/documentos/{$d}/enviar", [], self::H)->assertOk();
+        }
+        $this->getJson('/api/cuenta')->assertJson(['estado' => ['usadosMes' => 10, 'disponibles' => 0]]);
+        $bloqueado = $this->subir();
+        $this->preparar($bloqueado, 1);
+        $this->postJson("/api/documentos/{$bloqueado}/enviar", [], self::H)->assertStatus(402)->assertJsonPath('error', fn ($e) => str_contains($e, 'los 10 del mes'));
         $this->getJson('/api/cuenta/equipo')->assertJson(['activo' => false, 'codigo' => null]);
 
         // Empresarial: código de organización y hasta 5 usuarios
@@ -598,35 +742,38 @@ class PlataformaTest extends TestCase
 
         // Firmante con DNI: necesita un espacio para la firma y otro para la huella
         $guardar = fn (array $campos) => $this->putJson("/api/documentos/{$id}", ['nombre' => 'Contrato', 'orden' => 'secuencial', 'mensaje' => '', 'flujo' => true, 'certificado' => true,
-            'firmantes' => [['clave' => 'f0', 'nombre' => 'Luis Gómez', 'telefono' => '', 'email' => '', 'pedirDni' => true]], 'campos' => $campos], self::H)->assertOk();
+            'firmantes' => [['clave' => 'f0', 'nombre' => 'Luis Gómez', 'telefono' => '', 'email' => '', 'pedirDni' => true, 'pedirRostro' => true]], 'campos' => $campos], self::H)->assertOk();
         $firma = ['firmante' => 'f0', 'tipo' => 'firma', 'pagina' => 1, 'x' => 60, 'y' => 540, 'w' => 180, 'h' => 50, 'etiqueta' => '', 'obligatorio' => true];
         $guardar([$firma]);
         $this->postJson("/api/documentos/{$id}/enviar", [], self::H)->assertStatus(400)->assertJsonPath('error', fn ($e) => str_contains($e, 'huella'));
         $guardar([$firma, ['tipo' => 'huella', 'x' => 300, 'w' => 60, 'h' => 80, 'etiqueta' => 'Índice derecho'] + $firma]);
-        $this->getJson("/api/documentos/{$id}")->assertJson(['flujo' => true, 'certificado' => true, 'firmantes' => [['pedirDni' => true]]]);
+        $this->getJson("/api/documentos/{$id}")->assertJson(['flujo' => true, 'certificado' => true, 'firmantes' => [['pedirDni' => true, 'pedirRostro' => true]]]);
         $t = $this->postJson("/api/documentos/{$id}/enviar", [], self::H)->assertOk()->json('firmantes.0.token');
-        $vista = $this->getJson("/api/firmar/{$t}")->assertJson(['documento' => ['flujo' => true, 'certificado' => true, 'bloquearDibujo' => true], 'yo' => ['pedirDni' => true]])->json();
+        $vista = $this->getJson("/api/firmar/{$t}")->assertJson(['documento' => ['flujo' => true, 'certificado' => true, 'bloquearDibujo' => true], 'yo' => ['pedirDni' => true, 'pedirRostro' => true]])->json();
 
         // Sin las fotos del DNI no se puede firmar
         $valores = collect($vista['campos'])->where('mio', true)->mapWithKeys(fn ($c) => [(string) $c['id'] => $this->firmaDataUrl()])->all();
-        $this->postJson("/api/firmar/{$t}", ['acepto' => true, 'valores' => $valores], self::H)->assertStatus(400)->assertJsonStructure(['campos' => ['dni_frente', 'dni_reverso']]);
+        $this->postJson("/api/firmar/{$t}", ['acepto' => true, 'valores' => $valores], self::H)->assertStatus(400)->assertJsonStructure(['campos' => ['dni_frente', 'dni_reverso', 'rostro']]);
         $foto = $this->firmaDataUrl();
         $this->postJson("/api/firmar/{$t}", ['acepto' => true, 'valores' => $valores, 'evidencias' => [
-            'dni' => ['frente' => $foto, 'reverso' => $foto],
-            'momentos' => ['dniFrente' => '2026-10-20T15:00:00Z', 'firma' => '2026-10-20T15:01:00Z', 'huella' => 'no es una fecha'],
+            'dni' => ['frente' => $foto, 'reverso' => $foto], 'rostro' => $foto,
+            'momentos' => ['rostro' => '2026-10-20T14:59:00Z', 'dniFrente' => '2026-10-20T15:00:00Z', 'firma' => '2026-10-20T15:01:00Z', 'huella' => 'no es una fecha'],
             'ubicacion' => ['lat' => -12.04637, 'lng' => -77.04279, 'precision' => 35],
         ]], self::H)->assertOk()->assertJson(['completo' => true]);
         $f = DB::table('firmantes')->where('token', $t)->first();
         $this->assertNotNull($f->dni_frente);
         $this->assertNotNull($f->dni_reverso);
-        $this->assertSame(['dniFrente' => '2026-10-20T15:00:00Z', 'firma' => '2026-10-20T15:01:00Z'], json_decode($f->evidencias, true)['momentos']);
+        $this->assertNotNull($f->foto_rostro);
+        $this->assertSame(['rostro' => '2026-10-20T14:59:00Z', 'dniFrente' => '2026-10-20T15:00:00Z', 'firma' => '2026-10-20T15:01:00Z'], json_decode($f->evidencias, true)['momentos']);
 
-        // PDF final: la página + el certificado + la hoja de evidencias con la ubicación
+        // PDF final: la página + el certificado + la hoja de evidencias (rostro junto al DNI) con la ubicación
         $final = $this->get("/api/documentos/{$id}/final")->getContent();
-        $this->assertSame(3, (new Fpdi)->setSourceFile(StreamReader::createByString($final)));
+        $this->assertGreaterThanOrEqual(3, (new Fpdi)->setSourceFile(StreamReader::createByString($final)));
         $texto = $this->texto($final);
         $this->assertStringContainsString('Evidencias', $texto);
         $this->assertStringContainsString('-12.04637', $texto);
+        $this->assertStringContainsString('rostro y DNI', $texto);
+        $this->assertStringContainsString('Foto del rostro', $texto);
     }
 
     public function test_campos_que_llena_el_preparador_y_campos_calculados(): void

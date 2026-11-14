@@ -19,6 +19,16 @@ export const APPS_FLOW: AppFlow[] = [
     etiquetas: ["Foto a texto", "Celular → ordenador", "Boletas y facturas"],
     especial: true,
   },
+  {
+    id: "pizarra",
+    nombre: "Pizarra Pro Marker",
+    estado: "beta",
+    resumen: "Una pizarra grande para notas, escritura a mano, formas e imágenes. Escribe con el ratón, el dedo o un lápiz: tus trazos se vuelven más legibles solos.",
+    detalle: "Trazo asistido: al dejar de escribir, las formas se vuelven perfectas y los números y símbolos (+ − × =) se ven claros. Se guarda en tu dispositivo; compartir con colaboradores es parte de los planes de pago.",
+    icono: "🖊️",
+    etiquetas: ["Pizarra grande", "Trazo asistido", "Ideal para clases"],
+    especial: true,
+  },
 ];
 
 export const ETIQUETA_ESTADO: Record<EstadoApp, string> = { beta: "Beta", completa: "Completa" };

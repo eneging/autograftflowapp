@@ -85,7 +85,7 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
   // Idioma de la página del firmante: se detecta del texto del PDF al subirlo; el firmante también puede cambiarlo.
   const [idioma, setIdioma] = useState<Idioma>(inicial.idioma ?? "es");
   const [firmantes, setFirmantes] = useState<FirmanteEditor[]>(() =>
-    inicial.firmantes.map((f) => ({ clave: f.clave, nombre: f.nombre, telefono: f.telefono, email: f.email, pedirDni: f.pedirDni, modoTexto: f.modoTexto ?? "asignados" })));
+    inicial.firmantes.map((f) => ({ clave: f.clave, nombre: f.nombre, telefono: f.telefono, email: f.email, pedirDni: f.pedirDni, pedirRostro: f.pedirRostro ?? false, modoTexto: f.modoTexto ?? "asignados" })));
   const [campos, setCampos] = useState<CampoLocal[]>(() => inicial.campos.map((c) => ({ ...c, k: `c${c.id}` })));
   const [pagina, setPagina] = useState(1);
   const [activo, setActivo] = useState(firmantes[0]?.clave ?? "");
@@ -256,7 +256,7 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
     if (n > maxFirmantes) { setLimitePlan(true); setAviso(`Tu plan permite hasta ${maxFirmantes} firmante${maxFirmantes === 1 ? "" : "s"} por documento. Elige un plan para agregar más.`); }
     const final = Math.min(n, maxFirmantes);
     if (final > firmantes.length) {
-      const nuevos = Array.from({ length: final - firmantes.length }, (_, i) => ({ clave: nuevaClave("f"), nombre: `Firmante ${firmantes.length + i + 1}`, telefono: "", email: "", pedirDni: false, modoTexto: "solo" as ModoTexto }));
+      const nuevos = Array.from({ length: final - firmantes.length }, (_, i) => ({ clave: nuevaClave("f"), nombre: `Firmante ${firmantes.length + i + 1}`, telefono: "", email: "", pedirDni: false, pedirRostro: false, modoTexto: "solo" as ModoTexto }));
       setFirmantes((fs) => [...fs, ...nuevos]);
       setActivo(nuevos[0].clave);
       senalarSiguiente(nuevos[0]);
@@ -290,6 +290,16 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
     setPide((x) => ({ ...x, [activo]: { ...(x[activo] ?? { sello: false, huella: false }), [tipo]: valor } }));
     if (valor) setHerramienta(tipo);
     else borrarTipo(tipo);
+  }
+  /** Foto del rostro con la cámara al firmar: va a la hoja de evidencias (junto al DNI, si también se pide). */
+  function pedirRostro(valor: boolean) {
+    if (valor && !selloPermitido) {
+      setLimitePlan(true);
+      setAviso("La verificación con foto del rostro está disponible en los planes de pago.");
+      return;
+    }
+    setFirmantes((fs) => fs.map((f) => (f.clave === activo ? { ...f, pedirRostro: valor } : f)));
+    setAviso(valor ? `El Firmante ${iActivo + 1} se tomará una foto del rostro con la cámara antes de firmar.` : `La foto del rostro ya no será obligatoria para el Firmante ${iActivo + 1}.`);
   }
   /** Firma y huella con DNI: el firmante fotografía el frente, su firma en papel y el reverso (de ahí sale la huella). */
   function pedirDni(valor: boolean) {
@@ -390,7 +400,7 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
       setFlujo(false);
     }
     if (q === "ambos" && lista.length < 2 && maxFirmantes >= 2)
-      lista = [...lista, { clave: nuevaClave("f"), nombre: `Firmante ${lista.length + 1}`, telefono: "", email: "", pedirDni: false, modoTexto: "solo" }];
+      lista = [...lista, { clave: nuevaClave("f"), nombre: `Firmante ${lista.length + 1}`, telefono: "", email: "", pedirDni: false, pedirRostro: false, modoTexto: "solo" }];
     // Sin cuenta, si no da su nombre, queda «Firmante 1» y lo escribe después en «Tu nombre».
     const nombreYo = ya ? ya.nombre : miNombre(yo) ?? yo.nombre;
     lista = lista.map((f) => (f.clave === yo.clave ? { ...f, nombre: nombreYo, email: usuario.invitado ? f.email : usuario.email } : f));
@@ -420,8 +430,8 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
     if (!yo) return;
     // Si firmas solo tú, no hace falta decir qué número de firmante eres.
     const eres = firmantes.length > 1 ? `El Firmante ${n} eres tú. ` : "";
-    if (yo.pedirDni) {
-      setAviso(`${eres}Tu firma se toma con el DNI: al pulsar «${firmantes.length > 1 ? "Guardar y enviar" : "Firmar documento"}» se abrirá tu enlace para capturarlo.`);
+    if (yo.pedirDni || yo.pedirRostro) {
+      setAviso(`${eres}${yo.pedirDni ? "Tu firma se toma con el DNI" : "Se pide una foto de tu rostro"}: al pulsar «${firmantes.length > 1 ? "Guardar y enviar" : "Firmar documento"}» se abrirá tu enlace para capturarlo.`);
       return;
     }
     const pedidos: ImagenPropia[] = ["firma", ...(pide[clave]?.sello ? ["sello" as const] : []), ...(pide[clave]?.huella ? ["huella" as const] : [])];
@@ -524,7 +534,8 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
       if (!yo?.token || !miTurno) { alEnviar(det); return; }
       // Lo que hiciste aquí (firma, sello, huella) se envía como tu firma; si te falta llenar algo, se abre tu enlace.
       const mios = det.campos.filter((c) => c.firmante === yo.clave);
-      const completo = !yo.pedirDni && mios.every((c) => (ES_IMAGEN(c.tipo) ? !!misImagenes[c.tipo] : !c.obligatorio));
+      // Con DNI o foto del rostro, las capturas se hacen con la cámara desde tu enlace.
+      const completo = !yo.pedirDni && !yo.pedirRostro && mios.every((c) => (ES_IMAGEN(c.tipo) ? !!misImagenes[c.tipo] : !c.obligatorio));
       if (!completo) { navegar(`/f/${yo.token}`); return; }
       try {
         const valores = Object.fromEntries(mios.map((c) => [String(c.id), ES_IMAGEN(c.tipo) ? misImagenes[c.tipo]! : c.tipo === "casilla" ? false : ""]));
@@ -689,7 +700,8 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
     {!soloYo && firmantes.map((f, i) => <option key={f.clave} value={f.clave}>{otro}{i + 1}{/^Firmante \d+$/.test(f.nombre) ? "" : ` · ${f.nombre}`}</option>)}
   </>;
   // Si firmas solo tú, los bloqueos de la firma y del sello y el Flujo (opciones para los firmantes) no se muestran.
-  const activasAvanzadas = (soloYo ? [!!fActivo?.pedirDni, certificado] : [bloquearDibujo, bloquearSello, !!fActivo?.pedirDni, certificado, flujo]).filter(Boolean).length;
+  const activasAvanzadas = (soloYo ? [!!fActivo?.pedirDni, !!fActivo?.pedirRostro, certificado] : [bloquearDibujo, bloquearSello, !!fActivo?.pedirDni, !!fActivo?.pedirRostro, certificado, flujo]).filter(Boolean).length;
+  const conRostro = firmantes.flatMap((f, i) => (f.pedirRostro ? [i] : []));
   // El certificado necesita algo que certificar (firma, sello o huella), como en el prototipo.
   const hayEvidencias = campos.some((c) => ES_IMAGEN(c.tipo));
   const conDni = firmantes.flatMap((f, i) => (f.pedirDni ? [i] : []));
@@ -897,6 +909,7 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
                       </>
                     )}
                     {fActivo.pedirDni && <div className="small afDniNota">🪪 Firma y huella se tomarán del DNI (ver Funciones avanzadas).</div>}
+                    {fActivo.pedirRostro && <div className="small afDniNota">🤳 Se tomará una foto de su rostro con la cámara al firmar.</div>}
                   </div>
                   <button type="button" className="danger participantClearAll" disabled={!campos.some((c) => c.firmante !== PREPARADOR && c.tipo !== "calculo")} onClick={() => {
                     // Solo los campos de los firmantes: lo que llenas tú y los cálculos del PDF se conservan.
@@ -1139,7 +1152,13 @@ export function Editor({ inicial, alEnviar, alCambiarPdf, avisoInicial = "" }: {
               </>}
               <label className="checkrow"><input type="checkbox" checked={!!fActivo?.pedirDni} disabled={!fActivo} onChange={(e) => pedirDni(e.target.checked)} />
                 <div><div className="afTituloOpcion"><strong>🪪 Requerir firma y huella capturando DNI</strong>{!selloPermitido && <span className="afPaidBadge">🔒 Plan de pago</span>}</div>
-                  <div className="small">Para el Firmante {iActivo + 1}{conDni.length > (fActivo?.pedirDni ? 1 : 0) ? ` (también: ${conDni.filter((i) => i !== iActivo).map((i) => `Firmante ${i + 1}`).join(", ")})` : ""}: foto frontal del DNI, su firma en papel y el reverso, de donde sale la huella. Las fotos del DNI van en una hoja de evidencias del PDF{certificado ? ", junto a su cronología" : ""}. No valida identidad ante RENIEC.</div></div></label>
+                  <div className="small">Para el Firmante {iActivo + 1}{conDni.length > (fActivo?.pedirDni ? 1 : 0) ? ` (también: ${conDni.filter((i) => i !== iActivo).map((i) => `Firmante ${i + 1}`).join(", ")})` : ""}: foto frontal del DNI, su firma en papel y el reverso, de donde sale la huella. <strong>Todas las fotos se toman en el momento con la cámara: el firmante no podrá subir imágenes ni archivos guardados.</strong> Las fotos del DNI van en una hoja de evidencias del PDF{certificado ? ", junto a su cronología" : ""}. No valida identidad ante RENIEC.</div></div></label>
+              <label className="checkrow"><input type="checkbox" checked={!!fActivo?.pedirRostro} disabled={!fActivo} onChange={(e) => pedirRostro(e.target.checked)} />
+                <div><div className="afTituloOpcion"><strong>🤳 Verificar identidad con foto del rostro</strong>{!selloPermitido && <span className="afPaidBadge">🔒 Plan de pago</span>}</div>
+                  <div className="small">Para el Firmante {iActivo + 1}{conRostro.length > (fActivo?.pedirRostro ? 1 : 0) ? ` (también: ${conRostro.filter((i) => i !== iActivo).map((i) => `Firmante ${i + 1}`).join(", ")})` : ""}: antes de firmar se toma una foto del rostro, tipo perfil, con la cámara frontal. <strong>Solo con la cámara, en el momento: no podrá subir una foto guardada.</strong> La foto va en la hoja de evidencias del PDF.
+                    {fActivo?.pedirRostro && fActivo?.pedirDni
+                      ? " ✓ Combinada con el DNI: la hoja muestra el rostro junto al DNI para compararlos, además de la firma en papel y la huella."
+                      : " Combínala con «Requerir firma y huella capturando DNI» para tener rostro, DNI, firma y huella en una sola hoja."} No hace reconocimiento facial automático ni valida identidad ante RENIEC.</div></div></label>
               <label className={`checkrow ${hayEvidencias ? "" : "afInactiva"}`}><input type="checkbox" checked={certificado} disabled={!hayEvidencias} onChange={(e) => setCertificado(e.target.checked)} />
                 <div><strong>📜 Generar certificado de evidencias</strong><div className="small">{hayEvidencias
                   ? `Añade al PDF una hoja por firmante con la cronología de su firma, sello y huella${conDni.length ? ", las fotos de su DNI" : ""}, sus imágenes y su ubicación si la autoriza.`

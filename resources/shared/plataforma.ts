@@ -75,6 +75,8 @@ export const esquemaFirmante = z.object({
   email: z.union([z.string().trim().email("Correo inválido"), z.literal("")]).default(""),
   /** Firma y huella con fotos del DNI: frente, firma en papel y reverso (la huella sale del reverso). */
   pedirDni: z.boolean().default(false),
+  /** Foto del rostro tomada con la cámara al firmar (va en la hoja de evidencias, junto al DNI si también se pide). */
+  pedirRostro: z.boolean().default(false),
   /** Texto del firmante: «solo» firma/sella/huella, «asignados» llena los campos que se le asignan, «libre» además agrega texto libre. */
   modoTexto: z.enum(["solo", "asignados", "libre"]).default("asignados"),
 });
@@ -124,10 +126,12 @@ export const esquemaFirmar = z.object({
 });
 
 /** Capturas que se registran en el certificado de evidencias (hora del dispositivo del firmante). */
-export type Momento = "dniFrente" | "firma" | "sello" | "dniReverso" | "huella";
+export type Momento = "rostro" | "dniFrente" | "firma" | "sello" | "dniReverso" | "huella";
 /** Lo que acompaña a la firma: fotos del DNI, momento de cada captura y ubicación (si la autorizó). */
 export interface Evidencias {
   dni?: { frente: string; reverso: string };
+  /** Foto del rostro (JPG en data URL), tomada con la cámara frontal. */
+  rostro?: string;
   momentos?: Partial<Record<Momento, string>>;
   ubicacion?: { lat: number; lng: number; precision: number } | { estado: "denegada" | "no_disponible" };
 }
@@ -172,7 +176,7 @@ export interface VistaFirmante {
     nombre: string; estado: EstadoDocumento; mensaje: string; paginas: Pagina[]; remitente: string; empresa: string; logo: boolean;
     bloquearDibujo: boolean; bloquearSello: boolean; flujo: boolean; certificado: boolean; idioma: Idioma;
   };
-  yo: { orden: number; nombre: string; estado: EstadoFirmante; color: string; total: number; pedirDni: boolean; modoTexto: "solo" | "asignados" | "libre";
+  yo: { orden: number; nombre: string; estado: EstadoFirmante; color: string; total: number; pedirDni: boolean; pedirRostro: boolean; modoTexto: "solo" | "asignados" | "libre";
     /** Hasta cuándo puede descargar su copia (null si aún no firma). */
     copiaHasta: string | null };
   /** Falso si en orden secuencial todavía no le toca. */

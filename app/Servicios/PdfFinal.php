@@ -212,7 +212,8 @@ class PdfFinal
     private static function evidencias(Fpdi $pdf, array $f, bool $cronologia): void
     {
         $conDni = ! empty($f['dniFrente']) || ! empty($f['dniReverso']);
-        if (($f['estado'] ?? '') !== 'firmado' || (! $cronologia && ! $conDni)) {
+        $conRostro = ! empty($f['rostro']);
+        if (($f['estado'] ?? '') !== 'firmado' || (! $cronologia && ! $conDni && ! $conRostro)) {
             return;
         }
         $M = 48;
@@ -265,12 +266,38 @@ class PdfFinal
                 $y += 134;
             }
         }
-        if ($conDni) {
+        // Si lo que sigue no entra en la página, continúa en una nueva (con la cronología puede no alcanzar).
+        $espacio = function (float $alto) use ($pdf, &$y, $M) {
+            if ($y + $alto > 792 - $M - 24) {
+                $pdf->AddPage('P', [612, 792]);
+                $y = $M;
+            }
+        };
+        if ($conRostro && $conDni) {
+            // Rostro y DNI lado a lado, para comparar a simple vista la persona que firmó con su documento.
+            $espacio(270);
+            $linea('Verificación de identidad: rostro y DNI', 11, 'B');
+            $linea('Fotos tomadas con la cámara durante la firma: rostro, frente del DNI, firma en papel y reverso del DNI.', 8.5, '', self::GRIS);
+            $caja($f['rostro'], 'Rostro al firmar', $M, $y, 170, 210);
+            $caja($f['dniFrente'] ?? null, 'Frente del DNI', $M + 182, $y, $A - 182, 210);
+            $y += 224;
+            $espacio(204);
+            $caja($f['dniReverso'] ?? null, 'Reverso del DNI', $M + 182, $y, $A - 182, 190);
+            $y += 204;
+        } elseif ($conDni) {
+            $espacio(230);
             $linea('Fotos del DNI aportadas por el firmante', 11, 'B');
             $caja($f['dniFrente'] ?? null, 'Frente del DNI', $M, $y, ($A - 12) / 2, 190);
             $caja($f['dniReverso'] ?? null, 'Reverso del DNI', $M + ($A + 12) / 2, $y, ($A - 12) / 2, 190);
             $y += 204;
+        } elseif ($conRostro) {
+            $espacio(250);
+            $linea('Foto del rostro tomada con la cámara durante la firma', 11, 'B');
+            $caja($f['rostro'], 'Rostro al firmar', $M, $y, 170, 210);
+            $y += 224;
         }
-        $linea('Las imágenes y fotos de esta hoja son evidencia aportada por el firmante desde su dispositivo. No validan su identidad ante RENIEC ni constituyen una firma digital certificada. AutograFlow no guarda la ubicación si el firmante no la autoriza.', 7.5, '', self::GRIS);
+        $linea('Las imágenes y fotos de esta hoja son evidencia aportada por el firmante desde su dispositivo. No validan su identidad ante RENIEC ni constituyen una firma digital certificada'
+            .($conRostro ? '; AutograFlow no hace reconocimiento facial automático: la foto del rostro sirve para compararla con el DNI a simple vista' : '')
+            .'. AutograFlow no guarda la ubicación si el firmante no la autoriza.', 7.5, '', self::GRIS);
     }
 }

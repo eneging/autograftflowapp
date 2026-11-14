@@ -86,6 +86,33 @@ main.mainPortada { max-width: none; margin: 0; padding: 0; }
 .logoWord { color: var(--ink); font-size: 16px; font-weight: 650; letter-spacing: -.015em; }
 .logoWord .logoFlow { color: inherit; }
 .authLogo .logoWord { font-size: 22px; }
+/*
+ * Logo escrito como una firma (≈2,6 s; la barra lateral espera lo mismo en Marco.tsx): la hoja aparece, la «A» se traza
+ * y se rellena, la rúbrica se dibuja y el nombre se descubre de izquierda a derecha, como escrito a mano.
+ */
+.logoEscribe .logoF { animation: escribeHoja .35s ease-out both; }
+.logoEscribe .logoLetra { stroke: var(--logoTinta); stroke-width: .9; stroke-dasharray: 130; stroke-dashoffset: 130; fill-opacity: 0;
+  animation: escribeTrazo 1s .25s ease-in-out forwards, escribeRelleno .35s 1.05s ease-out forwards; }
+.logoEscribe .logoTrazo { stroke-dasharray: 32; stroke-dashoffset: 32; animation: escribeTrazo .55s 1.2s ease-in-out forwards; }
+.logoEscribe .logoWord { display: inline-block; clip-path: inset(-4px 100% -4px 0); animation: escribePalabra 1.3s .5s cubic-bezier(.45, .05, .35, 1) forwards; }
+@keyframes escribeHoja { from { opacity: 0; transform: scale(.82) rotate(-6deg); } }
+@keyframes escribeTrazo { to { stroke-dashoffset: 0; } }
+@keyframes escribeRelleno { to { fill-opacity: 1; stroke-width: 0; } }
+@keyframes escribePalabra { to { clip-path: inset(-4px 0 -4px 0); } }
+/* Barra lateral: el logo ocupa el lugar del avatar y el nombre; al terminar se desvanece rápido y ellos vuelven. */
+.espacioIntro { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.espacioIntro .logoWord { font-size: 15px; }
+.espacioIntro.saliendo { animation: introSale .35s ease-in forwards; }
+.espacioEntra { display: inline-flex; animation: introEntra .4s ease-out both; }
+.espacioNombre.espacioEntra { display: block; }
+@keyframes introSale { to { opacity: 0; transform: translateY(-3px); filter: blur(1px); } }
+@keyframes introEntra { from { opacity: 0; transform: translateY(3px); } }
+@media (prefers-reduced-motion: reduce) {
+  .logoEscribe .logoF, .logoEscribe .logoLetra, .logoEscribe .logoTrazo, .logoEscribe .logoWord, .espacioIntro.saliendo, .espacioEntra { animation: none; }
+  .logoEscribe .logoLetra { stroke-dashoffset: 0; fill-opacity: 1; stroke-width: 0; }
+  .logoEscribe .logoTrazo { stroke-dashoffset: 0; }
+  .logoEscribe .logoWord { clip-path: none; }
+}
 
 /* ------------------------------------------------------------------ encabezado sencillo (firmantes y visitantes) */
 .afHeader {
@@ -159,6 +186,12 @@ main.mainPortada { max-width: none; margin: 0; padding: 0; }
 /* «Ver documento»: solo cuando la vista previa queda debajo del menú (.editorGrid a una columna). */
 .botonVerDocumento { display: none !important; white-space: nowrap; }
 @media (max-width: 900px) { .botonVerDocumento { display: inline-flex !important; } }
+/* Un poco más visible que los demás botones de la barra, sin llegar a ser el botón principal. */
+.botonVerDocumento {
+  background: var(--accentSuave) !important; color: var(--accent) !important; border-color: color-mix(in srgb, var(--accent) 35%, transparent) !important;
+  font-weight: 600;
+}
+.botonVerDocumento:hover { border-color: var(--accent) !important; }
 /* Al bajar hasta el documento, que no quede debajo de la barra superior. */
 .previewCard .preview, .previewCard .avisoColocar { scroll-margin-top: 56px; }
 .chipPlan { padding: 2px 8px; border-radius: 4px; background: var(--gris); color: var(--muted); font-size: 12px; font-weight: 500; text-decoration: none; }

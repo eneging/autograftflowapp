@@ -8,6 +8,7 @@ use App\Servicios\ErrorUso;
 use App\Servicios\Imagenes;
 use App\Servicios\MercadoPago;
 use App\Servicios\Planes;
+use App\Servicios\Suscripciones;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -64,7 +65,20 @@ class CuentaController extends Controlador
         if (AuthController::esInvitado($r->user())) {
             throw new \App\Servicios\ErrorUso('Crea tu cuenta para comprar un plan: así tus pagos y documentos quedan a tu nombre.', 403);
         }
-        return response()->json(MercadoPago::crearPago($r->user(), $d['producto']), 201);
+        // Básico es una suscripción mensual (con prueba gratuita la primera vez); los demás, un pago único.
+        return response()->json(Suscripciones::esSuscripcion($d['producto'])
+            ? Suscripciones::crear($r->user(), $d['producto'])
+            : MercadoPago::crearPago($r->user(), $d['producto']), 201);
+    }
+
+    public function verificarSuscripcion(Request $r, int $id)
+    {
+        return Suscripciones::verificar($r->user(), $id);
+    }
+
+    public function cancelarSuscripcion(Request $r)
+    {
+        return Suscripciones::cancelar($r->user());
     }
 
     public function verificarPago(Request $r, int $id)
@@ -83,9 +97,15 @@ class CuentaController extends Controlador
         if ($secreto !== '' && ! MercadoPago::firmaValida($secreto, $r->header('x-signature'), $r->header('x-request-id'), $idFirmado)) {
             return response()->json(['error' => 'Firma inválida'], 401);
         }
-        if ($tipo === 'payment' && $dataId !== '') {
+        $procesar = match ($tipo) {
+            'payment' => fn () => MercadoPago::procesarPago($dataId),
+            'subscription_preapproval' => fn () => Suscripciones::procesarSuscripcion($dataId),
+            'subscription_authorized_payment' => fn () => Suscripciones::procesarCobro($dataId),
+            default => null,
+        };
+        if ($procesar && $dataId !== '') {
             try {
-                MercadoPago::procesarPago($dataId);
+                $procesar();
             } catch (\Throwable $e) {
                 report($e);
                 // Con error, Mercado Pago reintenta el aviso más tarde.

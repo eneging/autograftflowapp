@@ -96,6 +96,8 @@ Route::prefix('api')->middleware(CabeceraAutograFlow::class)->group(function () 
         Route::delete('cuenta/logo', [CuentaController::class, 'quitarLogo']);
         Route::post('pagos', [CuentaController::class, 'comprar']);
         Route::post('pagos/{id}/verificar', [CuentaController::class, 'verificarPago'])->whereNumber('id');
+        Route::post('suscripciones/{id}/verificar', [CuentaController::class, 'verificarSuscripcion'])->whereNumber('id');
+        Route::post('suscripciones/cancelar', [CuentaController::class, 'cancelarSuscripcion'])->middleware('throttle:10,1');
         Route::get('pagos/{id}/comprobante', [PerfilController::class, 'comprobante'])->whereNumber('id')->middleware('throttle:30,1');
         Route::get('perfil', [PerfilController::class, 'ver']);
         Route::put('perfil', [PerfilController::class, 'guardar'])->middleware('throttle:30,1');

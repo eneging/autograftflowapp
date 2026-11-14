@@ -10,6 +10,7 @@ import "./flow-tools.css";
 /** Apps propias (páginas React), cada una cargada solo al abrirla. */
 const NATIVAS: Record<string, LazyExoticComponent<ComponentType>> = {
   "ex-trae": lazy(() => import("./ExTrae")),
+  "pizarra": lazy(() => import("./pizarra/Pizarra")),
 };
 
 /** «Flow Tools»: catálogo de apps (separadas en completas y beta) y cada app abierta dentro de la plataforma. */

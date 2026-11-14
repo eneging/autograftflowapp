@@ -148,7 +148,7 @@ class Documentos
             'creadoEn' => Fechas::iso($d->created_at), 'enviadoEn' => Fechas::iso($d->enviado_en), 'completadoEn' => Fechas::iso($d->completado_en),
             'firmantes' => DB::table('firmantes')->where('documento_id', $id)->orderBy('orden')->get()->map(fn ($f) => [
                 'id' => $f->id, 'clave' => $clave($f->id), 'orden' => $f->orden, 'nombre' => $f->nombre, 'telefono' => $f->telefono, 'email' => $f->email,
-                'pedirDni' => (bool) $f->pedir_dni, 'modoTexto' => $f->modo_texto ?? 'asignados', 'color' => $f->color, 'token' => $f->token, 'estado' => $f->estado, 'abiertoEn' => Fechas::iso($f->abierto_en),
+                'pedirDni' => (bool) $f->pedir_dni, 'pedirRostro' => (bool) $f->pedir_rostro, 'modoTexto' => $f->modo_texto ?? 'asignados', 'color' => $f->color, 'token' => $f->token, 'estado' => $f->estado, 'abiertoEn' => Fechas::iso($f->abierto_en),
                 'firmadoEn' => Fechas::iso($f->firmado_en), 'motivoRechazo' => $f->motivo_rechazo,
             ])->all(),
             'campos' => DB::table('campos')->where('documento_id', $id)->orderBy('id')->get()->map(fn ($c) => [
@@ -210,7 +210,7 @@ class Documentos
             foreach ($datos['firmantes'] as $i => $f) {
                 $ids[$f['clave']] = DB::table('firmantes')->insertGetId([
                     'documento_id' => $id, 'orden' => $i + 1, 'nombre' => $f['nombre'], 'telefono' => $f['telefono'], 'email' => $f['email'],
-                    'color' => self::COLORES[$i % count(self::COLORES)], 'pedir_dni' => $f['pedirDni'] ?? false, 'modo_texto' => $f['modoTexto'] ?? 'asignados',
+                    'color' => self::COLORES[$i % count(self::COLORES)], 'pedir_dni' => $f['pedirDni'] ?? false, 'pedir_rostro' => $f['pedirRostro'] ?? false, 'modo_texto' => $f['modoTexto'] ?? 'asignados',
                 ]);
             }
             foreach ($datos['campos'] as $c) {
@@ -334,7 +334,7 @@ class Documentos
             $ids = [];
             foreach ($det['firmantes'] as $f) {
                 $ids[$f['clave']] = DB::table('firmantes')->insertGetId([
-                    'documento_id' => $nuevo, 'orden' => $f['orden'], 'nombre' => $f['nombre'], 'color' => $f['color'], 'pedir_dni' => $f['pedirDni'], 'modo_texto' => $f['modoTexto'],
+                    'documento_id' => $nuevo, 'orden' => $f['orden'], 'nombre' => $f['nombre'], 'color' => $f['color'], 'pedir_dni' => $f['pedirDni'], 'pedir_rostro' => $f['pedirRostro'], 'modo_texto' => $f['modoTexto'],
                     'telefono' => $det['esPlantilla'] ? '' : $f['telefono'], 'email' => $det['esPlantilla'] ? '' : $f['email'],
                 ]);
             }
@@ -573,7 +573,7 @@ class Documentos
             // Completado, rechazado o anulado: se borra del todo (PDF, firmas, fotos del DNI e historial) para no
             // acumular espacio. El documento consumido del plan sigue contando (la tabla consumos no se toca).
             $imagenes = DB::table('campos')->where('documento_id', $id)->whereNotNull('imagen')->pluck('imagen')
-                ->merge(DB::table('firmantes')->where('documento_id', $id)->get(['dni_frente', 'dni_reverso'])->flatMap(fn ($f) => [$f->dni_frente, $f->dni_reverso]))
+                ->merge(DB::table('firmantes')->where('documento_id', $id)->get(['dni_frente', 'dni_reverso', 'foto_rostro'])->flatMap(fn ($f) => [$f->dni_frente, $f->dni_reverso, $f->foto_rostro]))
                 ->filter()->unique();
             DB::table('documentos')->where('id', $id)->delete();
             self::disco()->deleteDirectory("documentos/{$id}");
@@ -729,7 +729,7 @@ class Documentos
                 'bloquearDibujo' => (bool) $f->bloquear_dibujo || (bool) $f->pedir_dni, 'bloquearSello' => (bool) $f->bloquear_sello,
                 'flujo' => (bool) $f->flujo, 'certificado' => (bool) $f->certificado_evidencias, 'idioma' => $f->doc_idioma ?? 'es',
             ],
-            'yo' => ['orden' => $f->orden, 'nombre' => $f->nombre, 'estado' => $f->estado, 'color' => $f->color, 'total' => $firmantes->count(), 'pedirDni' => (bool) $f->pedir_dni, 'modoTexto' => $f->modo_texto ?? 'asignados',
+            'yo' => ['orden' => $f->orden, 'nombre' => $f->nombre, 'estado' => $f->estado, 'color' => $f->color, 'total' => $firmantes->count(), 'pedirDni' => (bool) $f->pedir_dni, 'pedirRostro' => (bool) $f->pedir_rostro, 'modoTexto' => $f->modo_texto ?? 'asignados',
                 'copiaHasta' => Fechas::iso(self::copiaHasta($f))],
             'turno' => $turno, 'esperando' => $esperando,
             // Sus campos, los ya llenados por otros (o por quien preparó el documento) y los que calcula el PDF.
@@ -749,7 +749,7 @@ class Documentos
     }
 
     /** Momentos que registra la página del firmante (hora de su dispositivo), en el orden en que se muestran. */
-    public const MOMENTOS = ['dniFrente' => 'Foto del frente del DNI', 'firma' => 'Firma', 'sello' => 'Sello', 'dniReverso' => 'Foto del reverso del DNI', 'huella' => 'Huella'];
+    public const MOMENTOS = ['rostro' => 'Foto del rostro', 'dniFrente' => 'Foto del frente del DNI', 'firma' => 'Firma', 'sello' => 'Sello', 'dniReverso' => 'Foto del reverso del DNI', 'huella' => 'Huella'];
 
     /** Momentos de captura y ubicación enviados por la página, limpios. Null si no hay nada. */
     private static function limpiarEvidencias(array $e): ?string
@@ -839,6 +839,15 @@ class Documentos
                         } else {
                             $faltan["dni_{$lado}"] = "Falta la foto del {$lado} del DNI";
                         }
+                    }
+                }
+                // Foto del rostro tomada con la cámara al firmar (se compara a simple vista con el DNI en la hoja de evidencias).
+                if ($f->pedir_rostro) {
+                    $v = $evidencias['rostro'] ?? null;
+                    if (is_string($v) && str_starts_with($v, 'data:image/')) {
+                        $subidas[] = $dni['foto_rostro'] = Imagenes::guardar(Imagenes::desdeDataUrl($v, config('autograflow.limites.dni_bytes')), "documentos/{$f->documento_id}/rostro");
+                    } else {
+                        $faltan['rostro'] = 'Falta la foto de tu rostro';
                     }
                 }
                 if ($faltan) {
@@ -983,7 +992,7 @@ class Documentos
                     'orden' => $f->orden, 'nombre' => $f->nombre, 'telefono' => $f->telefono, 'email' => $f->email, 'estado' => $f->estado,
                     'abiertoEn' => $f->abierto_en, 'firmadoEn' => $f->firmado_en, 'ip' => $f->ip, 'agente' => $f->agente,
                     'firma' => $imagen('firma'), 'sello' => $imagen('sello'), 'huella' => $imagen('huella'),
-                    'dniFrente' => $leer($f->dni_frente), 'dniReverso' => $leer($f->dni_reverso),
+                    'dniFrente' => $leer($f->dni_frente), 'dniReverso' => $leer($f->dni_reverso), 'rostro' => $leer($f->foto_rostro),
                     'momentos' => $ev['momentos'] ?? [], 'ubicacion' => $ev['ubicacion'] ?? null,
                 ];
             })->all(),

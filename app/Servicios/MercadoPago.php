@@ -49,6 +49,9 @@ class MercadoPago
     public static function crearPago(User $u, string $idProducto): array
     {
         $p = Planes::producto($idProducto) ?? throw new ErrorUso('Ese plan no existe');
+        if (Suscripciones::esSuscripcion($idProducto)) {
+            throw new ErrorUso("El plan {$p['plan']['nombre']} es una suscripción mensual: suscríbete desde la página de planes.");
+        }
         if (! self::activo()) {
             throw new ErrorUso('Los pagos en línea todavía no están activados. Escríbenos y activamos tu plan manualmente.', 503);
         }
@@ -111,7 +114,7 @@ class MercadoPago
     /** Marca el pago como aprobado y entrega lo comprado. Idempotente: si el aviso llega dos veces, se aplica una sola. */
     public static function aplicar(int $pagoId, ?string $mpPagoId): bool
     {
-        return DB::transaction(function () use ($pagoId, $mpPagoId) {
+        $aplicado = DB::transaction(function () use ($pagoId, $mpPagoId) {
             $cambiados = DB::table('pagos')->where('id', $pagoId)->whereNull('aplicado_en')->update([
                 'estado' => 'aprobado', 'mp_pago_id' => $mpPagoId ?? DB::raw('mp_pago_id'), 'aplicado_en' => now(), 'updated_at' => now(),
             ]);
@@ -123,6 +126,14 @@ class MercadoPago
             Referidos::pagoAprobado($pago);
             return true;
         }, 3);
+        // Al pasar a Profesional o Empresarial ya no tiene sentido seguir cobrando el Básico mensual.
+        if ($aplicado) {
+            $cuentaId = (int) DB::table('pagos')->where('id', $pagoId)->value('cuenta_id');
+            if (in_array(Planes::vigenteDe($cuentaId), ['profesional', 'empresarial'], true)) {
+                Suscripciones::reemplazarPorPlan($cuentaId);
+            }
+        }
+        return $aplicado;
     }
 
     /** Al volver de Mercado Pago: busca el pago por su referencia (sirve aunque el aviso no haya llegado todavía). */

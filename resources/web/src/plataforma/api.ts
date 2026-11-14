@@ -1,5 +1,5 @@
 import type { DatosGuardarDocumento, DocumentoDetalle, EstadoDocumento, EstadoFirmante, Evidencias, VistaFirmante } from "../../../shared/plataforma";
-import type { EstadoCuenta, IdPlan, PagoFila, Plan } from "../../../shared/planes";
+import type { EstadoCuenta, IdPlan, PagoFila, Plan, Suscripcion } from "../../../shared/planes";
 import { prepararPdf } from "./prepararPdf";
 
 export class ErrorApi extends Error {
@@ -125,7 +125,10 @@ export const plataforma = {
   envios: (plantilla: number) => pedir<EnvioPlantilla[]>(`/api/documentos/${plantilla}/envios`),
   eliminarContacto: (id: number) => pedir<void>(`/api/contactos/${id}`, { method: "DELETE" }),
   cuenta: () => pedir<{ estado: EstadoCuenta; pagos: PagoFila[] }>("/api/cuenta"),
-  comprar: (producto: string) => pedir<{ pagoId: number; url: string }>("/api/pagos", json("POST", { producto })),
+  /** Planes de pago único devuelven pagoId; Básico (suscripción mensual) devuelve suscripcionId. */
+  comprar: (producto: string) => pedir<{ pagoId?: number; suscripcionId?: number; url: string }>("/api/pagos", json("POST", { producto })),
+  verificarSuscripcion: (id: number) => pedir<Suscripcion>(`/api/suscripciones/${id}/verificar`, json("POST", {})),
+  cancelarSuscripcion: () => pedir<Suscripcion>("/api/suscripciones/cancelar", json("POST", {})),
   verificarPago: (id: number) => pedir<PagoFila>(`/api/pagos/${id}/verificar`, json("POST", {})),
 
   // «Mi perfil»: avatar, nombre, datos de facturación y comprobantes de pago.

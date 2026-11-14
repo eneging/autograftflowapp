@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import SignaturePad from "signature_pad";
 import type { Dedo, Mano } from "../../../shared/plataforma";
 import { girarRecorte, type Recorte } from "../../../shared/firmaImagen";
+import { CamaraEnVivo } from "./CamaraEnVivo";
 import { ConsejosHuella, EncajarHuella, girar } from "./Huella";
 import { textoDedoEn, usarIdioma, usarT } from "./idioma";
 import { cargarFoto, pngSinRetoques, recortar, RecortarFirma } from "./RecortarFirma";
@@ -25,6 +26,8 @@ interface Props {
   bloquearDibujo?: boolean;
   /** El documento pide el sello real: no se puede confeccionar con texto. */
   bloquearSello?: boolean;
+  /** Con DNI: la foto se toma en el momento con la cámara en vivo; no se pueden subir imágenes. */
+  soloCamara?: boolean;
   /** Dedo pedido para la huella. */
   dedo?: { mano: Mano; dedo: Dedo } | null;
 }
@@ -32,7 +35,8 @@ interface Props {
 interface FotoRecortable { lienzo: HTMLCanvasElement; recorte: Recorte | null }
 
 /** Pantalla completa de firma: dibujar, subir una imagen o fotografiar la firma en papel. */
-export function PantallaFirma({ titulo, tipo = "firma", inicial, alTerminar, alCerrar, bloquearDibujo = false, bloquearSello = false, dedo = null }: Props) {
+export function PantallaFirma({ titulo, tipo = "firma", inicial, alTerminar, alCerrar, bloquearDibujo = false, bloquearSello = false, soloCamara = false, dedo = null }: Props) {
+  const [camaraVivo, setCamaraVivo] = useState(false);
   const t = usarT(), idioma = usarIdioma();
   const txt = TEXTOS[tipo];
   const sinDibujo = tipo === "firma" && bloquearDibujo;
@@ -49,7 +53,8 @@ export function PantallaFirma({ titulo, tipo = "firma", inicial, alTerminar, alC
   const [recortando, setRecortando] = useState<FotoRecortable | null>(null);
   const [hayTrazo, setHayTrazo] = useState(false);
   const [aviso, setAviso] = useState(
-    sinDibujo ? t("Este documento requiere tu firma real: fírmala en papel y tómale una foto, o sube una imagen de tu firma.")
+    sinDibujo && soloCamara ? t("Este documento requiere tu firma real: fírmala en papel y tómale una foto con la cámara (no se pueden subir imágenes guardadas).")
+      : sinDibujo ? t("Este documento requiere tu firma real: fírmala en papel y tómale una foto, o sube una imagen de tu firma.")
       : tipo === "sello" && bloquearSello ? t("Este documento requiere tu sello real: fotografíalo o sube una imagen.")
       : tipo === "huella" && dedo ? t("{dedo}: sube o fotografía la foto de tu dedo.", { dedo: textoDedoEn(idioma, dedo) }) : t(txt.aviso));
   const subir = useRef<HTMLInputElement>(null);
@@ -164,13 +169,15 @@ export function PantallaFirma({ titulo, tipo = "firma", inicial, alTerminar, alC
       <div className="methods">
         {tipo === "firma" && !sinDibujo && <button type="button" className={!imagen ? "primary" : ""} onClick={() => { setImagen(null); setFoto(null); }}>{t("✍️ Dibujar")}</button>}
         {conConfeccion && <button type="button" className={confeccionando ? "primary" : ""} onClick={() => setConfeccionando(true)}>{t("✍️ Confeccionar sello")}</button>}
-        <button type="button" onClick={() => subir.current?.click()}>{t(`🖼️ Subir ${tipo === "firma" ? "firma PNG" : txt.nombre}`)}</button>
-        <button type="button" onClick={() => camara.current?.click()}>{t(`📷 Fotografiar ${txt.nombre}`)}</button>
+        {!soloCamara && <button type="button" onClick={() => subir.current?.click()}>{t(`🖼️ Subir ${tipo === "firma" ? "firma PNG" : txt.nombre}`)}</button>}
+        <button type="button" className={soloCamara && !imagen ? "primary" : ""} onClick={() => (soloCamara ? setCamaraVivo(true) : camara.current?.click())}>{t(`📷 Fotografiar ${txt.nombre}`)}</button>
         {imagen && foto && <button type="button" onClick={() => setRecortando(foto)}>{t("✂️ Ajustar recorte")}</button>}
         {imagen && tipo !== "huella" && <button type="button" title={t("Si la foto salió de lado o de cabeza")} onClick={girarTodo}>{t("↻ Girar 90°")}</button>}
         <input ref={subir} type="file" accept="image/png,image/jpeg" hidden onChange={(e) => { alElegirArchivo(e.target.files?.[0]); e.target.value = ""; }} />
         <input ref={camara} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { alElegirArchivo(e.target.files?.[0]); e.target.value = ""; }} />
       </div>
+      {camaraVivo && <CamaraEnVivo titulo={t("Foto de tu firma")} pista="Encuadra la firma hecha en papel y toma la foto"
+        alCerrar={() => setCamaraVivo(false)} alCapturar={(f) => { setCamaraVivo(false); alElegirArchivo(f); }} />}
       <div className="hintBar">{aviso}</div>
       <div className="bottom">
         <button type="button" onClick={borrar} disabled={!hayTrazo && !imagen}>{t(`Borrar ${txt.nombre}`)}</button>

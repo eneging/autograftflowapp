@@ -66,6 +66,7 @@ button.rvIcono:hover:not(:disabled) { background: rgba(255,255,255,.1); }
 .rvHoja select { width: auto; background: #2b2b2b; color: #fff; border-color: rgba(255,255,255,.2); }
 .rvHoja .rvCheck { justify-content: flex-start; }
 .rvHoja > button { padding: 12px 14px; border: 1px solid rgba(255,255,255,.18); border-radius: 10px; background: rgba(255,255,255,.05); font-size: 14.5px; text-align: left; }
+.rvNota { display: block; margin-top: 3px; font-size: 12px; opacity: .7; font-weight: 400; overflow-wrap: anywhere; }
 .rvHojaBotones { display: flex; justify-content: flex-end; gap: 8px; }
 .rvHojaBotones button { padding: 10px 16px; border: 1px solid rgba(255,255,255,.2); border-radius: 10px; background: transparent; }
 .rvHojaBotones .rvPeligro { border-color: transparent; background: #d93a3a; color: #fff !important; font-weight: 600; }

@@ -9,7 +9,7 @@ import { Admin } from "./paginas/Admin";
 import { Acceso, Inicio, SinCuenta } from "./plataforma/Portada";
 import { Panel } from "./plataforma/Panel";
 import { ConSesion, SesionProveedor } from "./plataforma/sesion";
-import { MiPlan, ResultadoPago } from "./plataforma/Planes";
+import { MiPlan, ResultadoPago, ResultadoSuscripcion } from "./plataforma/Planes";
 import { Estadisticas } from "./plataforma/Estadisticas";
 import { Equipo } from "./plataforma/Equipo";
 import { Verificar } from "./plataforma/Verificar";
@@ -61,6 +61,7 @@ createRoot(document.getElementById("root")!).render(
             <Route path="/app/estadisticas" element={<ConSesion><Estadisticas /></ConSesion>} />
             <Route path="/app/equipo" element={<ConSesion><Equipo /></ConSesion>} />
             <Route path="/app/pago" element={<ConSesion><ResultadoPago /></ConSesion>} />
+            <Route path="/app/suscripcion" element={<ConSesion><ResultadoSuscripcion /></ConSesion>} />
             {/* Plantilla: Solicitud de reembolso */}
             <Route path="/reembolso" element={<NuevaSolicitud />} />
             <Route path="/s/:token" element={<VerSolicitud />} />

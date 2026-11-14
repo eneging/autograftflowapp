@@ -22,9 +22,27 @@ import { enElDocumento, irAlDocumento, olvidarOrigen, volverDelDocumento } from 
 
 export { LogoMarca };
 
-export function Logo({ grande = false, a = "/" }: { grande?: boolean; a?: string }) {
+const sinMovimiento = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/** Cuenta vueltas cada «ms» (0 = nunca): sirve de key para repetir una animación CSS desde el principio. */
+function usarRepeticion(ms: number) {
+  const [vuelta, setVuelta] = useState(0);
+  useEffect(() => {
+    if (!ms || sinMovimiento()) return;
+    const id = setInterval(() => { if (!document.hidden) setVuelta((n) => n + 1); }, ms);
+    return () => clearInterval(id);
+  }, [ms]);
+  return vuelta;
+}
+
+/**
+ * Logo de la cabecera. Con «animar» (ms), se escribe como una firma —la A se traza, luego la rúbrica y el nombre de
+ * izquierda a derecha— al cargar la página y de nuevo cada «animar» ms.
+ */
+export function Logo({ grande = false, a = "/", animar = 0 }: { grande?: boolean; a?: string; animar?: number }) {
+  const vuelta = usarRepeticion(animar);
   return (
-    <Link to={a} className={`logo ${grande ? "authLogo" : ""}`} aria-label="AutograFlow">
+    <Link key={vuelta} to={a} className={`logo ${grande ? "authLogo" : ""} ${animar ? "logoEscribe" : ""}`} aria-label="AutograFlow">
       <LogoMarca tam={grande ? 40 : 26} />
       <span className="logoWord">AutograFlow</span>
     </Link>
@@ -116,7 +134,7 @@ export function Marco({ children }: { children: ReactNode }) {
     <>
       {aviso}
       <header className="afHeader">
-        <Logo a={firmante ? "#" : "/"} />
+        <Logo a={firmante ? "#" : "/"} animar={30_000} />
         <div className="headDer">
           {firmante ? <span className="headNota">Firma electrónica de documentos</span>
             : usuario === null && <Link className="boton botonChico" to="/ingresar">Iniciar sesión</Link>}
@@ -139,6 +157,7 @@ function tituloRuta(pathname: string) {
   if (pathname === "/app/estadisticas") return "Estadísticas y directorio";
   if (pathname === "/app/equipo") return "Mi Equipo";
   if (pathname === "/app/pago") return "Pago";
+  if (pathname === "/app/suscripcion") return "Suscripción";
   if (pathname === "/verificar") return "Verificar un PDF";
   if (pathname === "/admin") return "Administración";
   return "";
@@ -194,6 +213,40 @@ function ConLateral({ ancho, children }: { ancho: boolean; children: ReactNode }
   );
 }
 
+/** Cada cuánto vuelve a escribirse el logo en la barra lateral (se recuerda entre páginas y recargas). */
+const INTRO_CADA = 5 * 60_000;
+const CLAVE_INTRO = "af.introLogo";
+/** Duración de la escritura (ver .logoEscribe en tema.css) y de la salida gradual. */
+const INTRO_ESCRITURA = 2600, INTRO_SALIDA = 350, INTRO_ENTRADA = 400;
+
+/**
+ * En la barra lateral, el logo se escribe en lugar del avatar y el nombre; al terminar se desvanece rápido y vuelven
+ * el avatar y lo demás. Ocurre al entrar al panel y, después, una vez cada 5 minutos.
+ */
+function usarIntroLogo() {
+  const [fase, setFase] = useState<"no" | "escribiendo" | "saliendo" | "entrando">("no");
+  useEffect(() => {
+    if (sinMovimiento()) return;
+    const leer = () => { try { return Number(localStorage.getItem(CLAVE_INTRO)) || 0; } catch { return 0; } };
+    const toca = () => !document.hidden && Date.now() - leer() >= INTRO_CADA;
+    const empezar = () => {
+      try { localStorage.setItem(CLAVE_INTRO, String(Date.now())); } catch { /* sin almacenamiento: igual se anima */ }
+      setFase("escribiendo");
+    };
+    if (toca()) empezar();
+    const id = setInterval(() => { if (toca()) empezar(); }, 15_000);
+    return () => clearInterval(id);
+  }, []);
+  useEffect(() => {
+    const siguiente = { escribiendo: ["saliendo", INTRO_ESCRITURA], saliendo: ["entrando", INTRO_SALIDA], entrando: ["no", INTRO_ENTRADA] } as const;
+    if (fase === "no") return;
+    const [proxima, ms] = siguiente[fase];
+    const id = setTimeout(() => setFase(proxima), ms);
+    return () => clearTimeout(id);
+  }, [fase]);
+  return fase;
+}
+
 /** Barra lateral: espacio de trabajo, navegación, documentos recientes y, abajo, nuevo documento, tema y salir. */
 function Lateral({ alPlegar }: { alPlegar: () => void }) {
   const { usuario, salir } = usarSesion();
@@ -206,6 +259,7 @@ function Lateral({ alPlegar }: { alPlegar: () => void }) {
   const [verOrganizar, setVerOrganizar] = useState(false);
   const { accesos: favoritos } = usarFavoritos();
   const caja = useRef<HTMLDivElement>(null);
+  const intro = usarIntroLogo();
   // Los documentos recientes se actualizan al cambiar de página (p. ej. al crear o enviar uno).
   useEffect(() => {
     plataforma.documentos().then((d) => {
@@ -230,9 +284,13 @@ function Lateral({ alPlegar }: { alPlegar: () => void }) {
     <aside className="afLateral" aria-label="Navegación">
       <div className="espacio" ref={caja}>
         <button type="button" className="espacioBoton" aria-haspopup="true" aria-expanded={menuCuenta} onClick={() => setMenuCuenta(!menuCuenta)}>
-          <Avatar codigo={usuario.avatar} inicial={inicial} tam={28} />
-          <span className="espacioNombre">{usuario.invitado ? "Invitado (sin cuenta)" : `Espacio de ${usuario.nombre}`}</span>
-          <span className="espacioFlecha" aria-hidden>⌄</span>
+          {intro === "escribiendo" || intro === "saliendo"
+            ? <span className={`espacioIntro logoEscribe ${intro === "saliendo" ? "saliendo" : ""}`} aria-hidden><LogoMarca tam={28} /><span className="logoWord">AutograFlow</span></span>
+            : <>
+              <span className={intro === "entrando" ? "espacioEntra" : ""}><Avatar codigo={usuario.avatar} inicial={inicial} tam={28} /></span>
+              <span className={`espacioNombre ${intro === "entrando" ? "espacioEntra" : ""}`}>{usuario.invitado ? "Invitado (sin cuenta)" : `Espacio de ${usuario.nombre}`}</span>
+              <span className="espacioFlecha" aria-hidden>⌄</span>
+            </>}
         </button>
         <button type="button" className="botonIcono soloEscritorio" title="Ocultar barra lateral" aria-label="Ocultar barra lateral" onClick={alPlegar}><Icono n="plegar" /></button>
         {menuCuenta && (

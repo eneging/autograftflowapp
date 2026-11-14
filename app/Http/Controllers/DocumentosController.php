@@ -73,6 +73,7 @@ class DocumentosController extends Controlador
             'firmantes.*.telefono' => ['nullable', 'string', 'max:30', 'regex:/^$|^[+\d][\d\s()-]{6,}$/'],
             'firmantes.*.email' => 'nullable|email|max:160',
             'firmantes.*.pedirDni' => 'boolean',
+            'firmantes.*.pedirRostro' => 'boolean',
             'firmantes.*.modoTexto' => 'nullable|in:solo,asignados,libre',
             'campos' => "present|array|max:{$l['campos']}",
             'campos.*.firmante' => 'required|string|max:40',
@@ -93,7 +94,7 @@ class DocumentosController extends Controlador
             'bloquearDibujo' => (bool) ($d['bloquearDibujo'] ?? false), 'bloquearSello' => (bool) ($d['bloquearSello'] ?? false),
             'flujo' => (bool) ($d['flujo'] ?? false), 'certificado' => (bool) ($d['certificado'] ?? false), 'idioma' => $d['idioma'] ?? null,
             'firmantes' => array_map(fn ($f) => ['clave' => $f['clave'], 'nombre' => trim($f['nombre']), 'telefono' => trim($f['telefono'] ?? ''), 'email' => trim($f['email'] ?? ''),
-                'pedirDni' => (bool) ($f['pedirDni'] ?? false), 'modoTexto' => $f['modoTexto'] ?? 'asignados'], $d['firmantes']),
+                'pedirDni' => (bool) ($f['pedirDni'] ?? false), 'pedirRostro' => (bool) ($f['pedirRostro'] ?? false), 'modoTexto' => $f['modoTexto'] ?? 'asignados'], $d['firmantes']),
             'campos' => array_map(fn ($c) => [...$c, 'etiqueta' => trim($c['etiqueta'] ?? ''), 'obligatorio' => (bool) ($c['obligatorio'] ?? true), 'bloqueado' => (bool) ($c['bloqueado'] ?? false)], $d['campos']),
         ]);
         return ['ok' => true];

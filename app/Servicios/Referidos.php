@@ -49,7 +49,8 @@ class Referidos
             'reglas' => json_encode(self::reglas()), 'created_at' => now(), 'updated_at' => now()]);
     }
 
-    private static function identidad(string $email): string
+    /** Correo normalizado (variantes de Gmail con puntos y «+etiqueta» cuentan como el mismo). */
+    public static function identidad(string $email): string
     {
         [$usuario, $dominio] = array_pad(explode('@', strtolower(trim($email)), 2), 2, '');
         if (in_array($dominio, ['gmail.com', 'googlemail.com'], true)) {

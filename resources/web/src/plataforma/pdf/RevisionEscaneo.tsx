@@ -73,6 +73,8 @@ interface Props {
   alEscanearMas: () => void;
   alGaleria: () => void;
   alGuardar: () => void;
+  /** Un PDF por página en un .zip (solo con más de una página). */
+  alGuardarSeparadas?: () => void;
   alFirmar: () => void;
   alCompartir?: () => void;
   alDescartar: () => void;
@@ -205,6 +207,13 @@ export function RevisionEscaneo(p: Props) {
               <select value={p.tamano} onChange={(ev) => p.alTamano(ev.target.value as TamanoHoja)}><option value="a4">A4</option><option value="carta">Carta</option><option value="imagen">Igual a la foto</option></select>
             </label>
             {p.tamano !== "imagen" && <label className="rvCheck"><input type="checkbox" checked={p.margen} onChange={(ev) => p.alMargen(ev.target.checked)} /> Dejar margen alrededor</label>}
+            <button type="button" disabled={p.procesando > 0} onClick={() => { setMenu(false); p.alGuardar(); }}>📄 Descargar todo en un PDF</button>
+            {p.alGuardarSeparadas && (
+              <button type="button" disabled={p.procesando > 0} onClick={() => { setMenu(false); p.alGuardarSeparadas!(); }}>
+                🗂️ Descargar páginas separadas (.zip)
+                <small className="rvNota">Un PDF por página: «{p.nombre.trim() || "Escaneo"} - 01.pdf», «… - 02.pdf»…</small>
+              </button>
+            )}
             <button type="button" disabled={p.procesando > 0} onClick={() => { setMenu(false); p.alFirmar(); }}>✍️ Preparar para firmar</button>
             <button type="button" onClick={() => { setMenu(false); p.alGaleria(); }}>🖼️ Agregar imágenes de la galería</button>
             <button type="button" onClick={() => { setMenu(false); setConfirmar("descartar"); }}>Empezar de nuevo</button>
